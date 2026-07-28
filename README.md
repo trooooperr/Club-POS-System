@@ -1,4 +1,4 @@
-# Club POS System (V2.0 — Production ERP)
+# Club POS System (V2.0 - Production ERP)
 
 A **premium, enterprise POS & Inventory System** engineered specifically for **Club POS Operations**.  
 Features **atomic bill numbering, real-time stock deduction, silent thermal desktop printing**, and **role-secured API protection**.
