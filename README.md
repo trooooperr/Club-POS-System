@@ -1,6 +1,6 @@
-# Bar POS System (V2.0 — Production ERP)
+# Club POS System (V2.0 — Production ERP)
 
-A **premium, enterprise POS & Inventory System** engineered specifically for **Bar & Restaurant POS Operations**.  
+A **premium, enterprise POS & Inventory System** engineered specifically for **Club POS Operations**.  
 Features **atomic bill numbering, real-time stock deduction, silent thermal desktop printing**, and **role-secured API protection**.
 
 ---
@@ -74,8 +74,8 @@ graph LR
 
 ```mermaid
 flowchart TD
-    A["📱 Customer Phone / Waiter POS"] -->|1. Place Food / Bar Order| B["⚙️ Express Backend API"]
-    B -->|2. Check & Deduct Bar Stock| C[("🗄️ Bar Inventory")]
+    A["📱 Customer Phone / Waiter POS"] -->|1. Place Club Order| B["⚙️ Express Backend API"]
+    B -->|2. Check & Deduct Inventory Stock| C[("🗄️ Bar Inventory")]
     B -->|3. Send KOT HTML Payload| D["🖨️ Silent Desktop Print Agent"]
     D -->|4. Silent Print KOT Ticket| E["🖨️ Kitchen Thermal Printer"]
     
@@ -85,8 +85,6 @@ flowchart TD
     G -->|8. Silent Print Customer Receipt| H["🖨️ Cashier Thermal Printer"]
     G -->|9. Sync Final Data| I["📈 Sales & Stock Reports"]
 ```
-
----
 
 ### 2. Order Settlement Sequence Dataflow
 
@@ -101,7 +99,7 @@ sequenceDiagram
     participant DB as 🗄️ Database & Redis
 
     Customer->>Server: 1. Place Order (POST /api/kots)
-    Server->>DB: 2. Check & Deduct Bar Inventory Stock
+    Server->>DB: 2. Check & Deduct Inventory Stock
     Server->>PrintAgent: 3. Send KOT HTML Payload (Port 5001)
     PrintAgent->>Printer: 4. Silent Print KOT Ticket in Kitchen
     
@@ -119,7 +117,7 @@ sequenceDiagram
 
 ## 🚀 Key Features
 
-1. **Decoupled Menu & Inventory:** Kitchen items bypass stock tracking for zero billing latency; Bar items track exact bottle-to-peg inventory in real time.
+1. **Decoupled Menu & Inventory:** Kitchen items bypass stock tracking for zero billing latency; Inventory items track stock levels in real time..
 2. **Delta Stock Protection:** Deducts inventory during KOT creation and only deducts newly added items upon final bill printing to prevent double-deduction.
 3. **Atomic Bill Numbering:** Resilient daily sequential bill counter powered by Redis `INCR`.
 4. **Direct Kitchen Silent Printing:** Local agent running on port `5001` that spools PDFs silently to Kitchen & Cashier ESC/POS thermal printers.
@@ -180,4 +178,4 @@ cd print-agent && npm install && npm start
 
 ## License
 
-Built for **Bar & Restaurant POS ERP**. All rights reserved.
+Built for **Club & Restaurant POS ERP**. All rights reserved.
