@@ -211,6 +211,8 @@ ${s.thankYouMsg}
 
               <div className="bill-footer-note">
                 {o.paymentMode?.toUpperCase()} · THANK YOU FOR VISITING!
+                <br />
+                <strong>Note:</strong>  Perfect for parties & group gatherings
               </div>
             </div>
           </div>
