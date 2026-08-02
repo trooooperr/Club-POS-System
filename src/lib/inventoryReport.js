@@ -8,9 +8,16 @@ const { getBusinessDateString } = require('./businessDay');
  * @param {number} quantityChange - The change in stock (positive or negative)
  * @param {'sale'|'refund'|'addition'|'adjustment'|'sync'} type
  */
-async function recordStockChange(inventoryId, quantityChange, type) {
+async function recordStockChange(inventoryId, quantityChange, type, dateOrBusinessDate = null) {
   try {
-    const businessDate = getBusinessDateString(new Date());
+    let businessDate;
+    if (typeof dateOrBusinessDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateOrBusinessDate)) {
+      businessDate = dateOrBusinessDate;
+    } else if (dateOrBusinessDate) {
+      businessDate = getBusinessDateString(new Date(dateOrBusinessDate));
+    } else {
+      businessDate = getBusinessDateString(new Date());
+    }
     const item = await Inventory.findById(inventoryId);
     if (!item) return;
 

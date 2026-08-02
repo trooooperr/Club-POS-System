@@ -124,7 +124,7 @@ async function getInventorySnapshot() {
   return items;
 }
 
-async function deductInventoryForItems(items = []) {
+async function deductInventoryForItems(items = [], dateOrBusinessDate = null) {
   const quantities = aggregateQuantities(items);
   const names = [...quantities.keys()];
   if (!names.length) return getInventorySnapshot();
@@ -186,12 +186,12 @@ async function deductInventoryForItems(items = []) {
     try {
       const { recordStockChange } = require('./inventoryReport');
       for (const [invId, totalDeduction] of parentDeductionMap.entries()) {
-        await recordStockChange(invId, -totalDeduction, 'sale');
+        await recordStockChange(invId, -totalDeduction, 'sale', dateOrBusinessDate);
       }
       for (const [name, quantity] of quantities.entries()) {
         const directInv = inventoryByName.get(normalizeName(name));
         if (directInv && directInv.linkInventoryId) {
-          await recordStockChange(directInv._id, -quantity, 'sale');
+          await recordStockChange(directInv._id, -quantity, 'sale', dateOrBusinessDate);
         }
       }
     } catch (err) {
@@ -233,7 +233,7 @@ function broadcastInventoryUpdate(req, inventory, extra = {}) {
   });
 }
 
-async function refundInventoryForItems(items = []) {
+async function refundInventoryForItems(items = [], dateOrBusinessDate = null) {
   const quantities = aggregateQuantities(items);
   const names = [...quantities.keys()];
   if (!names.length) return getInventorySnapshot();
@@ -291,12 +291,12 @@ async function refundInventoryForItems(items = []) {
     try {
       const { recordStockChange } = require('./inventoryReport');
       for (const [invId, totalRefund] of parentRefundMap.entries()) {
-        await recordStockChange(invId, totalRefund, 'refund');
+        await recordStockChange(invId, totalRefund, 'refund', dateOrBusinessDate);
       }
       for (const [name, quantity] of quantities.entries()) {
         const directInv = inventoryByName.get(normalizeName(name));
         if (directInv && directInv.linkInventoryId) {
-          await recordStockChange(directInv._id, quantity, 'refund');
+          await recordStockChange(directInv._id, quantity, 'refund', dateOrBusinessDate);
         }
       }
     } catch (err) {

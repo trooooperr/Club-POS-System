@@ -192,7 +192,7 @@ router.post('/', async (req, res) => {
       // Deduct inventory only for POS-initiated KOTs and only if order is not a direct device order
       const isAlreadyDeducted = order.inventoryFinalized;
       if (!isAlreadyDeducted && kotSource === 'pos') {
-        updatedInventory = await deductInventoryForItems(items);
+        updatedInventory = await deductInventoryForItems(items, order.businessDate || order.date || saved.createdAt);
         saved.inventoryDeducted = true;
         saved.inventoryDeductedAt = new Date();
         await saved.save();
@@ -331,7 +331,8 @@ router.delete('/:id', requireRole(['admin', 'manager']), async (req, res) => {
     // 1. Refund the inventory stock for the items in the KOT
     let updatedInventory = null;
     if (kot.items && kot.items.length > 0) {
-      updatedInventory = await refundInventoryForItems(kot.items);
+      const order = await Order.findById(kot.orderId);
+      updatedInventory = await refundInventoryForItems(kot.items, order?.businessDate || order?.date || kot.createdAt);
     }
 
     // 2. Remove this KOT ID from the associated Order
@@ -452,7 +453,8 @@ router.post('/remove-item', async (req, res) => {
 
     if (actualRefundedQty > 0) {
       // Refund inventory stock for this item
-      updatedInventory = await refundInventoryForItems([{ name, quantity: actualRefundedQty }]);
+      const order = await Order.findById(orderId);
+      updatedInventory = await refundInventoryForItems([{ name, quantity: actualRefundedQty }], order?.businessDate || order?.date);
     }
 
     // Invalidate cache

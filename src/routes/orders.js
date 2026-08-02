@@ -295,7 +295,7 @@ router.post('/', async (req, res) => {
     let directOrderInventory = null;
     if (isDirectOrder) {
       try {
-        directOrderInventory = await deductInventoryForItems(orderData.items);
+        directOrderInventory = await deductInventoryForItems(orderData.items, orderData.businessDate || targetDate);
         broadcastInventoryUpdate(req, directOrderInventory, {
           orderId: saved._id,
           source: 'DIRECT_ORDER'
@@ -421,7 +421,7 @@ router.patch('/:id/finalize-bill', async (req, res) => {
         const deltaItems = buildInventoryDelta(items, alreadyDeducted);
 
         if (deltaItems.length > 0) {
-          updatedInventory = await deductInventoryForItems(deltaItems);
+          updatedInventory = await deductInventoryForItems(deltaItems, order.businessDate || order.date);
           broadcastInventoryUpdate(req, updatedInventory, {
             orderId: req.params.id,
             source: 'FINAL_BILL'

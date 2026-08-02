@@ -175,5 +175,23 @@ describe('HumTum POS - Inventory Daily Report Suite', () => {
       expect(pastReport.soldStock).toBe(3);
       expect(pastReport.openingStock).toBe(pastReport.closingStock + 3);
     });
+
+    it('should attribute stock deductions between 12 Midnight and 5 AM to the previous business date', async () => {
+      // Order created at 2:00 AM IST on Aug 4th (UTC: Aug 3rd 20:30:00)
+      const postMidnightDate = new Date('2026-08-03T20:30:00.000Z');
+      const expectedBizDate = getBusinessDateString(postMidnightDate); // Should be "2026-08-03" (previous day's shift)
+
+      const { deductInventoryForItems } = require('../lib/inventoryStock');
+      await deductInventoryForItems([{ name: 'Corona Beer', quantity: 4 }], expectedBizDate);
+
+      const report = await InventoryDailyReport.findOne({ businessDate: expectedBizDate, inventoryId: testBeer._id });
+      expect(report).toBeDefined();
+      expect(report.businessDate).toBe(expectedBizDate);
+      expect(report.soldStock).toBe(4);
+
+      // Verify that no report was created for the new calendar day "2026-08-04"
+      const wrongReport = await InventoryDailyReport.findOne({ businessDate: '2026-08-04', inventoryId: testBeer._id });
+      expect(wrongReport).toBeNull();
+    });
   });
 });

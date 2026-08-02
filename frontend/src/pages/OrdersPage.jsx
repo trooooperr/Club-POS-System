@@ -273,10 +273,21 @@ export default function OrdersPage() {
   const getLocalDateString = (dateObj) => {
     if (!dateObj) return '';
     const d = new Date(dateObj);
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    const istTime = new Date(d.getTime() + 19800000);
+    let year = istTime.getUTCFullYear();
+    let month = istTime.getUTCMonth();
+    let dateVal = istTime.getUTCDate();
+    let hour = istTime.getUTCHours();
+    if (hour < 5) {
+      const prevDay = new Date(Date.UTC(year, month, dateVal - 1));
+      year = prevDay.getUTCFullYear();
+      month = prevDay.getUTCMonth();
+      dateVal = prevDay.getUTCDate();
+    }
+    const yyyy = year;
+    const mm = String(month + 1).padStart(2, '0');
+    const dd = String(dateVal).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
   };
 
   const formatBusinessDate = (dateStr) => {

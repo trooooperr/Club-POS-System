@@ -257,15 +257,16 @@ export default function SettingsPage() {
 
   const getBusinessDateString = (dateObj = new Date()) => {
     const d = new Date(dateObj);
-    let year = d.getFullYear();
-    let month = d.getMonth();
-    let dateVal = d.getDate();
-    let hour = d.getHours();
+    const istTime = new Date(d.getTime() + 19800000);
+    let year = istTime.getUTCFullYear();
+    let month = istTime.getUTCMonth();
+    let dateVal = istTime.getUTCDate();
+    let hour = istTime.getUTCHours();
     if (hour < 5) {
-      const prevDay = new Date(year, month, dateVal - 1);
-      year = prevDay.getFullYear();
-      month = prevDay.getMonth();
-      dateVal = prevDay.getDate();
+      const prevDay = new Date(Date.UTC(year, month, dateVal - 1));
+      year = prevDay.getUTCFullYear();
+      month = prevDay.getUTCMonth();
+      dateVal = prevDay.getUTCDate();
     }
     const yyyy = year;
     const mm = String(month + 1).padStart(2, '0');

@@ -354,14 +354,16 @@ async function startServer() {
     await connectRedis();
     await warmupCache();
     await migrateInventoryMenuItems();
-    (async () => {
-      try {
-        const { backfillDailyStockReports } = require('./src/lib/inventoryReport');
-        await backfillDailyStockReports();
-      } catch (bfErr) {
-        console.error('⚠️  Daily report backfill failed:', bfErr.message);
-      }
-    })();
+    if (process.env.RUN_BACKFILL === 'true') {
+      (async () => {
+        try {
+          const { backfillDailyStockReports } = require('./src/lib/inventoryReport');
+          await backfillDailyStockReports();
+        } catch (bfErr) {
+          console.error('⚠️  Daily report backfill failed:', bfErr.message);
+        }
+      })();
+    }
 
     setupSocketIO();
 
@@ -443,7 +445,7 @@ function setupDbChangeStreams(io) {
                   console.log(`📡 Change Stream: Order is already inventoryFinalized. Skipping KOT ${kotDoc.kotNo} stock deduction.`);
                 } else {
                   console.log(`📡 Change Stream: Deducting inventory for table KOT ${kotDoc.kotNo}...`);
-                  const updatedInventory = await deductInventoryForItems(kotDoc.items);
+                  const updatedInventory = await deductInventoryForItems(kotDoc.items, order?.businessDate || order?.date || kotDoc.createdAt);
 
                   broadcastInventoryUpdate({ app: { locals: { io } } }, updatedInventory, {
                     orderId: kotDoc.orderId,

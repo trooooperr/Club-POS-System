@@ -127,18 +127,25 @@ export default function SalesPage() {
     let end = endDate;
     const now = new Date();
 
+    const formatDateStr = (d) => {
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    };
+
     if (range === 'today') {
       start = end = todayStr;
     } else if (range === 'week') {
       const weekAgo = new Date();
       weekAgo.setDate(now.getDate() - 7);
-      start = weekAgo.toISOString().slice(0, 10);
+      start = formatDateStr(weekAgo);
       end = todayStr;
     } else if (range === 'month') {
       const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
-      start = firstDay.toISOString().slice(0, 10);
+      start = formatDateStr(firstDay);
       const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      end = lastDay.toISOString().slice(0, 10);
+      end = formatDateStr(lastDay);
     } else if (range === 'all') {
       start = '2020-01-01';
       end = '2099-12-31';
