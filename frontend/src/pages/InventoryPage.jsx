@@ -785,18 +785,22 @@ export default function InventoryPage() {
                                     </span>
                                   </td>
                                   <td><span className={`badge ${s.cls}`}>{s.text}</span></td>
-                                   {isAdmin && (
-                                     <td className="action-cell">
-                                       {i.trackStock !== false && (
-                                         <>
-                                           <button className="btn btn-danger btn-icon-sm" onClick={() => adjust(i._id, -1)}>-</button>
-                                           <button className="btn btn-success btn-icon-sm" onClick={() => adjust(i._id, 1)}>+</button>
-                                         </>
-                                       )}
-                                       <button className="btn btn-blue btn-sm" onClick={() => setModal(i)}>Edit</button>
-                                       <button className="btn btn-icon-sm btn-danger" onClick={() => setConfirmDelete(i._id)} title="Delete item"><Trash2 size={14} /></button>
-                                     </td>
-                                   )}
+                                  {isAdmin && (
+                                    <td>
+                                      <div className="action-cell">
+                                        {i.trackStock !== false ? (
+                                          <>
+                                            <button className="btn btn-danger btn-icon-sm" onClick={() => adjust(i._id, -1)}>-</button>
+                                            <button className="btn btn-success btn-icon-sm" onClick={() => adjust(i._id, 1)}>+</button>
+                                          </>
+                                        ) : (
+                                          <div style={{ width: 62, flexShrink: 0 }} />
+                                        )}
+                                        <button className="btn btn-blue btn-sm" onClick={() => setModal(i)}>Edit</button>
+                                        <button className="btn btn-icon-sm btn-danger" onClick={() => setConfirmDelete(i._id)} title="Delete item"><Trash2 size={14} /></button>
+                                      </div>
+                                    </td>
+                                  )}
                                 </tr>
                               )}
                             </Draggable>
