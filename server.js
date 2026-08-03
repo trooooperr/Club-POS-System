@@ -321,7 +321,7 @@ async function startServer() {
         serverSelectionTimeoutMS: 30_000,
         socketTimeoutMS: 45_000,
         maxPoolSize: 10,
-        minPoolSize: 2,
+        minPoolSize: 1,
         family: 4,    // Force IPv4
         retryWrites: true,
         w: 'majority',

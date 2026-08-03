@@ -846,8 +846,12 @@ export function AppProvider({ children }) {
       }
     });
 
+    let sessionFetchTimer = null;
     newSocket.on('TABLE_SESSION_UPDATED', () => {
-      safeFetch(apiUrl('/api/orders/sessions/active')).then(setActiveSessions);
+      if (sessionFetchTimer) clearTimeout(sessionFetchTimer);
+      sessionFetchTimer = setTimeout(() => {
+        safeFetch(apiUrl('/api/orders/sessions/active')).then(setActiveSessions);
+      }, 300);
     });
 
     newSocket.on('NEW_KOT', (kot) => {
@@ -885,6 +889,7 @@ export function AppProvider({ children }) {
     setSocket(newSocket);
 
     return () => {
+      if (sessionFetchTimer) clearTimeout(sessionFetchTimer);
       if (newSocket) newSocket.disconnect();
     };
   }, [currentUser, printKOTDocument, showToast, applyInventoryUpdate, loadData]);

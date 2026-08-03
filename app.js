@@ -10,6 +10,13 @@ const { requireAuth, allowCronSecret } = require('./src/middleware/auth');
 
 const app = express();
 
+try {
+  const compression = require('compression');
+  app.use(compression());
+} catch (e) {
+  // Compression enabled on production build via package.json
+}
+
 app.disable('x-powered-by');
 app.set('trust proxy', 1); // trust first proxy (Render, Railway, etc.)
 
@@ -96,7 +103,19 @@ app.use('/api', apiLimiter);
 app.use('/api/auth', authLimiter, require('./src/routes/auth'));
 
 // ── Health checks (no auth required) ────────────────────────────
+let cachedHealth = null;
+let lastHealthCheck = 0;
+const HEALTH_CACHE_MS = 15000; // Cache health checks for 15s to eliminate outbound ping storms
+
 app.get('/api/health', async (req, res) => {
+  const now = Date.now();
+  if (cachedHealth && (now - lastHealthCheck < HEALTH_CACHE_MS)) {
+    return res.status(cachedHealth.mongo ? 200 : 503).json({
+      ...cachedHealth,
+      uptime: process.uptime(),
+    });
+  }
+
   const mongoose = require('mongoose');
   let mongoOk = false;
   try {
@@ -106,13 +125,18 @@ app.get('/api/health', async (req, res) => {
 
   const redisOk = await isRedisHealthy();
 
-  res.status(mongoOk ? 200 : 503).json({
+  cachedHealth = {
     status: mongoOk ? 'ok' : 'degraded',
     mongo:  mongoOk,
     redis:  redisOk,
-    uptime: process.uptime(),
     env:    process.env.NODE_ENV || 'development',
     version: '3.0.2',
+  };
+  lastHealthCheck = now;
+
+  res.status(mongoOk ? 200 : 503).json({
+    ...cachedHealth,
+    uptime: process.uptime(),
   });
 });
 
@@ -175,7 +199,10 @@ app.use('/api/admin',     requireAuth, require('./src/routes/admin'));
 
 // ── Static files (frontend dist) ────────────────────────────────
 const frontendDist = path.join(__dirname, 'frontend', 'dist');
-app.use(express.static(frontendDist));
+app.use(express.static(frontendDist, {
+  maxAge: '1d',
+  etag: true,
+}));
 
 app.get('*', (req, res) => {
   const file = path.join(frontendDist, 'index.html');
