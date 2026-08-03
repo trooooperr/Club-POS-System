@@ -588,7 +588,7 @@ export function AppProvider({ children }) {
 
             <div class="dash-line" style="margin-top: 10px;"></div>
             <div class="footer-msg">${settings.thankYouMsg || 'THANK YOU FOR VISITING!'}</div>
-            <div class="footer-msg"><strong>NOTE:</strong> Contact us for parties or group gatherings</div>
+            <div class="footer-msg"><strong>NOTE:</strong> Contact us for parties & group gatherings</div>
           </div>
         </body>
       </html>
