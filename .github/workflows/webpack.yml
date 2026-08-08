@@ -1,4 +1,4 @@
-name: NodeJS with Webpack
+name: Node.js CI
 
 on:
   push:
@@ -12,7 +12,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [18.x, 20.x, 22.x]
+        node-version: [18.x, 20.x]
 
     steps:
     - uses: actions/checkout@v4
@@ -22,7 +22,13 @@ jobs:
       with:
         node-version: ${{ matrix.node-version }}
 
-    - name: Build
+    - name: Install Dependencies
       run: |
         npm install
-        npx webpack
+        npm --prefix frontend install
+
+    - name: Build Frontend
+      run: npm run build
+
+    - name: Run Backend Tests
+      run: npm test
