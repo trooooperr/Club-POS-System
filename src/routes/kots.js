@@ -3,6 +3,7 @@ const router = express.Router();
 const KOT = require('../models/KOT');
 const Order = require('../models/Order');
 const TableSession = require('../models/TableSession');
+const KotCounter = require('../models/KotCounter');
 const Inventory = require('../models/Inventory');
 const MenuItem = require('../models/MenuItem');
 const { getCache, setCache, deleteCache } = require('../lib/redis');
@@ -72,16 +73,9 @@ async function recalculateOrderTotals(order) {
 // ── GENERATE KOT NUMBER ─────────────────────────────────────────
 async function generateKOTNo() {
   const redis = require('../lib/redis');
-  const { getBusinessDayBoundary } = require('../lib/businessDay');
+  const { getBusinessDayBoundary, getBusinessDateString } = require('../lib/businessDay');
   const boundary = getBusinessDayBoundary();
-
-  // Format business day date string using IST calendar fields, e.g. "2026-06-09"
-  const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
-  const istBoundary = new Date(boundary.getTime() + IST_OFFSET_MS);
-  const yyyy = istBoundary.getUTCFullYear();
-  const mm = String(istBoundary.getUTCMonth() + 1).padStart(2, '0');
-  const dd = String(istBoundary.getUTCDate()).padStart(2, '0');
-  const dateStr = `${yyyy}-${mm}-${dd}`;
+  const dateStr = getBusinessDateString(boundary);
 
   const kotCounterKey = `kot_seq:${dateStr}`;
   try {
@@ -90,35 +84,66 @@ async function generateKOTNo() {
       let count = await client.incr(kotCounterKey);
       if (count === 1) {
         await client.expire(kotCounterKey, 172800); // 48 hours expiration
-        // Sync with DB in case Redis was flushed or restarted
-        const latestKOT = await KOT.findOne({ createdAt: { $gte: boundary } }).sort({ createdAt: -1 });
-        if (latestKOT && latestKOT.kotNo) {
-          const parts = latestKOT.kotNo.split('-');
-          if (parts.length === 2) {
-            const dbCount = parseInt(parts[1], 10);
-            if (dbCount >= 1) {
-              await client.set(kotCounterKey, dbCount + 1);
-              count = dbCount + 1;
-            }
+        // Sync with KotCounter / DB sequence
+        let counter = await KotCounter.findOne({ businessDate: dateStr });
+        if (!counter) {
+          const latestKOT = await KOT.findOne({ createdAt: { $gte: boundary } }).sort({ createdAt: -1 });
+          let maxSeq = 0;
+          if (latestKOT && latestKOT.kotNo) {
+            const parts = latestKOT.kotNo.split('-');
+            if (parts.length === 2) maxSeq = parseInt(parts[1], 10) || 0;
           }
+          counter = await KotCounter.findOneAndUpdate(
+            { businessDate: dateStr },
+            { $setOnInsert: { seq: maxSeq } },
+            { upsert: true, new: true }
+          );
+        }
+        if (counter && counter.seq >= 1) {
+          await client.set(kotCounterKey, counter.seq + 1);
+          count = counter.seq + 1;
         }
       }
+      // Also update DB KotCounter to keep DB counter atomic and synced
+      await KotCounter.findOneAndUpdate(
+        { businessDate: dateStr },
+        { $set: { seq: count } },
+        { upsert: true }
+      ).catch(() => {});
+
       return `KOT-${count.toString().padStart(3, '0')}`;
     }
   } catch (err) {
     console.error('Redis KOT counter error:', err.message);
   }
 
-  // Fallback: Find the latest KOT for today and increment its number
-  const latestKOT = await KOT.findOne({ createdAt: { $gte: boundary } }).sort({ createdAt: -1 });
-  let nextCount = 1;
-  if (latestKOT && latestKOT.kotNo) {
-    const parts = latestKOT.kotNo.split('-');
-    if (parts.length === 2) {
-      nextCount = parseInt(parts[1], 10) + 1;
+  // Fallback: Atomic MongoDB KotCounter (Guarantees zero duplicate KOT numbers under concurrent requests)
+  let counter = await KotCounter.findOne({ businessDate: dateStr });
+  if (!counter) {
+    const latestKOT = await KOT.findOne({ createdAt: { $gte: boundary } }).sort({ createdAt: -1 });
+    let maxSeq = 0;
+    if (latestKOT && latestKOT.kotNo) {
+      const parts = latestKOT.kotNo.split('-');
+      if (parts.length === 2) maxSeq = parseInt(parts[1], 10) || 0;
+    }
+    try {
+      counter = await KotCounter.findOneAndUpdate(
+        { businessDate: dateStr },
+        { $setOnInsert: { seq: maxSeq } },
+        { upsert: true, new: true }
+      );
+    } catch (err) {
+      counter = await KotCounter.findOne({ businessDate: dateStr });
     }
   }
-  return `KOT-${nextCount.toString().padStart(3, '0')}`;
+
+  counter = await KotCounter.findOneAndUpdate(
+    { businessDate: dateStr },
+    { $inc: { seq: 1 } },
+    { new: true, upsert: true }
+  );
+
+  return `KOT-${counter.seq.toString().padStart(3, '0')}`;
 }
 
 // ── GET ALL KOTs FOR A TABLE ────────────────────────────────────

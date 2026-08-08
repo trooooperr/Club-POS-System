@@ -1,6 +1,6 @@
 import React from 'react';
 import { useApp, ROLE_HIERARCHY } from '../context/AppContext';
-import { LayoutDashboard, UtensilsCrossed, ClipboardList, BarChart3, Users, Package, Settings, Sun, Moon, LogOut, X, Menu } from 'lucide-react';
+import { LayoutDashboard, UtensilsCrossed, ClipboardList, BarChart3, Users, Package, Settings, Sun, Moon, LogOut, X, Menu, Clock } from 'lucide-react';
 
 const NAV = [
   { id:'billing',   label:'Billing',         icon:LayoutDashboard, perm:'billing'   },

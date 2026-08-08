@@ -1,9 +1,127 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { ArrowLeft, Search, Trash2, Printer, UtensilsCrossed, X, Menu } from 'lucide-react';
+import { ArrowLeft, Search, Trash2, Printer, UtensilsCrossed, X, Menu, Clock } from 'lucide-react';
 import { apiUrl, authFetch } from '../lib/api';
+import LiveKOTModal from '../components/LiveKOTModal';
 
 const qz = window.qz;
+
+function KOTDetailsModal({ kot, currency = '₹', onClose, onDelete, canDelete = false }) {
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [onClose]);
+
+  if (!kot) return null;
+
+  const items = kot.items || [];
+  const kotSubtotal = items.reduce((sum, i) => sum + (i.price || 0) * (i.quantity || 0), 0);
+
+  return (
+    <div 
+      className="moverlay" 
+      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.85)', zIndex: 1100 }} 
+      onClick={onClose}
+    >
+      <div 
+        className="mbox" 
+        style={{ maxWidth: '460px', width: '92%', padding: '20px', position: 'relative', borderRadius: '14px', background: 'var(--s1)', border: '1px solid var(--b1)', color: 'var(--t0)' }} 
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--t0)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span>{kot.kotNo || `KOT-${kot._id?.slice(-4)}`}</span>
+              <span className="badge" style={{ fontSize: 11, background: 'var(--s3)', color: 'var(--t1)', padding: '2px 8px', borderRadius: 6 }}>
+                Table {kot.tableNo}
+              </span>
+            </div>
+          </div>
+          <button 
+            type="button"
+            onClick={onClose} 
+            style={{ background: 'var(--s2)', border: '1px solid var(--b1)', color: 'var(--t1)', borderRadius: '50%', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+            title="Close (Esc)"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Metadata Bar */}
+        <div style={{ display: 'flex', gap: 12, fontSize: 12, color: 'var(--t2)', marginBottom: 14, background: 'var(--s2)', padding: '8px 12px', borderRadius: 8, flexWrap: 'wrap' }}>
+          {kot.waiterName && <div>Waitstaff: <strong style={{ color: 'var(--t0)' }}>{kot.waiterName.toUpperCase()}</strong></div>}
+          {kot.orderType && <div>Type: <strong style={{ color: 'var(--a)' }}>{kot.orderType.toUpperCase()}</strong></div>}
+        </div>
+
+        {/* Items List Table */}
+        <div style={{ maxHeight: '260px', overflowY: 'auto', marginBottom: 14, border: '1px solid var(--b1)', borderRadius: 8 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: 'var(--s2)', borderBottom: '1px solid var(--b1)', color: 'var(--t2)', fontSize: 11, textTransform: 'uppercase' }}>
+                <th align="left" style={{ padding: '8px 12px' }}>Item</th>
+                <th align="center" style={{ padding: '8px 6px' }}>Qty</th>
+                <th align="right" style={{ padding: '8px 12px' }}>Price</th>
+                <th align="right" style={{ padding: '8px 12px' }}>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item, idx) => (
+                <tr key={idx} style={{ borderBottom: '1px solid var(--b1)' }}>
+                  <td style={{ padding: '8px 12px', fontWeight: 600, color: 'var(--t0)' }}>
+                    {item.name}
+                    {item.notes && <div style={{ fontSize: 10, color: '#F59E0B', fontStyle: 'italic' }}>Note: {item.notes}</div>}
+                  </td>
+                  <td align="center" style={{ padding: '8px 6px', fontWeight: 700 }}>x{item.quantity}</td>
+                  <td align="right" style={{ padding: '8px 12px', color: 'var(--t2)' }}>{currency}{(item.price || 0).toFixed(0)}</td>
+                  <td align="right" style={{ padding: '8px 12px', fontWeight: 700, color: 'var(--t0)' }}>{currency}{((item.price || 0) * (item.quantity || 0)).toFixed(0)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Summary Footer */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 10, borderTop: '1px solid var(--b1)', fontWeight: 800 }}>
+          {canDelete && onDelete ? (
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onDelete(kot);
+              }}
+              style={{
+                background: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                color: '#EF4444',
+                borderRadius: '8px',
+                padding: '6px 12px',
+                fontSize: '12px',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+            >
+              <Trash2 size={13} />
+              Delete KOT
+            </button>
+          ) : (
+            <span style={{ color: 'var(--t1)', fontSize: 12 }}>KOT Items: {items.reduce((sum, i) => sum + (i.quantity || 0), 0)}</span>
+          )}
+          <span style={{ color: 'var(--a)', fontSize: 16 }}>Total: {currency}{kotSubtotal.toFixed(2)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /* COMPACT TABLE PILL */
 function TableCard({ id, isActive, status, num, onClick }) {
@@ -107,7 +225,7 @@ function MenuItem({ item, qty, add, rem, stock, minStock }) {
 /* ─── BILLING NAV BAR ─────────────────────────────────────────── */
 function BillingNavBar({
   activeTableId, occupiedCount, totalTables,
-  onBack, onPrintKOT, onPrintBill,
+  onBack, onPrintKOT, onPrintBill, onOpenLiveQueue,
   pendingCount = 0, allCount = 0, busy = false
 }) {
   const vacantCount = totalTables - occupiedCount;
@@ -159,8 +277,18 @@ function BillingNavBar({
         </div>
       )}
 
-      {/* RIGHT: Stats */}
-      <div className="bnav-stats">
+      {/* RIGHT: Stats & Live KOTs Button */}
+      <div className="bnav-stats" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <button
+          type="button"
+          onClick={onOpenLiveQueue}
+          style={{ background: 'rgba(245,158,11,0.14)', border: '1px solid rgba(245,158,11,0.3)', color: '#F59E0B', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: '8px', fontWeight: 700, fontSize: '12px', height: '36px' }}
+          title="Open Live KOT Display"
+        >
+          <Clock size={14} />
+          <span>Live KOTs</span>
+        </button>
+
         <div className="bnav-stat occupied">
           <span className="bnav-stat-dot occ-dot" />
           <div>
@@ -202,6 +330,8 @@ export default function BillingPage() {
   const [activeOrder, setActiveOrder] = useState(null); // Current order for this table
   const [kots, setKots] = useState([]); // KOTs for current order
   const [confirmDialog, setConfirmDialog] = useState(null); // { title, message, confirmText, danger, onConfirm, onCancel }
+  const [selectedKotDetails, setSelectedKotDetails] = useState(null);
+  const [showLiveKOTModal, setShowLiveKOTModal] = useState(false);
 
   const showConfirm = (message, onConfirm, isDanger = false, confirmText = 'Confirm', title = 'Confirm Action', onCancel = null) => {
     setConfirmDialog({ title, message, confirmText, danger: isDanger, onConfirm, onCancel });
@@ -921,8 +1051,9 @@ export default function BillingPage() {
         occupiedCount={occupiedCount}
         totalTables={NUM_TABLES}
         onBack={() => selectTable(null)}
-        onPrintKOT={printKOT}
+        onPrintKOT={() => doGen(1)}
         onPrintBill={() => doGen(0)}
+        onOpenLiveQueue={() => setShowLiveKOTModal(true)}
         pendingCount={combinedItems.pending.length}
         allCount={combinedItems.all.length}
         busy={busy}
@@ -1189,65 +1320,28 @@ export default function BillingPage() {
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {kots.map((k, i) => (
-                    <div 
+                    <button
                       key={i} 
+                      type="button"
+                      onClick={() => setSelectedKotDetails(k)}
                       style={{ 
                         fontSize: 11, 
                         background: 'var(--s1)', 
                         border: '1px solid var(--b1)', 
-                        padding: '3px 8px', 
+                        padding: '4px 10px', 
                         borderRadius: 6, 
                         color: 'var(--t0)', 
                         fontWeight: 600,
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '6px'
+                        gap: '6px',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
                       }}
+                      title="Click to view KOT details"
                     >
                       <span>{k.kotNo || `KOT-${i + 1}`} · {new Date(k.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
-                      {(role === 'admin' || role === 'manager') && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                             e.stopPropagation();
-                             if (busy) return;
-                             showConfirm(
-                               `⚠️ WARNING: Are you sure you want to DELETE entire "${k.kotNo || 'KOT'}"? All items in this KOT will be deleted and their stock will be refunded.`,
-                               async () => {
-                                 setBusy(true);
-                                 try {
-                                   await deleteKOT(k._id, k.tableNo);
-                                   showToast(`Deleted ${k.kotNo || 'KOT'} and refunded stock successfully`, 'success');
-                                   await loadTableSession(); // Refresh table state
-                                 } catch (err) {
-                                   showToast(err.message || 'Failed to delete KOT', 'error');
-                                 } finally {
-                                    setBusy(false);
-                                 }
-                               },
-                               true, // isDanger
-                               'Delete KOT',
-                               'Delete KOT'
-                             );
-                           }}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            color: '#ff4d4d',
-                            cursor: 'pointer',
-                            fontSize: '12px',
-                            fontWeight: 'bold',
-                            padding: '0 2px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            opacity: 0.85
-                          }}
-                          title="Delete KOT (Admin Only)"
-                        >
-                          ×
-                        </button>
-                      )}
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -1317,6 +1411,43 @@ export default function BillingPage() {
               </div>
             </div>
           </div>
+        )}
+        {/* KOT Details Popup */}
+        {selectedKotDetails && (
+          <KOTDetailsModal
+            kot={selectedKotDetails}
+            currency={c}
+            canDelete={role === 'admin' || role === 'manager'}
+            onClose={() => setSelectedKotDetails(null)}
+            onDelete={(k) => {
+              if (busy) return;
+              showConfirm(
+                `⚠️ WARNING: Are you sure you want to DELETE entire "${k.kotNo || 'KOT'}"? All items in this KOT will be deleted and their stock will be refunded.`,
+                async () => {
+                  setBusy(true);
+                  try {
+                    await deleteKOT(k._id, k.tableNo);
+                    showToast(`Deleted ${k.kotNo || 'KOT'} and refunded stock successfully`, 'success');
+                    await ensureActiveOrder(`t${k.tableNo}`, false);
+                    await loadData(); // Refresh table state
+                  } catch (err) {
+                    showToast(err.message || 'Failed to delete KOT', 'error');
+                  } finally {
+                    setBusy(false);
+                  }
+                },
+                true, // isDanger
+                'Delete KOT',
+                'Delete KOT'
+              );
+            }}
+          />
+        )}
+        {/* Live KOT Display Modal */}
+        {showLiveKOTModal && (
+          <LiveKOTModal
+            onClose={() => setShowLiveKOTModal(false)}
+          />
         )}
       </div>
     </div>
