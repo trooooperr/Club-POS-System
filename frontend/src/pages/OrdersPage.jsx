@@ -175,7 +175,8 @@ function DiscountEditModal({ order, currency, onSave, onClose }) {
   const [discountVal, setDiscountVal] = useState(order.discount ? String(order.discount) : '');
   const [saving, setSaving] = useState(false);
 
-  const subtotalAndTax = order.subtotal + order.sgst + order.cgst;
+  const serviceTaxVal = order.serviceTax || 0;
+  const subtotalAndTax = order.subtotal + order.sgst + order.cgst + serviceTaxVal;
   const newGrandTotal = Math.round(Math.max(0, subtotalAndTax - (parseFloat(discountVal) || 0)));
 
   const handleSave = async () => {

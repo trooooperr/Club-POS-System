@@ -56,6 +56,7 @@ export default function InvoiceModal() {
           subtotal: o.subtotal,
           sgst: o.sgst,
           cgst: o.cgst,
+          serviceTax: o.serviceTax || 0,
           discountAmount: o.discount || 0,
           roundOff: o.roundOff || 0,
           grandTotal: o.grandTotal
@@ -102,9 +103,7 @@ ${itemsText}
 
 ━━━━━━━━━━━━━━━━━━━━
 Subtotal: ${s.currency}${o.subtotal.toFixed(2)}
-SGST (2.5%): ${s.currency}${o.sgst.toFixed(2)}
-CGST (2.5%): ${s.currency}${o.cgst.toFixed(2)}
-${
+${o.cgst > 0 ? `CGST (${s.cgstRate || 2.5}%): ${s.currency}${o.cgst.toFixed(2)}\n` : ''}${o.sgst > 0 ? `SGST (${s.sgstRate || 2.5}%): ${s.currency}${o.sgst.toFixed(2)}\n` : ''}${(o.serviceTax || 0) > 0 ? `Service Tax (${s.serviceTaxRate || 0}%): ${s.currency}${o.serviceTax.toFixed(2)}\n` : ''}${
   o.discount > 0
     ? `Discount: -${s.currency}${o.discount.toFixed(2)}\n`
     : ""
@@ -183,8 +182,9 @@ ${s.thankYouMsg}
 
               <div className="bill-summary-stack">
                 <div className="sum-row"><span>Subtotal</span><span>{s.currency}{o.subtotal.toFixed(2)}</span></div>
-                <div className="sum-row"><span>SGST (2.5%)</span><span>{s.currency}{o.sgst.toFixed(2)}</span></div>
-                <div className="sum-row"><span>CGST (2.5%)</span><span>{s.currency}{o.cgst.toFixed(2)}</span></div>
+                {o.cgst > 0 && <div className="sum-row"><span>CGST ({s.cgstRate || 2.5}%)</span><span>{s.currency}{o.cgst.toFixed(2)}</span></div>}
+                {o.sgst > 0 && <div className="sum-row"><span>SGST ({s.sgstRate || 2.5}%)</span><span>{s.currency}{o.sgst.toFixed(2)}</span></div>}
+                {(o.serviceTax || 0) > 0 && <div className="sum-row"><span>Service Tax ({s.serviceTaxRate || 0}%)</span><span>{s.currency}{o.serviceTax.toFixed(2)}</span></div>}
                 {o.discount > 0 && <div className="sum-row discount"><span>Discount</span><span>-{s.currency}{o.discount.toFixed(2)}</span></div>}
                 {(o.roundOff || 0) !== 0 && <div className="sum-row"> <span>Round-Off</span><span>{o.roundOff > 0 ? '+' : ''}{o.roundOff.toFixed(2)}</span></div>}
                 <div className="grand-total-box">

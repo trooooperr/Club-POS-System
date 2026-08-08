@@ -40,12 +40,14 @@ async function recalculateOrderTotals(order) {
   const settings = await Settings.findOne();
   const sgstRate = settings ? settings.sgstRate : 2.5;
   const cgstRate = settings ? settings.cgstRate : 2.5;
+  const serviceTaxRate = settings && settings.serviceTaxEnabled ? (settings.serviceTaxRate || 0) : 0;
 
   const sgst = (subtotal * sgstRate) / 100;
   const cgst = (subtotal * cgstRate) / 100;
+  const serviceTax = (subtotal * serviceTaxRate) / 100;
 
   const discount = Math.min(order.discount || 0, subtotal);
-  const rawTotal = subtotal + sgst + cgst - discount;
+  const rawTotal = subtotal + sgst + cgst + serviceTax - discount;
   const grandTotal = Math.round(rawTotal);
   const roundOff = grandTotal - rawTotal;
 
@@ -53,6 +55,7 @@ async function recalculateOrderTotals(order) {
   order.subtotal = subtotal;
   order.sgst = sgst;
   order.cgst = cgst;
+  order.serviceTax = serviceTax;
   order.discount = discount;
   order.roundOff = roundOff;
   order.grandTotal = grandTotal;

@@ -306,15 +306,16 @@ export default function BillingPage() {
     const subtotal = combinedItems.all.reduce((s, i) => s + (i.price || 0) * (i.quantity || 0), 0);
     const sgst = subtotal * (settings.sgstRate / 100);
     const cgst = subtotal * (settings.cgstRate / 100);
+    const serviceTax = settings.serviceTaxEnabled ? subtotal * ((settings.serviceTaxRate || 0) / 100) : 0;
     const discountVal = parseFloat((table.discount || '').replace(/[^0-9.]/g, '')) || 0;
     const discountAmount = Math.round(subtotal * (discountVal / 100));
-    const rawTotal = subtotal + sgst + cgst - discountAmount;
+    const rawTotal = subtotal + sgst + cgst + serviceTax - discountAmount;
     const grandTotal = Math.max(0, Math.round(rawTotal));
     const roundOff = grandTotal - rawTotal;
-    return { subtotal, sgst, cgst, discountAmount, grandTotal, roundOff };
+    return { subtotal, sgst, cgst, serviceTax, discountAmount, grandTotal, roundOff };
   }, [combinedItems.all, table.discount, settings]);
 
-  const { subtotal, sgst, cgst, discountAmount, grandTotal, roundOff } = totals;
+  const { subtotal, sgst, cgst, serviceTax, discountAmount, grandTotal, roundOff } = totals;
 
   const tableList = Array.from({ length: NUM_TABLES }, (_, i) => {
     const id = `T${i + 1}`;
@@ -671,6 +672,7 @@ export default function BillingPage() {
         subtotal,
         sgst,
         cgst,
+        serviceTax,
         discountAmount,
         roundOff,
         grandTotal,
@@ -691,6 +693,7 @@ export default function BillingPage() {
           subtotal,
           sgst,
           cgst,
+          serviceTax,
           discountAmount,
           roundOff,
           grandTotal
@@ -1115,7 +1118,9 @@ export default function BillingPage() {
             <div className="bill-footer">
               <div className="bill-summary-card">
                 <div className="s-row"><span>Subtotal</span><span>{c}{subtotal.toFixed(0)}</span></div>
-                <div className="s-row"><span>Tax</span><span>{c}{(sgst + cgst).toFixed(0)}</span></div>
+                {cgst > 0 && <div className="s-row"><span>CGST ({settings.cgstRate || 0}%)</span><span>{c}{cgst.toFixed(2)}</span></div>}
+                {sgst > 0 && <div className="s-row"><span>SGST ({settings.sgstRate || 0}%)</span><span>{c}{sgst.toFixed(2)}</span></div>}
+                {serviceTax > 0 && <div className="s-row"><span>Service Tax ({settings.serviceTaxRate || 0}%)</span><span>{c}{serviceTax.toFixed(2)}</span></div>}
                 {roundOff !== 0 && (
                   <div className="s-row" style={{ color: 'var(--t3)', fontSize: '12px', fontStyle: 'italic' }}>
                     <span>Round Off</span>

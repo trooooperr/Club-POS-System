@@ -64,6 +64,8 @@ function normalizeSettings(data) {
     phone: data.phone || '',
     sgstRate: Number(data.sgstRate) || 0,
     cgstRate: Number(data.cgstRate) || 0,
+    serviceTaxEnabled: !!data.serviceTaxEnabled,
+    serviceTaxRate: Number(data.serviceTaxRate) || 0,
     currency: data.currency || '₹',
     thankYouMsg: data.thankYouMsg || '',
     darkMode: data.darkMode !== false,
@@ -210,6 +212,8 @@ router.put('/', requireRole(['admin', 'manager']), async (req, res) => {
   if (req.body.phone !== undefined) settings.phone = cleanString(req.body.phone);
   if (req.body.sgstRate !== undefined) settings.sgstRate = cleanNumber(req.body.sgstRate, settings.sgstRate);
   if (req.body.cgstRate !== undefined) settings.cgstRate = cleanNumber(req.body.cgstRate, settings.cgstRate);
+  if (req.body.serviceTaxEnabled !== undefined) settings.serviceTaxEnabled = !!req.body.serviceTaxEnabled;
+  if (req.body.serviceTaxRate !== undefined) settings.serviceTaxRate = cleanNumber(req.body.serviceTaxRate, settings.serviceTaxRate);
   if (req.body.currency !== undefined) settings.currency = cleanString(req.body.currency, '₹').slice(0, 4) || '₹';
   if (req.body.thankYouMsg !== undefined) settings.thankYouMsg = cleanString(req.body.thankYouMsg);
   if (req.body.darkMode !== undefined) settings.darkMode = !!req.body.darkMode;

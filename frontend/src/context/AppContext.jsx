@@ -76,6 +76,8 @@ const DEFAULT_SETTINGS = {
   phone:           '',
   sgstRate:        2.5,
   cgstRate:        2.5,
+  serviceTaxEnabled: false,
+  serviceTaxRate:   0,
   currency:        '₹',
   thankYouMsg:     'Thank you for visiting!',
   darkMode:        true,
@@ -478,6 +480,10 @@ export function AppProvider({ children }) {
       ? table.cgst
       : subtotal * (settings.cgstRate / 100);
 
+    const serviceTax = typeof table.serviceTax === 'number'
+      ? table.serviceTax
+      : (settings.serviceTaxEnabled ? subtotal * ((settings.serviceTaxRate || 0) / 100) : 0);
+
     let discountAmount = 0;
     if (typeof table.discountAmount === 'number') {
       discountAmount = table.discountAmount;
@@ -490,7 +496,7 @@ export function AppProvider({ children }) {
         : parseFloat(dv) || 0);
     }
 
-    const rawTotal = subtotal + sgst + cgst - discountAmount;
+    const rawTotal = subtotal + sgst + cgst + serviceTax - discountAmount;
     const grandTotal = Math.max(0, Math.round(rawTotal));
     const roundOff = typeof table.roundOff === 'number'
       ? table.roundOff
@@ -555,7 +561,9 @@ export function AppProvider({ children }) {
           <div class="dash-line"></div>
 
           <div class="row"><span>Subtotal</span><span>${subtotal.toFixed(2)}</span></div>
-          ${(sgst + cgst) > 0 ? `<div class="row"><span>Taxes</span><span>${(sgst + cgst).toFixed(2)}</span></div>` : ''}
+          ${cgst > 0 ? `<div class="row"><span>CGST (${settings.cgstRate || 0}%)</span><span>${cgst.toFixed(2)}</span></div>` : ''}
+          ${sgst > 0 ? `<div class="row"><span>SGST (${settings.sgstRate || 0}%)</span><span>${sgst.toFixed(2)}</span></div>` : ''}
+          ${serviceTax > 0 ? `<div class="row"><span>Service Tax (${settings.serviceTaxRate || 0}%)</span><span>${serviceTax.toFixed(2)}</span></div>` : ''}
           ${discountAmount > 0 ? `<div class="row"><span>Discount</span><span>-${discountAmount.toFixed(2)}</span></div>` : ''}
           ${roundOff !== 0 ? `<div class="row"><span>Round Off</span><span>${roundOff > 0 ? '+' : ''}${roundOff.toFixed(2)}</span></div>` : ''}
 
@@ -568,12 +576,7 @@ export function AppProvider({ children }) {
 
           <div class="thick-line"></div>
 
-          ${paymentMode ? `
-            <div class="center" style="margin-top: 6px; font-size: 13px; font-weight: 900; text-transform: uppercase;">
-              PAID VIA ${paymentMode === 'split' ? `SPLIT (CASH: Rs.${cashAmount.toFixed(0)} UPI: Rs.${upiAmount.toFixed(0)})` : paymentMode}
-            </div>
-            <div class="thick-line"></div>
-          ` : ''}
+
 
           <div class="center">
             <div style="font-size: 13px; font-weight: bold; margin-bottom: 4px;">SCAN TO PAY BILL</div>
@@ -798,19 +801,29 @@ export function AppProvider({ children }) {
   }, [settings.printAgentPort]);
 
   useEffect(() => {
+    let timer = null;
+    let isMounted = true;
+
+    const checkHealth = async () => {
+      if (!settings.printAgentEnabled || !currentUser) return;
+      const connected = await pingPrintAgent();
+      if (isMounted && connected) {
+        fetchAgentPrinters();
+      }
+    };
+
     if (settings.printAgentEnabled && currentUser) {
-      pingPrintAgent().then((connected) => {
-        if (connected) {
-          fetchAgentPrinters();
-        }
-      });
-      const timer = setInterval(() => {
-        pingPrintAgent();
-      }, 30000);
-      return () => clearInterval(timer);
+      checkHealth();
+      // Poll every 60 seconds to check agent availability
+      timer = setInterval(checkHealth, 60000);
     } else {
       setAgentConnected(false);
     }
+
+    return () => {
+      isMounted = false;
+      if (timer) clearInterval(timer);
+    };
   }, [currentUser, settings.printAgentEnabled, pingPrintAgent, fetchAgentPrinters]);
 
   // ── Socket.IO ────────────────────────────────────────────────────
@@ -1025,14 +1038,15 @@ export function AppProvider({ children }) {
     const subtotal = table.items.reduce((s,i) => s + i.price * i.quantity, 0);
     const sgst     = subtotal * (settings.sgstRate / 100);
     const cgst     = subtotal * (settings.cgstRate / 100);
+    const serviceTax = settings.serviceTaxEnabled ? subtotal * ((settings.serviceTaxRate || 0) / 100) : 0;
     const dv       = (table.discount || '').trim();
     const discountAmount = Math.round(dv.endsWith('%')
       ? subtotal * (parseFloat(dv)/100) || 0
       : parseFloat(dv) || 0);
-    const rawTotal = subtotal + sgst + cgst - discountAmount;
+    const rawTotal = subtotal + sgst + cgst + serviceTax - discountAmount;
     const grandTotal = Math.round(Math.max(0, rawTotal));
     const roundOff = (grandTotal - rawTotal);
-    return { subtotal, sgst, cgst, discountAmount, grandTotal, roundOff };
+    return { subtotal, sgst, cgst, serviceTax, discountAmount, grandTotal, roundOff };
   }, [tableBills, activeTableId, settings]);
 
 
@@ -1111,14 +1125,14 @@ export function AppProvider({ children }) {
     const table = tableBills[activeTableId];
     if (!table || table.items.length === 0) return { error: 'No items in bill' };
 
-    const { subtotal, sgst, cgst, discountAmount, grandTotal, roundOff } = billTotals;
+    const { subtotal, sgst, cgst, serviceTax, discountAmount, grandTotal, roundOff } = billTotals;
     const paid = parseFloat(paidAmount) || grandTotal;
     const due  = Math.max(0, grandTotal - paid);
 
     const orderData = {
       tableNo: parseInt(activeTableId.substring(1)),
       items:   table.items.map(i => ({ name:i.name, quantity:i.quantity, price:i.price })),
-      subtotal, sgst, cgst,
+      subtotal, sgst, cgst, serviceTax,
       discount:      discountAmount,
       roundOff,
       grandTotal,
@@ -1489,12 +1503,12 @@ export function AppProvider({ children }) {
     }
   }, [socket, applyInventoryUpdate, setOrderHistory, setInvoiceOrder]);
 
-  const finalizeBill = useCallback(async (orderId, items, subtotal, sgst, cgst, discount, roundOff, grandTotal, waiterName = '', orderType = 'dine-in', customerName = '', customerPhone = '', paymentMode = 'cash', cashAmount = 0, upiAmount = 0) => {
+  const finalizeBill = useCallback(async (orderId, items, subtotal, sgst, cgst, serviceTax, discount, roundOff, grandTotal, waiterName = '', orderType = 'dine-in', customerName = '', customerPhone = '', paymentMode = 'cash', cashAmount = 0, upiAmount = 0) => {
     try {
       const res = await authFetch(apiUrl(`/api/orders/${orderId}/finalize-bill`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items, subtotal, sgst, cgst, discount, roundOff, grandTotal, waiterName, orderType, customerName, customerPhone, paymentMode, cashAmount, upiAmount })
+        body: JSON.stringify({ items, subtotal, sgst, cgst, serviceTax, discount, roundOff, grandTotal, waiterName, orderType, customerName, customerPhone, paymentMode, cashAmount, upiAmount })
       });
       if (!res.ok) throw new Error('Failed to finalize bill');
       const orderResponse = await res.json();

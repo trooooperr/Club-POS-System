@@ -120,6 +120,7 @@ router.post('/table/:tableNo/open', async (req, res) => {
       subtotal: 0,
       sgst: 0,
       cgst: 0,
+      serviceTax: 0,
       discount: 0,
       roundOff: 0,
       grandTotal: 0,
@@ -331,7 +332,7 @@ router.post('/', async (req, res) => {
 // ── FINALIZE BILL (called when printing final bill) ─────────────
 router.patch('/:id/finalize-bill', async (req, res) => {
   try {
-    const { items, subtotal, sgst, cgst, discount, roundOff, grandTotal, waiterName, orderType, customerName, customerPhone, paymentMode, cashAmount, upiAmount } = req.body;
+    const { items, subtotal, sgst, cgst, serviceTax, discount, roundOff, grandTotal, waiterName, orderType, customerName, customerPhone, paymentMode, cashAmount, upiAmount } = req.body;
 
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ message: 'Order not found' });
@@ -368,6 +369,7 @@ router.patch('/:id/finalize-bill', async (req, res) => {
     order.subtotal = subtotal;
     order.sgst = sgst;
     order.cgst = cgst;
+    order.serviceTax = typeof serviceTax === 'number' ? serviceTax : 0;
     order.discount = discount;
     order.roundOff = roundOff;
     order.grandTotal = grandTotal;
@@ -521,14 +523,16 @@ router.patch('/:id/discount', async (req, res) => {
     if (!order) return res.status(404).json({ message: 'Order not found' });
 
     const discountVal = parseFloat(discount) || 0;
-    if (discountVal < 0 || discountVal > (order.subtotal + order.sgst + order.cgst)) {
+    const serviceTaxVal = order.serviceTax || 0;
+    const subtotalAndTax = order.subtotal + order.sgst + order.cgst + serviceTaxVal;
+    if (discountVal < 0 || discountVal > subtotalAndTax) {
       return res.status(400).json({ message: 'Invalid discount amount' });
     }
 
     order.discount = discountVal;
 
     // Recalculate grandTotal and roundOff
-    const rawTotal = order.subtotal + order.sgst + order.cgst - discountVal;
+    const rawTotal = subtotalAndTax - discountVal;
     const rounded = Math.round(rawTotal);
     order.roundOff = rounded - rawTotal;
     order.grandTotal = rounded;

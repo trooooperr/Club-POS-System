@@ -7,6 +7,8 @@ const settingsSchema = new mongoose.Schema({
   phone:          { type: String, default: '' },
   sgstRate:       { type: Number, default: 0 },
   cgstRate:       { type: Number, default: 0 },
+  serviceTaxEnabled: { type: Boolean, default: false },
+  serviceTaxRate: { type: Number, default: 0 },
   currency:       { type: String, default: '₹' },
   thankYouMsg:    { type: String, default: '' },
   darkMode:       { type: Boolean, default: true },

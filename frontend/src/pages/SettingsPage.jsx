@@ -532,6 +532,16 @@ export default function SettingsPage() {
               <label>CGST Rate %</label>
               <input type="number" min="0" step="0.01" value={form.cgstRate ?? 0} onChange={e => set('cgstRate', parseFloat(e.target.value) || 0)} />
             </div>
+            <label className="settings-toggle settings-wide">
+              <input type="checkbox" checked={!!form.serviceTaxEnabled} onChange={e => set('serviceTaxEnabled', e.target.checked)} />
+              <span>Enable Service Tax</span>
+            </label>
+            {form.serviceTaxEnabled && (
+              <div className="settings-field">
+                <label>Service Tax Rate %</label>
+                <input type="number" min="0" step="0.01" value={form.serviceTaxRate ?? 0} onChange={e => set('serviceTaxRate', parseFloat(e.target.value) || 0)} />
+              </div>
+            )}
             <div className="settings-field settings-wide">
               <label>Thank You Message</label>
               <input value={form.thankYouMsg || ''} onChange={e => set('thankYouMsg', e.target.value)} placeholder="Thank you for visiting!" />

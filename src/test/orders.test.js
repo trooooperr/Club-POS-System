@@ -372,4 +372,46 @@ describe('Orders API', () => {
     expect(settleRes.body.businessDate).toBe(originalBusinessDate);
     expect(settleRes.body.date).toBe(originalDate);
   });
+
+  test('should update settings with service tax and apply service tax to finalized order', async () => {
+    // 1. Update settings with service tax enabled (e.g. 5%)
+    const settingsRes = await request(app)
+      .put('/api/settings')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        serviceTaxEnabled: true,
+        serviceTaxRate: 5
+      });
+    expect(settingsRes.statusCode).toBe(200);
+    expect(settingsRes.body.serviceTaxEnabled).toBe(true);
+    expect(settingsRes.body.serviceTaxRate).toBe(5);
+
+    // 2. Create order
+    const createRes = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ tableNo: 12, subtotal: 0, sgst: 0, cgst: 0, grandTotal: 0, paymentMode: 'cash' });
+    expect(createRes.statusCode).toBe(201);
+    const orderId = createRes.body._id;
+
+    // 3. Finalize bill with subtotal=100, sgst=2.5, cgst=2.5, serviceTax=5, grandTotal=110
+    const finalizeRes = await request(app)
+      .patch(`/api/orders/${orderId}/finalize-bill`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        items: [{ name: 'Test Soda', quantity: 2, price: 50 }],
+        subtotal: 100,
+        sgst: 2.5,
+        cgst: 2.5,
+        serviceTax: 5,
+        discount: 0,
+        roundOff: 0,
+        grandTotal: 110,
+        paymentMode: 'cash',
+        cashAmount: 110
+      });
+    expect(finalizeRes.statusCode).toBe(200);
+    expect(finalizeRes.body.serviceTax).toBe(5);
+    expect(finalizeRes.body.grandTotal).toBe(110);
+  });
 });
