@@ -11,7 +11,10 @@ function getElapsedTimeStr(createdAt) {
   const diffMin = Math.floor(diffSec / 60);
   if (diffMin < 60) return `${diffMin}m ago`;
   const diffHr = Math.floor(diffMin / 60);
-  return `${diffHr}h ${diffMin % 60}m ago`;
+function parseKotSeq(kotNo) {
+  if (!kotNo) return 0;
+  const match = String(kotNo).match(/KOT-(\d+)/i);
+  return match ? parseInt(match[1], 10) : 0;
 }
 
 export default function LiveKOTQueue() {
@@ -91,9 +94,14 @@ export default function LiveKOTQueue() {
     }
   }, [socket, soundEnabled]);
 
-  // FIFO Sorting: Sort strictly by createdAt ascending (Earliest generated first)
+  // FIFO Sorting: Sort by KOT sequence ascending (fallback createdAt ascending)
   const sortedKots = useMemo(() => {
-    let list = [...kots].sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+    let list = [...kots].sort((a, b) => {
+      const seqA = parseKotSeq(a.kotNo);
+      const seqB = parseKotSeq(b.kotNo);
+      if (seqA !== seqB) return seqA - seqB;
+      return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
+    });
 
     if (departmentFilter !== 'all') {
       list = list.filter(k => {

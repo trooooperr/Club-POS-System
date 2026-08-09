@@ -19,7 +19,10 @@ function getElapsedTimeStr(createdAt) {
   const diffMin = Math.floor(diffSec / 60);
   if (diffMin < 60) return `${diffMin}m ago`;
   const diffHr = Math.floor(diffMin / 60);
-  return `${diffHr}h ${diffMin % 60}m ago`;
+function parseKotSeq(kotNo) {
+  if (!kotNo) return 0;
+  const match = String(kotNo).match(/KOT-(\d+)/i);
+  return match ? parseInt(match[1], 10) : 0;
 }
 
 export default function LiveKOTModal({ onClose }) {
@@ -78,9 +81,15 @@ export default function LiveKOTModal({ onClose }) {
     }
   }, [socket]);
 
-  // Reverse Order Sorting: Latest generated KOT at the top (createdAt descending)
+  // Reverse Order Sorting: Latest generated KOT at the top (KOT sequence descending, fallback createdAt)
   const sortedKots = useMemo(() => {
-    let list = [...kots].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    let list = [...kots].sort((a, b) => {
+      const seqA = parseKotSeq(a.kotNo);
+      const seqB = parseKotSeq(b.kotNo);
+      if (seqA !== seqB) return seqB - seqA;
+      return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+    });
+
 
     if (departmentFilter !== 'all') {
       list = list.filter(k => {

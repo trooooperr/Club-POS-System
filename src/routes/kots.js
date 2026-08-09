@@ -77,74 +77,56 @@ async function generateKOTNo() {
   const boundary = getBusinessDayBoundary();
   const dateStr = getBusinessDateString(boundary);
 
-  const kotCounterKey = `kot_seq:${dateStr}`;
-  try {
-    const client = await redis.connectRedis();
-    if (client) {
-      let count = await client.incr(kotCounterKey);
-      if (count === 1) {
-        await client.expire(kotCounterKey, 172800); // 48 hours expiration
-        // Sync with KotCounter / DB sequence
-        let counter = await KotCounter.findOne({ businessDate: dateStr });
-        if (!counter) {
-          const latestKOT = await KOT.findOne({ createdAt: { $gte: boundary } }).sort({ createdAt: -1 });
-          let maxSeq = 0;
-          if (latestKOT && latestKOT.kotNo) {
-            const parts = latestKOT.kotNo.split('-');
-            if (parts.length === 2) maxSeq = parseInt(parts[1], 10) || 0;
-          }
-          counter = await KotCounter.findOneAndUpdate(
-            { businessDate: dateStr },
-            { $setOnInsert: { seq: maxSeq } },
-            { upsert: true, new: true }
-          );
-        }
-        if (counter && counter.seq >= 1) {
-          await client.set(kotCounterKey, counter.seq + 1);
-          count = counter.seq + 1;
-        }
-      }
-      // Also update DB KotCounter to keep DB counter atomic and synced
-      await KotCounter.findOneAndUpdate(
-        { businessDate: dateStr },
-        { $set: { seq: count } },
-        { upsert: true }
-      ).catch(() => {});
-
-      return `KOT-${count.toString().padStart(3, '0')}`;
-    }
-  } catch (err) {
-    console.error('Redis KOT counter error:', err.message);
-  }
-
-  // Fallback: Atomic MongoDB KotCounter (Guarantees zero duplicate KOT numbers under concurrent requests)
+  // 1. Ensure KotCounter for current businessDate exists and is initialized to true max sequence if new
   let counter = await KotCounter.findOne({ businessDate: dateStr });
   if (!counter) {
-    const latestKOT = await KOT.findOne({ createdAt: { $gte: boundary } }).sort({ createdAt: -1 });
+    // Scan all KOTs created on/after business day boundary to find true Math.max(seq)
+    const kotsToday = await KOT.find({ createdAt: { $gte: boundary } }, { kotNo: 1 });
     let maxSeq = 0;
-    if (latestKOT && latestKOT.kotNo) {
-      const parts = latestKOT.kotNo.split('-');
-      if (parts.length === 2) maxSeq = parseInt(parts[1], 10) || 0;
+    for (const k of kotsToday) {
+      if (k.kotNo) {
+        const match = k.kotNo.match(/KOT-(\d+)/i);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (!isNaN(num) && num > maxSeq) maxSeq = num;
+        }
+      }
     }
     try {
-      counter = await KotCounter.findOneAndUpdate(
+      await KotCounter.findOneAndUpdate(
         { businessDate: dateStr },
         { $setOnInsert: { seq: maxSeq } },
         { upsert: true, new: true }
       );
     } catch (err) {
-      counter = await KotCounter.findOne({ businessDate: dateStr });
+      // Ignore parallel upsert race errors
     }
   }
 
+  // 2. Perform strictly atomic MongoDB $inc increment (Guarantees zero duplicate sequence numbers)
   counter = await KotCounter.findOneAndUpdate(
     { businessDate: dateStr },
     { $inc: { seq: 1 } },
     { new: true, upsert: true }
   );
 
-  return `KOT-${counter.seq.toString().padStart(3, '0')}`;
+  const seqNumber = counter.seq;
+
+  // 3. Passively sync to Redis if available (without overwriting Mongo counter)
+  try {
+    const client = await redis.connectRedis();
+    if (client) {
+      const kotCounterKey = `kot_seq:${dateStr}`;
+      await client.set(kotCounterKey, seqNumber);
+      await client.expire(kotCounterKey, 172800); // 48h expiration
+    }
+  } catch (redisErr) {
+    // Non-blocking fallback if Redis connection has issues
+  }
+
+  return `KOT-${seqNumber.toString().padStart(3, '0')}`;
 }
+
 
 // ── GET ALL KOTs FOR A TABLE ────────────────────────────────────
 router.get('/table/:tableNo', async (req, res) => {
