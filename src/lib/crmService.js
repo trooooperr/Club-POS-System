@@ -50,11 +50,21 @@ async function getCustomerCRMHistory(phone) {
 
   try {
     const crmDoc = await Customer.findOne({ phone: cleanPhone });
+    // Only completed/finalized past orders count as previous visits!
     const pastOrders = await Order.find({
-      customerPhone: { $regex: new RegExp(cleanPhone, 'i') }
+      customerPhone: { $regex: new RegExp(cleanPhone, 'i') },
+      isActive: false
     }).sort({ date: -1 });
 
-    const totalOrders = Math.max(crmDoc ? crmDoc.visitCount : 0, pastOrders.length);
+    const totalOrders = Math.max(
+      crmDoc && crmDoc.visits ? crmDoc.visits.length : (crmDoc ? crmDoc.visitCount : 0), 
+      pastOrders.length
+    );
+
+    if (totalOrders === 0) {
+      return { totalOrders: 0, lastOrderDate: null, lastOrderItems: [], customerName: crmDoc?.name || '', orders: [] };
+    }
+
     const customerName = (crmDoc && crmDoc.name) || (pastOrders[0] && pastOrders[0].customerName) || '';
     const lastOrderDate = (crmDoc && crmDoc.lastVisitDate) || (pastOrders[0] && pastOrders[0].date) || null;
     const lastOrderItems = (pastOrders[0] && pastOrders[0].items) || [];
