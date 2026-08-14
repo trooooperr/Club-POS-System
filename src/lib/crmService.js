@@ -68,12 +68,7 @@ async function getCustomerCRMHistory(phone) {
       isActive: false
     }).sort({ date: -1 });
 
-    const totalOrders = Math.max(
-      crmDoc && crmDoc.visits ? crmDoc.visits.length : (crmDoc ? crmDoc.visitCount : 0), 
-      pastOrders.length
-    );
-
-    if (totalOrders === 0) {
+    if ((!crmDoc || !crmDoc.visits || crmDoc.visits.length === 0) && pastOrders.length === 0) {
       return { totalOrders: 0, lastOrderDate: null, lastOrderItems: [], customerName: crmDoc?.name || '', orders: [] };
     }
 
@@ -83,13 +78,16 @@ async function getCustomerCRMHistory(phone) {
     const lastOrderItems = (pastOrders[0] && pastOrders[0].items) || [];
     const lastBillNo = (pastOrders[0] && pastOrders[0].billNo) || (crmDoc && crmDoc.visits && crmDoc.visits[0] && crmDoc.visits[0].billNo) || '';
 
-    // Merge visit dates from both Order and Customer CRM applying the 5 AM IST boundary rule
+    // Merge visit dates from both Order and Customer CRM cleanly
     const visitsMap = new Map();
     if (pastOrders.length > 0) {
       for (const o of pastOrders) {
         const rawDate = o.date || o.createdAt;
         const effectiveDate = getEffectiveBusinessDate(rawDate);
-        const key = `${o.billNo || ''}_${effectiveDate.toISOString().slice(0, 10)}`;
+        const billKey = (o.billNo || '').trim().toUpperCase();
+        const dateKey = effectiveDate.toISOString().slice(0, 10);
+        const key = billKey ? `bill_${billKey}` : `date_${dateKey}`;
+        
         visitsMap.set(key, {
           billNo: o.billNo || '',
           date: effectiveDate,
@@ -100,12 +98,15 @@ async function getCustomerCRMHistory(phone) {
     }
     if (crmDoc && crmDoc.visits) {
       for (const v of crmDoc.visits) {
-        const effectiveDate = getEffectiveBusinessDate(v.date);
-        const key = `${v.billNo || ''}_${effectiveDate.toISOString().slice(0, 10)}`;
+        const billKey = (v.billNo || '').trim().toUpperCase();
+        const visitDate = v.date ? new Date(v.date) : new Date();
+        const dateKey = visitDate.toISOString().slice(0, 10);
+        const key = billKey ? `bill_${billKey}` : `date_${dateKey}`;
+
         if (!visitsMap.has(key)) {
           visitsMap.set(key, {
             billNo: v.billNo || '',
-            date: effectiveDate,
+            date: visitDate,
             total: v.amount || 0,
             itemsCount: v.itemsCount || 0
           });
@@ -114,6 +115,7 @@ async function getCustomerCRMHistory(phone) {
     }
 
     const mergedOrders = [...visitsMap.values()].sort((a, b) => new Date(b.date) - new Date(a.date));
+    const totalOrders = mergedOrders.length;
 
     return {
       totalOrders,
