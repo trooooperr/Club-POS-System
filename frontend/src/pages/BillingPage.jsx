@@ -333,6 +333,7 @@ export default function BillingPage() {
   const [selectedKotDetails, setSelectedKotDetails] = useState(null);
   const [showLiveKOTModal, setShowLiveKOTModal] = useState(false);
   const [customerHistoryMap, setCustomerHistoryMap] = useState({});
+  const [showHistory, setShowHistory] = useState(false);
 
   const showConfirm = (message, onConfirm, isDanger = false, confirmText = 'Confirm', title = 'Confirm Action', onCancel = null) => {
     setConfirmDialog({ title, message, confirmText, danger: isDanger, onConfirm, onCancel });
@@ -1200,36 +1201,79 @@ export default function BillingPage() {
               title={role !== 'admin' ? 'Customer mobile number is hidden for privacy' : 'Mobile No'}
             />
 
-            {/* Permanent CRM Customer Summary Badge */}
-            {table.customerPhone && table.customerPhone.replace(/\D/g, '').length === 10 && (
-              <div className="customer-crm-summary" style={{
+            {/* Expandable CRM Customer History Div */}
+            {table.customerPhone && table.customerPhone.replace(/\D/g, '').length === 10 && customerHistoryMap[activeTableId] && (
+              <div style={{
                 background: 'var(--bg3)',
                 border: '1px solid var(--b2)',
                 borderRadius: '8px',
-                padding: '8px 12px',
-                marginTop: '6px',
-                marginBottom: '8px',
-                fontSize: '11px',
-                color: 'var(--t1)'
+                padding: '6px 10px',
+                marginTop: '4px',
+                marginBottom: '8px'
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontWeight: 700, marginBottom: '3px' }}>
-                  <span style={{ color: (customerHistoryMap[activeTableId]?.totalOrders || 0) > 0 ? '#f59e0b' : '#10b981', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  fontSize: '11px',
+                  fontWeight: '700'
+                }}>
+                  <span style={{ color: (customerHistoryMap[activeTableId]?.totalOrders || 0) > 0 ? '#f59e0b' : '#10b981' }}>
                     {(customerHistoryMap[activeTableId]?.totalOrders || 0) > 0 
-                      ? `⭐ RETURNING CUSTOMER (${customerHistoryMap[activeTableId].totalOrders} VISITS)` 
-                      : '🆕 NEW CUSTOMER (1st VISIT)'}
+                      ? `⭐ Old Customer (${customerHistoryMap[activeTableId].totalOrders} Visits)` 
+                      : '🆕 New Customer'}
                   </span>
-                  {customerHistoryMap[activeTableId]?.lastBillNo && (
-                    <span style={{ fontSize: '10px', color: 'var(--t3)' }}>Bill: {customerHistoryMap[activeTableId].lastBillNo}</span>
+                  {(customerHistoryMap[activeTableId]?.totalOrders || 0) > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowHistory(!showHistory)}
+                      style={{
+                        background: 'var(--b2)',
+                        border: 'none',
+                        borderRadius: '4px',
+                        color: 'var(--t1)',
+                        padding: '2px 8px',
+                        fontSize: '10px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      <span>History</span>
+                      <span style={{ fontSize: '9px' }}>{showHistory ? '▲' : '▼'}</span>
+                    </button>
                   )}
                 </div>
-                {customerHistoryMap[activeTableId]?.lastOrderDate && (
-                  <div style={{ fontSize: '10px', color: 'var(--t2)', marginTop: '2px' }}>
-                    <span>Last Visit: <strong>{new Date(customerHistoryMap[activeTableId].lastOrderDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</strong></span>
-                    {customerHistoryMap[activeTableId]?.lastOrderItems?.length > 0 && (
-                      <span style={{ display: 'block', color: 'var(--t3)', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        Last Ordered: {customerHistoryMap[activeTableId].lastOrderItems.slice(0, 3).map(i => `${i.name} (${i.quantity}x)`).join(', ')}
-                      </span>
-                    )}
+
+                {showHistory && (customerHistoryMap[activeTableId]?.totalOrders || 0) > 0 && (
+                  <div style={{
+                    maxHeight: '130px',
+                    overflowY: 'auto',
+                    marginTop: '6px',
+                    paddingTop: '6px',
+                    borderTop: '1px dashed var(--b2)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px'
+                  }}>
+                    {customerHistoryMap[activeTableId]?.orders?.map((ord, idx) => (
+                      <div key={idx} style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        fontSize: '10px',
+                        color: 'var(--t2)',
+                        padding: '3px 6px',
+                        borderRadius: '4px',
+                        background: 'var(--bg2)'
+                      }}>
+                        <span>📅 {new Date(ord.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                        <span style={{ fontWeight: 600, color: 'var(--t1)' }}>
+                          {ord.billNo ? `Bill: ${ord.billNo}` : 'Visit'} {ord.total ? `(₹${ord.total})` : ''}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>

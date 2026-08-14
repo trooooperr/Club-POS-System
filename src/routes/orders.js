@@ -83,7 +83,7 @@ router.get('/customer-history/:phone', async (req, res) => {
       lastOrderItems: lastOrder.items || [],
       customerName: lastOrder.customerName || '',
       lastBillNo: lastOrder.billNo || '',
-      orders: pastOrders.slice(0, 5).map(o => ({
+      orders: pastOrders.slice(0, 20).map(o => ({
         billNo: o.billNo,
         date: o.date || o.createdAt,
         total: o.grandTotal,
