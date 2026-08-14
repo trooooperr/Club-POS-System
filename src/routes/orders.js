@@ -59,6 +59,42 @@ async function generateNextBillNo(businessDateStr) {
   return `HTB-${counter.seq.toString().padStart(3, '0')}`;
 }
 
+// ── GET CUSTOMER QR / CHECKIN ORDER HISTORY BY PHONE (Public) ──
+router.get('/customer-history/:phone', async (req, res) => {
+  try {
+    const rawPhone = (req.params.phone || '').trim();
+    if (!rawPhone || rawPhone.length < 5) {
+      return res.json({ totalOrders: 0, lastOrderDate: null, lastOrderItems: [], customerName: '', orders: [] });
+    }
+
+    const cleanDigits = rawPhone.replace(/\D/g, '');
+    const pastOrders = await Order.find({ 
+      customerPhone: { $regex: new RegExp(cleanDigits || rawPhone, 'i') } 
+    }).sort({ date: -1 });
+
+    if (!pastOrders || pastOrders.length === 0) {
+      return res.json({ totalOrders: 0, lastOrderDate: null, lastOrderItems: [], customerName: '', orders: [] });
+    }
+
+    const lastOrder = pastOrders[0];
+    res.json({
+      totalOrders: pastOrders.length,
+      lastOrderDate: lastOrder.date || lastOrder.createdAt,
+      lastOrderItems: lastOrder.items || [],
+      customerName: lastOrder.customerName || '',
+      lastBillNo: lastOrder.billNo || '',
+      orders: pastOrders.slice(0, 5).map(o => ({
+        billNo: o.billNo,
+        date: o.date || o.createdAt,
+        total: o.grandTotal,
+        itemsCount: (o.items || []).reduce((s, i) => s + (i.quantity || 1), 0)
+      }))
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 router.get('/', async (req, res) => {
   try {
     const cached = await getCache(ORDERS_CACHE_KEY);
@@ -86,7 +122,7 @@ router.get('/:id', async (req, res) => {
 router.post('/table/:tableNo/open', async (req, res) => {
   try {
     const { tableNo } = req.params;
-    const { waiterName, orderType } = req.body;
+    const { waiterName, orderType, customerName, customerPhone } = req.body;
 
     // Check if table is already open, heal duplicate/orphaned sessions
     const activeSessions = await TableSession.find({ tableNo: parseInt(tableNo), status: { $ne: 'COMPLETED' } }).populate('activeOrderId');
@@ -132,7 +168,9 @@ router.post('/table/:tableNo/open', async (req, res) => {
       date: new Date(),
       businessDate: getBusinessDateString(),
       waiterName: waiterName || '',
-      orderType: orderType || 'dine-in'
+      orderType: orderType || 'dine-in',
+      customerName: customerName || '',
+      customerPhone: customerPhone || ''
     });
     const savedOrder = await order.save();
 
@@ -220,6 +258,18 @@ router.put('/table/:tableNo/session', async (req, res) => {
     if (!activeSession) {
       // Return 200 instead of 404 to prevent harmless frontend network errors during checkout race conditions
       return res.status(200).json({ message: 'No active session found (likely completed)' });
+    }
+
+    // Update active Order with customer details & order meta
+    if (activeSession.activeOrderId) {
+      const orderUpdate = {};
+      if (customerName !== undefined) orderUpdate.customerName = customerName;
+      if (customerPhone !== undefined) orderUpdate.customerPhone = customerPhone;
+      if (waiterName !== undefined) orderUpdate.waiterName = waiterName;
+      if (orderType !== undefined) orderUpdate.orderType = orderType;
+      if (Object.keys(orderUpdate).length > 0) {
+        await Order.findByIdAndUpdate(activeSession.activeOrderId, orderUpdate);
+      }
     }
 
     const session = await TableSession.findByIdAndUpdate(

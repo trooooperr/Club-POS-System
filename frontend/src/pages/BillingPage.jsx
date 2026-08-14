@@ -624,12 +624,32 @@ export default function BillingPage() {
         pendingItemsForDb,
         totals.grandTotal,
         selectedWaiterObj?.name || '',
-        orderType
+        orderType,
+        table.customerName || '',
+        table.customerPhone || ''
       ).catch(() => { });
     }, 800); // 800ms debounce
 
     return () => clearTimeout(delayDebounceFn);
-  }, [table.items, selectedWaiterObj, orderType, activeTableId, activeOrder, totals.grandTotal]);
+  }, [table.items, table.customerName, table.customerPhone, selectedWaiterObj, orderType, activeTableId, activeOrder, totals.grandTotal]);
+
+  // Auto-fill returning customer details when 10-digit phone number is entered
+  useEffect(() => {
+    const rawPhone = (table.customerPhone || '').replace(/\D/g, '');
+    if (rawPhone.length === 10) {
+      safeFetch(apiUrl(`/api/orders/customer-history/${rawPhone}`))
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.customerName && !table.customerName) {
+            setTableField(activeTableId, 'customerName', data.customerName);
+          }
+          if (data && data.totalOrders > 0) {
+            showToast(`⭐ Returning Customer (${data.totalOrders} visits). Last ordered: ${new Date(data.lastOrderDate).toLocaleDateString()}`, 'info');
+          }
+        })
+        .catch(() => {});
+    }
+  }, [table.customerPhone, activeTableId]);
 
   // Listen to real-time socket events for current table
   useEffect(() => {
@@ -1169,7 +1189,15 @@ export default function BillingPage() {
 
             <div className="section-divider" />
             <input className="mini-input customer-input" value={table.customerName || ''} onChange={e => setTableField(activeTableId, 'customerName', e.target.value)} placeholder="Customer Name" />
-            <input className="mini-input customer-input" value={table.customerPhone || ''} onChange={e => setTableField(activeTableId, 'customerPhone', e.target.value)} placeholder="Mobile No" maxLength={10} />
+            <input 
+              className="mini-input customer-input" 
+              type={role === 'admin' ? 'text' : 'password'} 
+              value={table.customerPhone || ''} 
+              onChange={e => setTableField(activeTableId, 'customerPhone', e.target.value)} 
+              placeholder="Mobile No" 
+              maxLength={10} 
+              title={role !== 'admin' ? 'Customer mobile number is hidden for privacy' : 'Mobile No'}
+            />
 
             <div className="food-items-label">Food Items</div>
             <div className="bill-items-scroller">

@@ -228,7 +228,7 @@ ${s.thankYouMsg}
             </div>
             
             <div className="share-input-row">
-                <input maxLength={10} value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone Number" />
+                <input maxLength={10} type={role === 'admin' ? 'text' : 'password'} value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone Number" title={role !== 'admin' ? 'Customer phone number is hidden for privacy' : 'Phone Number'} />
               <button className="send-circle-btn" onClick={sendBill} disabled={!phone || phone.length < 10}>
                 {sent ? <Check size={12} /> : <Send size={18} />}
               </button>

@@ -246,7 +246,7 @@ export default function LiveKOTQueue() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: isFirst ? '4px' : '0' }}>
                   <div>
                     <div style={{ fontSize: '22px', fontWeight: 900, color: 'var(--t0)', lineHeight: 1 }}>
-                      TABLE {kot.tableNo}
+                      {kot.tableNo ? `TABLE ${kot.tableNo}` : (kot.orderType ? kot.orderType.toUpperCase() : 'TAKEAWAY / GUEST')}
                     </div>
                     <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--a)', marginTop: '4px' }}>
                       {kot.kotNo || `KOT-${kot._id?.slice(-4)}`}

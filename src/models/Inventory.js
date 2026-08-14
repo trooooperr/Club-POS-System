@@ -12,6 +12,7 @@ const inventorySchema = new mongoose.Schema({
   isAlcoholic: { type: Boolean, default: false },
   isAlcohol: { type: Boolean, default: false },
   trackStock: { type: Boolean, default: true },
+  isAvailable: { type: Boolean, default: true },
   linkInventoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Inventory', default: null },
   stockDeductionQty: { type: Number, default: 1 },
   order: { type: Number, default: 0 }

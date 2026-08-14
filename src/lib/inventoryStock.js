@@ -80,14 +80,26 @@ async function updateMenuAvailability() {
 
   const ops = [];
   for (const mItem of menuItems) {
-    const normName = normalizeName(mItem.name);
-    if (availabilityMap.has(normName)) {
-      ops.push({
-        updateOne: {
-          filter: { _id: mItem._id },
-          update: { $set: { available: availabilityMap.get(normName) } }
-        }
-      });
+    if (mItem.trackDirectStock) {
+      const isAvail = (mItem.directStock || 0) > 0;
+      if (mItem.available !== isAvail) {
+        ops.push({
+          updateOne: {
+            filter: { _id: mItem._id },
+            update: { $set: { available: isAvail } }
+          }
+        });
+      }
+    } else {
+      const normName = normalizeName(mItem.name);
+      if (availabilityMap.has(normName)) {
+        ops.push({
+          updateOne: {
+            filter: { _id: mItem._id },
+            update: { $set: { available: availabilityMap.get(normName) } }
+          }
+        });
+      }
     }
   }
 
@@ -199,6 +211,34 @@ async function deductInventoryForItems(items = [], dateOrBusinessDate = null) {
     }
   }
 
+  // Direct MenuItem Stock Deduction
+  const directMenuItems = await MenuItem.find({ trackDirectStock: true });
+  if (directMenuItems.length > 0) {
+    const menuOps = [];
+    for (const mItem of directMenuItems) {
+      const normName = normalizeName(mItem.name);
+      const qty = quantities.get(normName) || 0;
+      if (qty <= 0) continue;
+      const dedPerUnit = Number(mItem.stockDeductionQty) > 0 ? Number(mItem.stockDeductionQty) : 1;
+      const totalDeduction = qty * dedPerUnit;
+      const newStock = Math.max(0, (mItem.directStock || 0) - totalDeduction);
+      menuOps.push({
+        updateOne: {
+          filter: { _id: mItem._id },
+          update: { 
+            $set: { 
+              directStock: newStock,
+              available: newStock > 0
+            } 
+          }
+        }
+      });
+    }
+    if (menuOps.length) {
+      await MenuItem.bulkWrite(menuOps, { ordered: false });
+    }
+  }
+
   const uniqueParentIds = [...new Set([
     ...parentIds.map(id => id.toString()),
     ...affectedParentIds.map(id => id.toString())
@@ -225,12 +265,17 @@ function buildInventoryDelta(finalItems = [], alreadyDeducted = new Map()) {
 }
 
 function broadcastInventoryUpdate(req, inventory, extra = {}) {
-  if (!req.app.locals.io || !inventory) return;
-  req.app.locals.io.emit('INVENTORY_UPDATED', {
-    inventory,
-    ...extra,
-    timestamp: new Date()
-  });
+  if (!req.app.locals.io) return;
+  if (inventory) {
+    req.app.locals.io.emit('INVENTORY_UPDATED', {
+      inventory,
+      ...extra,
+      timestamp: new Date()
+    });
+  }
+  MenuItem.find().then(menuItems => {
+    req.app.locals.io.emit('MENU_UPDATED', menuItems);
+  }).catch(() => {});
 }
 
 async function refundInventoryForItems(items = [], dateOrBusinessDate = null) {
@@ -301,6 +346,34 @@ async function refundInventoryForItems(items = [], dateOrBusinessDate = null) {
       }
     } catch (err) {
       console.error('Error logging daily stock refunds:', err.message);
+    }
+  }
+
+  // Direct MenuItem Stock Refund
+  const directMenuItems = await MenuItem.find({ trackDirectStock: true });
+  if (directMenuItems.length > 0) {
+    const menuOps = [];
+    for (const mItem of directMenuItems) {
+      const normName = normalizeName(mItem.name);
+      const qty = quantities.get(normName) || 0;
+      if (qty <= 0) continue;
+      const refPerUnit = Number(mItem.stockDeductionQty) > 0 ? Number(mItem.stockDeductionQty) : 1;
+      const totalRefund = qty * refPerUnit;
+      const newStock = (mItem.directStock || 0) + totalRefund;
+      menuOps.push({
+        updateOne: {
+          filter: { _id: mItem._id },
+          update: { 
+            $set: { 
+              directStock: newStock,
+              available: newStock > 0
+            } 
+          }
+        }
+      });
+    }
+    if (menuOps.length) {
+      await MenuItem.bulkWrite(menuOps, { ordered: false });
     }
   }
 

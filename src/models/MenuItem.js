@@ -9,6 +9,10 @@ const menuItemSchema = new mongoose.Schema({
   department: { type: String, default: 'kitchen', enum: ['kitchen', 'bar', 'dessert', 'other'] },
   shortcut:  { type: String, default: '', lowercase: true, trim: true },
   isVeg:     { type: Boolean, default: true },
+  trackDirectStock: { type: Boolean, default: false },
+  directStock:      { type: Number, default: 0, min: 0 },
+  stockDeductionQty:{ type: Number, default: 1, min: 0 },
+  minDirectStock:   { type: Number, default: 5, min: 0 },
   order:     { type: Number, default: 0 },
 }, { timestamps: true });
 

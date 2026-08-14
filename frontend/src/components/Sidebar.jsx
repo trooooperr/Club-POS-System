@@ -1,14 +1,14 @@
 import React from 'react';
 import { useApp, ROLE_HIERARCHY } from '../context/AppContext';
-import { LayoutDashboard, UtensilsCrossed, ClipboardList, BarChart3, Users, Package, Settings, Sun, Moon, LogOut, X, Menu, Clock } from 'lucide-react';
+import { LayoutDashboard, UtensilsCrossed, ClipboardList, BarChart3, Users, Package, Settings, Sun, Moon, LogOut, X, Menu, Clock, Calendar } from 'lucide-react';
 
 const NAV = [
   { id:'billing',   label:'Billing',         icon:LayoutDashboard, perm:'billing'   },
   { id:'menu',      label:'Menu',            icon:UtensilsCrossed, perm:'menu'      },
+  { id:'inventory', label:'Inventory',       icon:Package,         perm:'inventory' },
   { id:'orders',    label:'Orders',          icon:ClipboardList,   perm:'orders'    },
   { id:'sales',     label:'Analytics',       icon:BarChart3,       perm:'sales'     },
   { id:'workers',   label:'Staff',           icon:Users,           perm:'workers'   },
-  { id:'inventory', label:'Inventory',       icon:Package,         perm:'inventory' },
   { id:'settings',  label:'Settings',        icon:Settings,        perm:'settings'  },
   { id:'kitchen',   label:'Kitchen Display', icon:UtensilsCrossed, perm:'kitchen'   },
   { id:'bar',       label:'Bar Display',     icon:UtensilsCrossed, perm:'kitchen'   },

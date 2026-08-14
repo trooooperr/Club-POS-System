@@ -77,42 +77,40 @@ async function generateKOTNo() {
   const boundary = getBusinessDayBoundary();
   const dateStr = getBusinessDateString(boundary);
 
-  // 1. Ensure KotCounter for current businessDate exists and is initialized to true max sequence if new
-  let counter = await KotCounter.findOne({ businessDate: dateStr });
-  if (!counter) {
-    // Scan all KOTs created on/after business day boundary to find true Math.max(seq)
-    const kotsToday = await KOT.find({ createdAt: { $gte: boundary } }, { kotNo: 1 });
-    let maxSeq = 0;
-    for (const k of kotsToday) {
-      if (k.kotNo) {
-        const match = k.kotNo.match(/KOT-(\d+)/i);
-        if (match) {
-          const num = parseInt(match[1], 10);
-          if (!isNaN(num) && num > maxSeq) maxSeq = num;
-        }
-      }
-    }
-    try {
-      await KotCounter.findOneAndUpdate(
-        { businessDate: dateStr },
-        { $setOnInsert: { seq: maxSeq } },
-        { upsert: true, new: true }
-      );
-    } catch (err) {
-      // Ignore parallel upsert race errors
-    }
-  }
-
-  // 2. Perform strictly atomic MongoDB $inc increment (Guarantees zero duplicate sequence numbers)
-  counter = await KotCounter.findOneAndUpdate(
+  // 1. Atomically increment the counter for today's business date
+  let counter = await KotCounter.findOneAndUpdate(
     { businessDate: dateStr },
     { $inc: { seq: 1 } },
     { new: true, upsert: true }
   );
 
+  // 2. Maximum sequence safety check across existing KOTs for today
+  const kotsToday = await KOT.find({ createdAt: { $gte: boundary } }, { kotNo: 1 });
+  let maxSeqInDb = 0;
+  for (const k of kotsToday) {
+    if (k.kotNo) {
+      const match = k.kotNo.match(/KOT-(\d+)/i);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxSeqInDb) maxSeqInDb = num;
+      }
+    }
+  }
+
+  // If the counter sequence is less than or equal to an existing KOT number today, boost it atomically!
+  if (counter.seq <= maxSeqInDb) {
+    const nextSeq = maxSeqInDb + 1;
+    const updated = await KotCounter.findOneAndUpdate(
+      { businessDate: dateStr, seq: { $lt: nextSeq } },
+      { $set: { seq: nextSeq } },
+      { new: true }
+    );
+    counter = updated || { seq: nextSeq };
+  }
+
   const seqNumber = counter.seq;
 
-  // 3. Passively sync to Redis if available (without overwriting Mongo counter)
+  // 3. Passively sync to Redis if available
   try {
     const client = await redis.connectRedis();
     if (client) {
@@ -126,6 +124,7 @@ async function generateKOTNo() {
 
   return `KOT-${seqNumber.toString().padStart(3, '0')}`;
 }
+
 
 
 // ── GET ALL KOTs FOR A TABLE ────────────────────────────────────
@@ -343,6 +342,7 @@ router.delete('/:id', requireRole(['admin', 'manager']), async (req, res) => {
     if (kot.items && kot.items.length > 0) {
       const order = await Order.findById(kot.orderId);
       updatedInventory = await refundInventoryForItems(kot.items, order?.businessDate || order?.date || kot.createdAt);
+      broadcastInventoryUpdate(req, updatedInventory, { orderId: kot.orderId, kotId: kot._id });
     }
 
     // 2. Remove this KOT ID from the associated Order
@@ -465,6 +465,7 @@ router.post('/remove-item', async (req, res) => {
       // Refund inventory stock for this item
       const order = await Order.findById(orderId);
       updatedInventory = await refundInventoryForItems([{ name, quantity: actualRefundedQty }], order?.businessDate || order?.date);
+      broadcastInventoryUpdate(req, updatedInventory, { orderId, itemName: name });
     }
 
     // Invalidate cache

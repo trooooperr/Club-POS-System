@@ -20,9 +20,9 @@ function ItemModal({ item, onClose, onSave }) {
     available: item?.available !== false,
     shortcut: item?.shortcut || '',
     isVeg: item?.isVeg !== false,
-    trackStock: item?.trackStock || false,
-    inventoryId: item?.inventoryId?._id || item?.inventoryId || '',
-    stockDeductionQty: item?.stockDeductionQty || 1,
+    trackDirectStock: item?.trackDirectStock || false,
+    directStock: item?.directStock != null ? item.directStock : 0,
+    stockDeductionQty: item?.stockDeductionQty != null ? item.stockDeductionQty : 1,
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -31,58 +31,22 @@ function ItemModal({ item, onClose, onSave }) {
     if (!form.name.trim()) { setError('Name is required'); return; }
     if (!form.price || isNaN(form.price)) { setError('Valid price required'); return; }
     
-    let inventoryId = null;
-    let stockDeductionQty = 1;
-    
-    if (form.trackStock) {
-      if (!form.inventoryId) { setError('Please select a linked inventory item'); return; }
-      
-      const parsedVal = form.stockDeductionQty;
-      let finalQty = 1;
-      if (typeof parsedVal === 'number') {
-        finalQty = parsedVal;
-      } else {
-        const str = String(parsedVal || '').trim();
-        if (str.includes('/')) {
-          const parts = str.split('/');
-          if (parts.length === 2) {
-            const num = parseFloat(parts[0]);
-            const den = parseFloat(parts[1]);
-            if (isNaN(num) || isNaN(den) || den === 0) {
-              setError('Invalid fraction format (e.g. 30/750)');
-              return;
-            }
-            finalQty = num / den;
-          } else {
-            setError('Invalid deduction quantity');
-            return;
-          }
-        } else {
-          finalQty = parseFloat(str);
-          if (isNaN(finalQty)) {
-            setError('Deduction quantity must be a valid number');
-            return;
-          }
-        }
-      }
-      
-      if (finalQty <= 0) {
-        setError('Deduction quantity must be greater than 0');
-        return;
-      }
-      
-      inventoryId = form.inventoryId;
-      stockDeductionQty = finalQty;
-    }
+    const trackDirectStock = !!form.trackDirectStock;
+    const directStock = trackDirectStock ? (parseFloat(form.directStock) || 0) : 0;
+    const stockDeductionQty = trackDirectStock ? (parseFloat(form.stockDeductionQty) || 1) : 1;
 
     setSaving(true);
     try {
       await onSave({ 
         ...form, 
         price: parseFloat(form.price),
-        trackStock: form.trackStock,
-        inventoryId,
-        stockDeductionQty
+        trackDirectStock,
+        directStock,
+        stockDeductionQty,
+        minDirectStock: 5,
+        available: trackDirectStock ? (directStock > 0) : form.available,
+        trackStock: false,
+        inventoryId: null
       });
       onClose();
     } catch (e) { setError(e.message); } finally { setSaving(false); }
@@ -135,42 +99,39 @@ function ItemModal({ item, onClose, onSave }) {
           </div>
         </div>
         <div style={{ borderTop: '1px solid var(--b1)', paddingTop: '15px', marginTop: '15px' }}>
-          <div className="menu-availability-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-            <label className="lbl" style={{ margin: 0 }}>Manage Stock (Link to Inventory)</label>
-            <label className="switch">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+            <label className="lbl" style={{ margin: 0, fontWeight: 700, fontSize: '13px' }}>Stock Management</label>
+            <label className="switch" style={{ margin: 0, transform: 'scale(0.85)' }} title="Stock Management ON / OFF">
               <input
                 type="checkbox"
-                checked={form.trackStock}
-                onChange={e => setForm({ ...form, trackStock: e.target.checked })}
+                checked={form.trackDirectStock}
+                onChange={e => setForm({ ...form, trackDirectStock: e.target.checked })}
               />
               <span className="slider round"></span>
             </label>
           </div>
 
-          {form.trackStock && (
+          {form.trackDirectStock && (
             <div className="frow2" style={{ marginTop: '10px', gap: '15px' }}>
               <div className="fgroup" style={{ flex: 1 }}>
-                <label className="lbl">Link Inventory Item</label>
-                <select 
-                  value={form.inventoryId} 
-                  onChange={e => setForm({ ...form, inventoryId: e.target.value })}
-                  style={{ width: '100%' }}
-                >
-                  <option value="">-- Select Inventory Item --</option>
-                  {(inventory || []).map(inv => (
-                    <option key={inv._id} value={inv._id}>
-                      {inv.name} ({inv.unit}) - Stock: {inv.stock}
-                    </option>
-                  ))}
-                </select>
+                <label className="lbl">Current Stock</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={form.directStock}
+                  onChange={e => setForm({ ...form, directStock: e.target.value })}
+                  placeholder="e.g. 50"
+                />
               </div>
               <div className="fgroup" style={{ flex: 1 }}>
-                <label className="lbl">Deduction Qty (e.g. 5 or 30/750)</label>
-                <input 
-                  type="text" 
-                  value={form.stockDeductionQty} 
+                <label className="lbl">Stock Reduction</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={form.stockDeductionQty}
                   onChange={e => setForm({ ...form, stockDeductionQty: e.target.value })}
-                  placeholder="e.g. 1, 5, or 30/750"
+                  placeholder="e.g. 1"
                 />
               </div>
             </div>
@@ -437,19 +398,21 @@ export default function MenuPage() {
                                   )}
                                   <span>{item.name}</span>
                                 </div>
-                                {item.trackStock && item.inventoryId && (
-                                  <span style={{ fontSize: '10px', color: '#8b949e', fontWeight: 'normal', display: 'flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}>
-                                    <span>📦 Linked:</span>
-                                    <span style={{ color: 'var(--accent)' }}>
-                                      {typeof item.inventoryId === 'object' 
-                                        ? item.inventoryId.name 
-                                        : (inventory?.find(inv => inv._id === item.inventoryId)?.name || 'Loading...')}
-                                    </span>
-                                    <span>(deducts {
-                                      Number(item.stockDeductionQty) < 1 
-                                        ? Number(item.stockDeductionQty).toFixed(3).replace(/\.?0+$/, '') 
-                                        : item.stockDeductionQty
-                                    })</span>
+                                {item.trackDirectStock && (
+                                  <span style={{ 
+                                    fontSize: '11px', 
+                                    fontWeight: 'bold', 
+                                    color: (item.directStock || 0) <= (item.minDirectStock || 5) ? '#ef4444' : '#10b981', 
+                                    display: 'inline-flex', 
+                                    alignItems: 'center', 
+                                    gap: '4px', 
+                                    marginTop: '3px' 
+                                  }}>
+                                    <span>📦 Stock:</span>
+                                    <span>{item.directStock || 0} units</span>
+                                    {(item.directStock || 0) <= (item.minDirectStock || 5) && (
+                                      <span className="badge b-red" style={{ fontSize: '9px', padding: '1px 5px' }}>LOW</span>
+                                    )}
                                   </span>
                                 )}
                               </div>

@@ -239,7 +239,7 @@ export default function LiveKOTModal({ onClose }) {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div>
                         <div style={{ fontSize: '18px', fontWeight: 900, color: 'var(--t0)', lineHeight: 1 }}>
-                          TABLE {kot.tableNo}
+                          {kot.tableNo ? `TABLE ${kot.tableNo}` : (kot.orderType ? kot.orderType.toUpperCase() : 'TAKEAWAY / GUEST')}
                         </div>
                         <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--a)', marginTop: '3px' }}>
                           {kot.kotNo || `KOT-${kot._id?.slice(-4)}`}

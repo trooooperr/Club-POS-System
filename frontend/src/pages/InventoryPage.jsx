@@ -407,6 +407,26 @@ export default function InventoryPage() {
     }
   };
 
+  const toggleAvailability = async (id, currentVal) => {
+    const previousInventory = inventory;
+    const newVal = !currentVal;
+    setInventory(prev => prev.map(i => i._id === id ? { ...i, isAvailable: newVal } : i));
+    try {
+      const res = await authFetch(apiUrl(`/api/inventory/${id}/availability`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isAvailable: newVal })
+      });
+      if (!res.ok) throw new Error('Failed to update availability');
+      const updated = await res.json();
+      setInventory(prev => prev.map(i => i._id === id ? updated : i));
+      if (window.updateMenuContext) window.updateMenuContext();
+    } catch (err) {
+      setInventory(previousInventory);
+      console.error('Availability update error', err);
+    }
+  };
+
   const handleSave = async (data, setModalError, closeModal) => {
     const previousInventory = inventory;
 
@@ -674,13 +694,15 @@ export default function InventoryPage() {
                               </div>
 
                               {isAdmin ? (
-                                <div className="invActions">
-                                  {i.trackStock !== false && (
-                                    <>
-                                      <button className="btn btn-danger btn-icon-sm" onClick={() => adjust(i._id, -1)}>-</button>
-                                      <button className="btn btn-success btn-icon-sm" onClick={() => adjust(i._id, 1)}>+</button>
-                                    </>
-                                  )}
+                                <div className="invActions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <label className="switch" style={{ margin: 0, transform: 'scale(0.85)' }} title={i.isAvailable === false ? 'Out of Stock (Unavailable)' : 'Available'}>
+                                    <input
+                                      type="checkbox"
+                                      checked={i.isAvailable !== false}
+                                      onChange={() => toggleAvailability(i._id, i.isAvailable !== false)}
+                                    />
+                                    <span className="slider round"></span>
+                                  </label>
                                   <button className="btn btn-blue btn-sm" onClick={() => setModal(i)}>Edit</button>
                                   <button className="btn btn-icon-sm btn-danger" onClick={() => setConfirmDelete(i._id)} title="Delete item"><Trash2 size={14} /></button>
                                 </div>
@@ -788,16 +810,18 @@ export default function InventoryPage() {
                                   {isAdmin && (
                                     <td>
                                       <div className="action-cell">
-                                        {i.trackStock !== false ? (
-                                          <>
-                                            <button className="btn btn-danger btn-icon-sm" onClick={() => adjust(i._id, -1)}>-</button>
-                                            <button className="btn btn-success btn-icon-sm" onClick={() => adjust(i._id, 1)}>+</button>
-                                          </>
-                                        ) : (
-                                          <div style={{ width: 62, flexShrink: 0 }} />
-                                        )}
-                                        <button className="btn btn-blue btn-sm" onClick={() => setModal(i)}>Edit</button>
-                                        <button className="btn btn-icon-sm btn-danger" onClick={() => setConfirmDelete(i._id)} title="Delete item"><Trash2 size={14} /></button>
+                                        <div className="invActions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                          <label className="switch" style={{ margin: 0, transform: 'scale(0.85)' }} title={i.isAvailable === false ? 'Out of Stock (Unavailable)' : 'Available'}>
+                                            <input
+                                              type="checkbox"
+                                              checked={i.isAvailable !== false}
+                                              onChange={() => toggleAvailability(i._id, i.isAvailable !== false)}
+                                            />
+                                            <span className="slider round"></span>
+                                          </label>
+                                          <button className="btn btn-blue btn-sm" onClick={() => setModal(i)}>Edit</button>
+                                          <button className="btn btn-icon-sm btn-danger" onClick={() => setConfirmDelete(i._id)} title="Delete item"><Trash2 size={14} /></button>
+                                        </div>
                                       </div>
                                     </td>
                                   )}

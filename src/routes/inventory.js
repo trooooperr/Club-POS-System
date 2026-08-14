@@ -221,7 +221,7 @@ router.put(
           name: updated.name,
           category: updated.category,
           price: updated.price,
-          available: updated.trackStock === false ? true : (updated.stock > 0),
+          available: updated.isAvailable === false ? false : (updated.trackStock === false ? true : (updated.stock > 0)),
           shortcut: (updated.shortcut || '').toLowerCase().trim(),
           department: 'bar',
           imageUrl: updated.imageUrl || '',
@@ -294,6 +294,35 @@ router.patch('/:id/stock', requireRole(['admin', 'manager']), async (req, res) =
     res.json(finalUpdatedItem);
   } catch (err) {
     console.error('INVENTORY STOCK UPDATE ERROR:', err.message);
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// TOGGLE INVENTORY ITEM AVAILABILITY (Admin/Manager only)
+router.patch('/:id/availability', requireRole(['admin', 'manager']), async (req, res) => {
+  try {
+    const { isAvailable } = req.body;
+    const updated = await Inventory.findByIdAndUpdate(
+      req.params.id,
+      { isAvailable: !!isAvailable },
+      { new: true }
+    );
+    if (!updated) return res.status(404).json({ message: 'Item not found' });
+
+    await MenuItem.findOneAndUpdate(
+      { name: updated.name },
+      { available: updated.isAvailable === false ? false : (updated.trackStock === false ? true : (updated.stock > 0)) }
+    );
+
+    await deleteCache([INVENTORY_CACHE_KEY, MENU_CACHE_KEY]);
+    if (req.app.locals.io) {
+      req.app.locals.io.emit('REFRESH_MENU');
+      const allInvRaw = await Inventory.find().populate('linkInventoryId');
+      const allInv = await sortInventoryItems(allInvRaw);
+      req.app.locals.io.emit('INVENTORY_UPDATED', { inventory: allInv, timestamp: new Date() });
+    }
+    res.json(updated);
+  } catch (err) {
     res.status(400).json({ message: err.message });
   }
 });
