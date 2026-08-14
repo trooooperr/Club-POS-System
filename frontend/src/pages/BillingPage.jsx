@@ -332,6 +332,7 @@ export default function BillingPage() {
   const [confirmDialog, setConfirmDialog] = useState(null); // { title, message, confirmText, danger, onConfirm, onCancel }
   const [selectedKotDetails, setSelectedKotDetails] = useState(null);
   const [showLiveKOTModal, setShowLiveKOTModal] = useState(false);
+  const [customerHistoryMap, setCustomerHistoryMap] = useState({});
 
   const showConfirm = (message, onConfirm, isDanger = false, confirmText = 'Confirm', title = 'Confirm Action', onCancel = null) => {
     setConfirmDialog({ title, message, confirmText, danger: isDanger, onConfirm, onCancel });
@@ -633,7 +634,7 @@ export default function BillingPage() {
     return () => clearTimeout(delayDebounceFn);
   }, [table.items, table.customerName, table.customerPhone, selectedWaiterObj, orderType, activeTableId, activeOrder, totals.grandTotal]);
 
-  // Auto-fill returning customer details when 10-digit phone number is entered
+  // Auto-fill returning customer details and load CRM history when 10-digit phone number is entered
   useEffect(() => {
     const rawPhone = (table.customerPhone || '').replace(/\D/g, '');
     if (rawPhone.length === 10) {
@@ -643,11 +644,11 @@ export default function BillingPage() {
           if (data && data.customerName && !table.customerName) {
             setTableField(activeTableId, 'customerName', data.customerName);
           }
-          if (data && data.totalOrders > 0) {
-            showToast(`⭐ Returning Customer (${data.totalOrders} visits). Last ordered: ${new Date(data.lastOrderDate).toLocaleDateString()}`, 'info');
-          }
+          setCustomerHistoryMap(prev => ({ ...prev, [activeTableId]: data }));
         })
         .catch(() => {});
+    } else {
+      setCustomerHistoryMap(prev => ({ ...prev, [activeTableId]: null }));
     }
   }, [table.customerPhone, activeTableId]);
 
@@ -1198,6 +1199,41 @@ export default function BillingPage() {
               maxLength={10} 
               title={role !== 'admin' ? 'Customer mobile number is hidden for privacy' : 'Mobile No'}
             />
+
+            {/* Permanent CRM Customer Summary Badge */}
+            {table.customerPhone && table.customerPhone.replace(/\D/g, '').length === 10 && (
+              <div className="customer-crm-summary" style={{
+                background: 'var(--bg3)',
+                border: '1px solid var(--b2)',
+                borderRadius: '8px',
+                padding: '8px 12px',
+                marginTop: '6px',
+                marginBottom: '8px',
+                fontSize: '11px',
+                color: 'var(--t1)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontWeight: 700, marginBottom: '3px' }}>
+                  <span style={{ color: (customerHistoryMap[activeTableId]?.totalOrders || 0) > 0 ? '#f59e0b' : '#10b981', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    {(customerHistoryMap[activeTableId]?.totalOrders || 0) > 0 
+                      ? `⭐ RETURNING CUSTOMER (${customerHistoryMap[activeTableId].totalOrders} VISITS)` 
+                      : '🆕 NEW CUSTOMER (1st VISIT)'}
+                  </span>
+                  {customerHistoryMap[activeTableId]?.lastBillNo && (
+                    <span style={{ fontSize: '10px', color: 'var(--t3)' }}>Bill: {customerHistoryMap[activeTableId].lastBillNo}</span>
+                  )}
+                </div>
+                {customerHistoryMap[activeTableId]?.lastOrderDate && (
+                  <div style={{ fontSize: '10px', color: 'var(--t2)', marginTop: '2px' }}>
+                    <span>Last Visit: <strong>{new Date(customerHistoryMap[activeTableId].lastOrderDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</strong></span>
+                    {customerHistoryMap[activeTableId]?.lastOrderItems?.length > 0 && (
+                      <span style={{ display: 'block', color: 'var(--t3)', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        Last Ordered: {customerHistoryMap[activeTableId].lastOrderItems.slice(0, 3).map(i => `${i.name} (${i.quantity}x)`).join(', ')}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="food-items-label">Food Items</div>
             <div className="bill-items-scroller">
