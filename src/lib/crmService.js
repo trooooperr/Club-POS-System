@@ -1,13 +1,25 @@
 const Customer = require('../models/Customer');
 const Order = require('../models/Order');
 
+function getEffectiveBusinessDate(inputDate = new Date()) {
+  const d = new Date(inputDate);
+  const istTime = new Date(d.getTime() + 5.5 * 60 * 60 * 1000);
+  const istHour = istTime.getUTCHours();
+  if (istHour < 5) {
+    // Orders placed between midnight and 5:00 AM IST belong to the previous calendar day
+    return new Date(d.getTime() - 24 * 60 * 60 * 1000);
+  }
+  return d;
+}
+
 async function recordCustomerVisit({ phone, name = '', billNo = '', amount = 0, items = [], orderType = 'dine-in', date = null }) {
   if (!phone) return null;
   const cleanPhone = String(phone).replace(/\D/g, '').trim();
   if (cleanPhone.length < 5) return null;
 
   try {
-    const visitDate = date ? new Date(date) : new Date();
+    const rawDate = date ? new Date(date) : new Date();
+    const visitDate = getEffectiveBusinessDate(rawDate);
     let customer = await Customer.findOne({ phone: cleanPhone });
 
     const visitEntry = {
@@ -66,18 +78,21 @@ async function getCustomerCRMHistory(phone) {
     }
 
     const customerName = (crmDoc && crmDoc.name) || (pastOrders[0] && pastOrders[0].customerName) || '';
-    const lastOrderDate = (crmDoc && crmDoc.lastVisitDate) || (pastOrders[0] && pastOrders[0].date) || null;
+    const rawLastDate = (crmDoc && crmDoc.lastVisitDate) || (pastOrders[0] && pastOrders[0].date) || null;
+    const lastOrderDate = rawLastDate ? getEffectiveBusinessDate(rawLastDate) : null;
     const lastOrderItems = (pastOrders[0] && pastOrders[0].items) || [];
     const lastBillNo = (pastOrders[0] && pastOrders[0].billNo) || (crmDoc && crmDoc.visits && crmDoc.visits[0] && crmDoc.visits[0].billNo) || '';
 
-    // Merge visit dates from both Order and Customer CRM
+    // Merge visit dates from both Order and Customer CRM applying the 5 AM IST boundary rule
     const visitsMap = new Map();
     if (pastOrders.length > 0) {
       for (const o of pastOrders) {
-        const key = `${o.billNo || ''}_${o.date || o.createdAt}`;
+        const rawDate = o.date || o.createdAt;
+        const effectiveDate = getEffectiveBusinessDate(rawDate);
+        const key = `${o.billNo || ''}_${effectiveDate.toISOString().slice(0, 10)}`;
         visitsMap.set(key, {
           billNo: o.billNo || '',
-          date: o.date || o.createdAt,
+          date: effectiveDate,
           total: o.grandTotal || 0,
           itemsCount: (o.items || []).reduce((s, i) => s + (i.quantity || 1), 0)
         });
@@ -85,11 +100,12 @@ async function getCustomerCRMHistory(phone) {
     }
     if (crmDoc && crmDoc.visits) {
       for (const v of crmDoc.visits) {
-        const key = `${v.billNo || ''}_${v.date}`;
+        const effectiveDate = getEffectiveBusinessDate(v.date);
+        const key = `${v.billNo || ''}_${effectiveDate.toISOString().slice(0, 10)}`;
         if (!visitsMap.has(key)) {
           visitsMap.set(key, {
             billNo: v.billNo || '',
-            date: v.date,
+            date: effectiveDate,
             total: v.amount || 0,
             itemsCount: v.itemsCount || 0
           });
