@@ -1262,14 +1262,15 @@ export default function BillingPage() {
                       <div key={idx} style={{
                         display: 'flex',
                         justifyContent: 'space-between',
-                        fontSize: '10px',
-                        color: 'var(--t2)',
-                        padding: '3px 6px',
+                        fontSize: '11px',
+                        color: 'var(--t1)',
+                        padding: '4px 6px',
                         borderRadius: '4px',
-                        background: 'var(--bg2)'
+                        background: 'var(--bg2)',
+                        fontWeight: '700'
                       }}>
-                        <span>📅 {new Date(ord.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                        <span style={{ fontWeight: 600, color: 'var(--t1)' }}>
+                        <span>{new Date(ord.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                        <span style={{ fontWeight: '700', color: 'var(--t1)' }}>
                           {ord.billNo ? `Bill: ${ord.billNo}` : 'Visit'} {ord.total ? `(₹${ord.total})` : ''}
                         </span>
                       </div>
