@@ -59,37 +59,12 @@ async function generateNextBillNo(businessDateStr) {
   return `HTB-${counter.seq.toString().padStart(3, '0')}`;
 }
 
-// ── GET CUSTOMER QR / CHECKIN ORDER HISTORY BY PHONE (Public) ──
+// ── GET CUSTOMER QR / CHECKIN ORDER HISTORY BY PHONE (Public CRM) ──
 router.get('/customer-history/:phone', async (req, res) => {
   try {
-    const rawPhone = (req.params.phone || '').trim();
-    if (!rawPhone || rawPhone.length < 5) {
-      return res.json({ totalOrders: 0, lastOrderDate: null, lastOrderItems: [], customerName: '', orders: [] });
-    }
-
-    const cleanDigits = rawPhone.replace(/\D/g, '');
-    const pastOrders = await Order.find({ 
-      customerPhone: { $regex: new RegExp(cleanDigits || rawPhone, 'i') } 
-    }).sort({ date: -1 });
-
-    if (!pastOrders || pastOrders.length === 0) {
-      return res.json({ totalOrders: 0, lastOrderDate: null, lastOrderItems: [], customerName: '', orders: [] });
-    }
-
-    const lastOrder = pastOrders[0];
-    res.json({
-      totalOrders: pastOrders.length,
-      lastOrderDate: lastOrder.date || lastOrder.createdAt,
-      lastOrderItems: lastOrder.items || [],
-      customerName: lastOrder.customerName || '',
-      lastBillNo: lastOrder.billNo || '',
-      orders: pastOrders.slice(0, 20).map(o => ({
-        billNo: o.billNo,
-        date: o.date || o.createdAt,
-        total: o.grandTotal,
-        itemsCount: (o.items || []).reduce((s, i) => s + (i.quantity || 1), 0)
-      }))
-    });
+    const { getCustomerCRMHistory } = require('../lib/crmService');
+    const history = await getCustomerCRMHistory(req.params.phone);
+    res.json(history);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -443,6 +418,19 @@ router.patch('/:id/finalize-bill', async (req, res) => {
     }
 
     const saved = await order.save();
+
+    if (saved.customerPhone) {
+      const { recordCustomerVisit } = require('../lib/crmService');
+      recordCustomerVisit({
+        phone: saved.customerPhone,
+        name: saved.customerName,
+        billNo: saved.billNo,
+        amount: saved.grandTotal,
+        items: saved.items,
+        orderType: saved.orderType,
+        date: saved.date || saved.createdAt
+      }).catch(err => console.error('CRM record visit error:', err.message));
+    }
 
     // Trigger WhatsApp Thank You notification in the background
     if (saved.customerPhone && !saved.isActive) {

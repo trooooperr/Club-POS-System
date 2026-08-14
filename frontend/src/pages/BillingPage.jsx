@@ -1220,8 +1220,8 @@ export default function BillingPage() {
                 }}>
                   <span style={{ color: (customerHistoryMap[activeTableId]?.totalOrders || 0) > 0 ? '#f59e0b' : '#10b981' }}>
                     {(customerHistoryMap[activeTableId]?.totalOrders || 0) > 0 
-                      ? `⭐ Old Customer (${customerHistoryMap[activeTableId].totalOrders} Visits)` 
-                      : '🆕 New Customer'}
+                      ? `Old Customer (${customerHistoryMap[activeTableId].totalOrders} Visits)` 
+                      : 'New Customer'}
                   </span>
                   {(customerHistoryMap[activeTableId]?.totalOrders || 0) > 0 && (
                     <button
