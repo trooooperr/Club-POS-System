@@ -637,7 +637,7 @@ export default function BillingPage() {
   useEffect(() => {
     const rawPhone = (table.customerPhone || '').replace(/\D/g, '');
     if (rawPhone.length === 10) {
-      safeFetch(apiUrl(`/api/orders/customer-history/${rawPhone}`))
+      authFetch(apiUrl(`/api/orders/customer-history/${rawPhone}`))
         .then(res => res.json())
         .then(data => {
           if (data && data.customerName && !table.customerName) {
