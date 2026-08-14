@@ -73,24 +73,24 @@ async function getCustomerCRMHistory(phone) {
     }
 
     const customerName = (crmDoc && crmDoc.name) || (pastOrders[0] && pastOrders[0].customerName) || '';
-    const rawLastDate = (crmDoc && crmDoc.lastVisitDate) || (pastOrders[0] && pastOrders[0].date) || null;
-    const lastOrderDate = rawLastDate ? getEffectiveBusinessDate(rawLastDate) : null;
-    const lastOrderItems = (pastOrders[0] && pastOrders[0].items) || [];
-    const lastBillNo = (pastOrders[0] && pastOrders[0].billNo) || (crmDoc && crmDoc.visits && crmDoc.visits[0] && crmDoc.visits[0].billNo) || '';
+    const firstOrder = pastOrders[0];
+    const rawLastDate = (firstOrder && firstOrder.businessDate ? new Date(`${firstOrder.businessDate}T12:00:00+05:30`) : (firstOrder && firstOrder.date)) || (crmDoc && crmDoc.lastVisitDate) || null;
+    const lastOrderDate = rawLastDate;
+    const lastOrderItems = (firstOrder && firstOrder.items) || [];
+    const lastBillNo = (firstOrder && firstOrder.billNo) || (crmDoc && crmDoc.visits && crmDoc.visits[0] && crmDoc.visits[0].billNo) || '';
 
-    // Merge visit dates from both Order and Customer CRM cleanly
+    // Merge visit dates from both Order and Customer CRM cleanly using order businessDate
     const visitsMap = new Map();
     if (pastOrders.length > 0) {
       for (const o of pastOrders) {
-        const rawDate = o.date || o.createdAt;
-        const effectiveDate = getEffectiveBusinessDate(rawDate);
+        const orderDate = o.businessDate ? new Date(`${o.businessDate}T12:00:00+05:30`) : getEffectiveBusinessDate(o.date || o.createdAt);
         const billKey = (o.billNo || '').trim().toUpperCase();
-        const dateKey = effectiveDate.toISOString().slice(0, 10);
+        const dateKey = orderDate.toISOString().slice(0, 10);
         const key = billKey ? `bill_${billKey}` : `date_${dateKey}`;
         
         visitsMap.set(key, {
           billNo: o.billNo || '',
-          date: effectiveDate,
+          date: orderDate,
           total: o.grandTotal || 0,
           itemsCount: (o.items || []).reduce((s, i) => s + (i.quantity || 1), 0)
         });
