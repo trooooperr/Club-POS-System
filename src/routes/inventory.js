@@ -302,9 +302,10 @@ router.patch('/:id/stock', requireRole(['admin', 'manager']), async (req, res) =
 router.patch('/:id/availability', requireRole(['admin', 'manager']), async (req, res) => {
   try {
     const { isAvailable } = req.body;
+    const availVal = !!isAvailable;
     const updated = await Inventory.findByIdAndUpdate(
       req.params.id,
-      { isAvailable: !!isAvailable },
+      { isAvailable: availVal, available: availVal },
       { new: true }
     );
     if (!updated) return res.status(404).json({ message: 'Item not found' });

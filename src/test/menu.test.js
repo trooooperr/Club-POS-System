@@ -50,4 +50,39 @@ describe('Menu API', () => {
     const res = await request(app).get('/api/menu');
     expect(res.statusCode).toBe(401);
   });
+
+  it('should sync availability when inventory item is toggled off', async () => {
+    const Inventory = require('../models/Inventory');
+    const inv = await Inventory.create({
+      name: 'Test Cocktail',
+      category: 'drinks',
+      unit: 'bottle',
+      price: 150,
+      stock: 10,
+      isAvailable: true,
+      available: true
+    });
+    await MenuItem.create({
+      name: 'Test Cocktail',
+      category: 'drinks',
+      price: 150,
+      available: true,
+      department: 'bar'
+    });
+
+    // Toggle off availability via PATCH endpoint
+    const patchRes = await request(app)
+      .patch(`/api/inventory/${inv._id}/availability`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ isAvailable: false });
+
+    expect(patchRes.statusCode).toBe(200);
+    expect(patchRes.body.isAvailable).toBe(false);
+    expect(patchRes.body.available).toBe(false);
+
+    // Verify MenuItem sync
+    const mItem = await MenuItem.findOne({ name: 'Test Cocktail' });
+    expect(mItem).not.toBeNull();
+    expect(mItem.available).toBe(false);
+  });
 });

@@ -112,7 +112,7 @@ router.post('/sync', requireRole(['admin', 'manager']), async (req, res) => {
           name: inv.name,
           category: inv.category,
           price: inv.price,
-          available: inv.trackStock === false ? true : (inv.stock > 0),
+          available: (inv.isAvailable === false || inv.available === false) ? false : (inv.trackStock === false ? true : (inv.stock > 0)),
           shortcut: inv.shortcut || '',
           department: 'bar',
         },

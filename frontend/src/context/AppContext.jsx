@@ -229,9 +229,25 @@ export function AppProvider({ children }) {
   const applyInventoryUpdate = useCallback((nextInventory) => {
     if (!Array.isArray(nextInventory)) return;
     setInventory(nextInventory);
+    const invMap = new Map(nextInventory.map(i => [i._id?.toString(), i]));
     setMenuItems(prev => prev.map(item => {
       const match = nextInventory.find(inv => inv.name?.toLowerCase().trim() === item.name?.toLowerCase().trim());
-      return match ? { ...item, available: match.trackStock === false ? true : (match.stock > 0) } : item;
+      if (!match) return item;
+      let avail = match.isAvailable !== false && match.available !== false;
+      if (avail && match.linkInventoryId) {
+        const parentId = typeof match.linkInventoryId === 'object' ? match.linkInventoryId._id?.toString() : match.linkInventoryId?.toString();
+        const parent = parentId ? invMap.get(parentId) : null;
+        if (parent) {
+          if (parent.isAvailable === false || parent.available === false) {
+            avail = false;
+          } else if (parent.trackStock !== false) {
+            avail = parent.stock >= (match.stockDeductionQty || 1);
+          }
+        }
+      } else if (avail && match.trackStock !== false) {
+        avail = (match.stock || 0) > 0;
+      }
+      return { ...item, available: avail };
     }));
     localStorage.setItem(INVENTORY_CACHE, JSON.stringify(nextInventory));
   }, []);
@@ -959,13 +975,30 @@ export function AppProvider({ children }) {
         isInventory: false
       }));
 
-    const drinkItems = inv.map(i => ({ 
-      ...i, 
-      department: 'bar',
-      imageUrl: getImg(i),
-      available: i.trackStock === false ? true : (i.stock > 0), 
-      isInventory: true 
-    }));
+    const inventoryMap = new Map(inv.map(i => [i._id?.toString(), i]));
+    const drinkItems = inv.map(i => {
+      let avail = i.isAvailable !== false && i.available !== false;
+      if (avail && i.linkInventoryId) {
+        const parentId = typeof i.linkInventoryId === 'object' ? i.linkInventoryId._id?.toString() : i.linkInventoryId?.toString();
+        const parent = parentId ? inventoryMap.get(parentId) : null;
+        if (parent) {
+          if (parent.isAvailable === false || parent.available === false) {
+            avail = false;
+          } else if (parent.trackStock !== false) {
+            avail = parent.stock >= (i.stockDeductionQty || 1);
+          }
+        }
+      } else if (avail && i.trackStock !== false) {
+        avail = (i.stock || 0) > 0;
+      }
+      return { 
+        ...i, 
+        department: 'bar',
+        imageUrl: getImg(i),
+        available: avail, 
+        isInventory: true 
+      };
+    });
 
     return [...processedMenu, ...drinkItems];
   }, [menuItems, inventory]);
