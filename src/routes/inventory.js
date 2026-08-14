@@ -309,13 +309,18 @@ router.patch('/:id/availability', requireRole(['admin', 'manager']), async (req,
     );
     if (!updated) return res.status(404).json({ message: 'Item not found' });
 
-    await MenuItem.findOneAndUpdate(
-      { name: updated.name },
-      { available: updated.isAvailable === false ? false : (updated.trackStock === false ? true : (updated.stock > 0)) }
+    const nameRegex = new RegExp(`^${updated.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+    await MenuItem.updateMany(
+      { name: nameRegex },
+      { $set: { available: updated.isAvailable === false ? false : (updated.trackStock === false ? true : (updated.stock > 0)) } }
     );
 
+    await updateMenuAvailability();
     await deleteCache([INVENTORY_CACHE_KEY, MENU_CACHE_KEY]);
+
     if (req.app.locals.io) {
+      const allMenuItems = await MenuItem.find();
+      req.app.locals.io.emit('MENU_UPDATED', allMenuItems);
       req.app.locals.io.emit('REFRESH_MENU');
       const allInvRaw = await Inventory.find().populate('linkInventoryId');
       const allInv = await sortInventoryItems(allInvRaw);

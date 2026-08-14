@@ -65,10 +65,16 @@ async function updateMenuAvailability() {
   const availabilityMap = new Map();
   for (const item of inventoryItems) {
     let isAvailable = true;
-    if (item.linkInventoryId) {
+    if (item.isAvailable === false) {
+      isAvailable = false;
+    } else if (item.linkInventoryId) {
       const parent = inventoryById.get(item.linkInventoryId.toString());
-      if (parent && parent.trackStock !== false) {
-        isAvailable = parent.stock >= (item.stockDeductionQty || 1);
+      if (parent) {
+        if (parent.isAvailable === false) {
+          isAvailable = false;
+        } else if (parent.trackStock !== false) {
+          isAvailable = parent.stock >= (item.stockDeductionQty || 1);
+        }
       }
     } else {
       if (item.trackStock !== false) {
@@ -93,12 +99,15 @@ async function updateMenuAvailability() {
     } else {
       const normName = normalizeName(mItem.name);
       if (availabilityMap.has(normName)) {
-        ops.push({
-          updateOne: {
-            filter: { _id: mItem._id },
-            update: { $set: { available: availabilityMap.get(normName) } }
-          }
-        });
+        const isAvail = availabilityMap.get(normName);
+        if (mItem.available !== isAvail) {
+          ops.push({
+            updateOne: {
+              filter: { _id: mItem._id },
+              update: { $set: { available: isAvail } }
+            }
+          });
+        }
       }
     }
   }
