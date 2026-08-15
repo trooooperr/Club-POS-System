@@ -333,6 +333,60 @@ router.patch('/:id/availability', requireRole(['admin', 'manager']), async (req,
   }
 });
 
+// TOGGLE DRY DAY STATUS (Admin/Manager only)
+router.post('/dry-day', requireRole(['admin', 'manager']), async (req, res) => {
+  try {
+    const { isDryDay } = req.body;
+    const dryDayBool = !!isDryDay;
+
+    const Settings = require('../models/Settings');
+    let settings = await Settings.findOne();
+    if (!settings) {
+      settings = new Settings();
+    }
+    settings.isDryDay = dryDayBool;
+    await settings.save();
+
+    const alcoholCategories = [
+      'BEER', 'WHISKY', 'VODKA', 'LIQUEUR', 'GIN', 'CLASSIC SCOTCH', 'SINGLE MALT',
+      'SHOOTERS', 'RUM', 'TEQUILA', 'WINE', 'COCKTAILS', 'BEERS', 'WHISKEY', 'CHAMPAGNE', 'SPIRITS'
+    ];
+
+    const alcoholFilter = {
+      $or: [
+        { isAlcoholic: true },
+        { isAlcohol: true },
+        { category: { $in: alcoholCategories.map(c => new RegExp(`^${c}$`, 'i')) } }
+      ]
+    };
+
+    if (dryDayBool) {
+      await Inventory.updateMany(alcoholFilter, { $set: { isAvailable: false, available: false } });
+    } else {
+      await Inventory.updateMany(alcoholFilter, { $set: { isAvailable: true, available: true } });
+    }
+
+    await updateMenuAvailability();
+    await deleteCache([INVENTORY_CACHE_KEY, MENU_CACHE_KEY]);
+
+    const allInvRaw = await Inventory.find().populate('linkInventoryId');
+    const allInv = await sortInventoryItems(allInvRaw);
+
+    if (req.app.locals.io) {
+      const allMenuItems = await MenuItem.find();
+      req.app.locals.io.emit('SETTINGS_UPDATED', settings);
+      req.app.locals.io.emit('MENU_UPDATED', allMenuItems);
+      req.app.locals.io.emit('REFRESH_MENU');
+      req.app.locals.io.emit('INVENTORY_UPDATED', { inventory: allInv, timestamp: new Date() });
+    }
+
+    res.json({ success: true, isDryDay: dryDayBool, inventory: allInv });
+  } catch (err) {
+    console.error('DRY DAY TOGGLE ERROR:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // DELETE INVENTORY ITEM (Admin/Manager only)
 router.delete('/:id', requireRole(['admin', 'manager']), async (req, res) => {
   try {

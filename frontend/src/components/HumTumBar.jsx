@@ -4,6 +4,7 @@ import {
   UtensilsCrossed, LayoutGrid, ClipboardList,
   BarChart2, Users, Package, Settings2, ChefHat
 } from 'lucide-react';
+import { useApp } from '../context/AppContext';
 
 const PAGE_ICONS = {
   billing: <UtensilsCrossed size={16} />,
@@ -23,9 +24,12 @@ export default function HumTumBar({
   tableStats = {},
   hint = '',
 }) {
+  const { isDryDay, toggleDryDay, role } = useApp();
+  const isAdmin = role === 'admin' || role === 'manager';
   const icon = PAGE_ICONS[section] || PAGE_ICONS[title?.toLowerCase()] || null;
   const activeCount = tableStats.active ?? 0;
   const vacantCount = tableStats.complete ?? 0;
+  const isInventoryPage = section === 'inventory' || title?.toLowerCase() === 'inventory';
 
   return (
     <header className="humtum-bar">
@@ -45,12 +49,25 @@ export default function HumTumBar({
         </div>
       </div>
 
-      {/* CENTER ─ shortcut hint (hidden on mobile) */}
-      {hint && (
-        <div className="hnav-center">
-          <div className="hnav-hint-pill">{hint}</div>
-        </div>
-      )}
+      {/* CENTER ─ Dry Day Button on Inventory Page & shortcut hint */}
+      <div className="hnav-center" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        {isInventoryPage && (
+          <button
+            className={`dry-day-btn ${isDryDay ? 'active' : ''}`}
+            onClick={() => {
+              if (isAdmin) {
+                toggleDryDay();
+              } else {
+                alert('Only Admin/Manager can toggle Dry Day mode.');
+              }
+            }}
+            title={isDryDay ? 'Dry Day is ACTIVE (Alcohol items disabled)' : 'Click to activate Dry Day (Disable all alcohol items)'}
+          >
+            {isDryDay ? '🚫 DRY DAY: ON' : '🍺 Dry Day: OFF'}
+          </button>
+        )}
+        {hint && <div className="hnav-hint-pill">{hint}</div>}
+      </div>
 
       {/* RIGHT ─ live table stats */}
       <div className="hnav-stats">

@@ -304,7 +304,7 @@ function StockModal({ item, onClose, onSave }) {
 
 /* MAIN */
 export default function InventoryPage() {
-  const { settings, role, can, inventory, setInventory, deleteInventoryItem, reorderInventoryItems } = useApp();
+  const { settings, role, can, inventory, setInventory, deleteInventoryItem, reorderInventoryItems, isDryDay, toggleDryDay } = useApp();
   const isAdmin = role === 'admin' || role === 'manager';
   const categories = Array.isArray(settings.inventoryCategories) && settings.inventoryCategories.length > 0
     ? settings.inventoryCategories
@@ -521,48 +521,66 @@ export default function InventoryPage() {
   return (
     <div className="fi inventory-page">
       {/* TABS */}
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '16px', gap: '8px', paddingBottom: '8px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', marginBottom: '16px', gap: '8px', paddingBottom: '8px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            className={`tab-btn ${activeTab === 'stock' ? 'active' : ''}`}
+            onClick={() => setActiveTab('stock')}
+            style={{
+              padding: '8px 16px',
+              background: activeTab === 'stock' ? 'var(--gradient-accent)' : 'var(--s2)',
+              border: activeTab === 'stock' ? 'none' : '1px solid var(--b1)',
+              borderRadius: '8px',
+              color: activeTab === 'stock' ? '#000000' : 'var(--t1)',
+              fontWeight: '800',
+              cursor: 'pointer',
+              fontSize: '13px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              boxShadow: activeTab === 'stock' ? 'var(--sh-glowing)' : 'none',
+              transition: 'all 0.25s var(--ease)'
+            }}
+          >
+            Current Stock
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'report' ? 'active' : ''}`}
+            onClick={() => setActiveTab('report')}
+            style={{
+              padding: '8px 16px',
+              background: activeTab === 'report' ? 'var(--gradient-accent)' : 'var(--s2)',
+              border: activeTab === 'report' ? 'none' : '1px solid var(--b1)',
+              borderRadius: '8px',
+              color: activeTab === 'report' ? '#000000' : 'var(--t1)',
+              fontWeight: '800',
+              cursor: 'pointer',
+              fontSize: '13px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              boxShadow: activeTab === 'report' ? 'var(--sh-glowing)' : 'none',
+              transition: 'all 0.25s var(--ease)'
+            }}
+          >
+            Daily Stock Report
+          </button>
+        </div>
+
+        {/* DRY DAY TOGGLE BUTTON */}
         <button
-          className={`tab-btn ${activeTab === 'stock' ? 'active' : ''}`}
-          onClick={() => setActiveTab('stock')}
-          style={{
-            padding: '8px 16px',
-            background: activeTab === 'stock' ? 'var(--gradient-accent)' : 'var(--s2)',
-            border: activeTab === 'stock' ? 'none' : '1px solid var(--b1)',
-            borderRadius: '8px',
-            color: activeTab === 'stock' ? '#000000' : 'var(--t1)',
-            fontWeight: '800',
-            cursor: 'pointer',
-            fontSize: '13px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            boxShadow: activeTab === 'stock' ? 'var(--sh-glowing)' : 'none',
-            transition: 'all 0.25s var(--ease)'
+          className={`dry-day-btn ${isDryDay ? 'active' : ''}`}
+          onClick={() => {
+            if (isAdmin) {
+              toggleDryDay();
+            } else {
+              alert('Only Admin/Manager can toggle Dry Day mode.');
+            }
           }}
+          title={isDryDay ? 'Dry Day is ACTIVE (Alcohol items disabled)' : 'Click to activate Dry Day (Disable all alcohol items)'}
+          style={{ cursor: isAdmin ? 'pointer' : 'not-allowed', margin: 0 }}
         >
-          Current Stock
-        </button>
-        <button
-          className={`tab-btn ${activeTab === 'report' ? 'active' : ''}`}
-          onClick={() => setActiveTab('report')}
-          style={{
-            padding: '8px 16px',
-            background: activeTab === 'report' ? 'var(--gradient-accent)' : 'var(--s2)',
-            border: activeTab === 'report' ? 'none' : '1px solid var(--b1)',
-            borderRadius: '8px',
-            color: activeTab === 'report' ? '#000000' : 'var(--t1)',
-            fontWeight: '800',
-            cursor: 'pointer',
-            fontSize: '13px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            boxShadow: activeTab === 'report' ? 'var(--sh-glowing)' : 'none',
-            transition: 'all 0.25s var(--ease)'
-          }}
-        >
-          Daily Stock Report
+          {isDryDay ? '🚫 DRY DAY: ON' : '🍺 Dry Day: OFF'}
         </button>
       </div>
 

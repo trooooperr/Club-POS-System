@@ -1631,6 +1631,29 @@ export function AppProvider({ children }) {
     }
   }, [socket]);
 
+  const toggleDryDay = useCallback(async (targetState) => {
+    const isDry = targetState !== undefined ? !!targetState : !settings.isDryDay;
+    try {
+      const res = await authFetch(apiUrl('/api/inventory/dry-day'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isDryDay: isDry })
+      });
+      if (!res.ok) throw new Error('Failed to toggle dry day');
+      const data = await res.json();
+      setSettings(prev => ({ ...prev, isDryDay: data.isDryDay }));
+      if (Array.isArray(data.inventory)) {
+        applyInventoryUpdate(data.inventory);
+      }
+      showToast(data.isDryDay ? '🚫 Dry Day Activated: All alcohol items disabled' : '🍺 Dry Day Deactivated: Alcohol items restored', data.isDryDay ? 'amber' : 'green');
+      return data;
+    } catch (err) {
+      console.error('Toggle dry day error:', err);
+      showToast('Failed to toggle Dry Day status', 'red');
+      throw err;
+    }
+  }, [settings.isDryDay, applyInventoryUpdate, setSettings, showToast]);
+
   return (
     <AppContext.Provider value={{
       currentUser, login, logout,
@@ -1655,6 +1678,7 @@ export function AppProvider({ children }) {
       saveMenuItem, deleteMenuItem, deleteOrder, updateOrderPayment, updateOrderDiscount,
       saveWorker, deleteWorker, updateWorkerStatus,
       toast, showToast,
+      isDryDay: !!settings.isDryDay, toggleDryDay,
       NUM_TABLES,
       // Print Agent
       agentConnected, agentPrinters, fetchAgentPrinters, pingPrintAgent,
