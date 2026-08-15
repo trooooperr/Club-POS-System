@@ -50,7 +50,7 @@ export default function HumTumBar({
       </div>
 
       {/* CENTER ─ Dry Day Button on Inventory Page & shortcut hint */}
-      <div className="hnav-center" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      {/* <div className="hnav-center" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
         {isInventoryPage && (
           <button
             className={`dry-day-btn ${isDryDay ? 'active' : ''}`}
@@ -68,7 +68,7 @@ export default function HumTumBar({
           </button>
         )}
         {hint && <div className="hnav-hint-pill">{hint}</div>}
-      </div>
+      </div> */}
 
       {/* RIGHT ─ live table stats */}
       <div className="hnav-stats">
