@@ -96,6 +96,13 @@ router.post(
     try {
       const { name, category, unit, stock, minStock, price, isAlcoholic, trackStock, linkInventoryId, stockDeductionQty, imageUrl } = req.body;
       const shortcut = (req.body.shortcut || '').toLowerCase().trim();
+
+      const Settings = require('../models/Settings');
+      const settings = await Settings.findOne();
+      const isDryActive = !!(settings && settings.isDryDay);
+      const isItemAlcoholic = !!(isAlcoholic || req.body.isAlcohol);
+      const initialAvailability = (isDryActive && isItemAlcoholic) ? false : (req.body.isAvailable !== false);
+
       const invItem = new Inventory({
         name,
         category,
@@ -105,8 +112,10 @@ router.post(
         price,
         shortcut,
         imageUrl: imageUrl || '',
-        isAlcoholic: !!isAlcoholic,
-        isAlcohol: !!isAlcoholic,
+        isAlcoholic: isItemAlcoholic,
+        isAlcohol: isItemAlcoholic,
+        isAvailable: initialAvailability,
+        available: initialAvailability,
         trackStock: trackStock !== false,
         linkInventoryId: linkInventoryId || null,
         stockDeductionQty: stockDeductionQty || 1
@@ -126,7 +135,7 @@ router.post(
       }
       await MenuItem.findOneAndUpdate(
         { name },
-        { name, category, price, available: trackStock === false ? true : (stock > 0), shortcut, department: 'bar', imageUrl: imageUrl || '' },
+        { name, category, price, available: initialAvailability ? (trackStock === false ? true : (stock > 0)) : false, shortcut, department: 'bar', imageUrl: imageUrl || '' },
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
       await deleteCache([INVENTORY_CACHE_KEY, MENU_CACHE_KEY]);
@@ -200,6 +209,14 @@ router.put(
         { new: true, runValidators: true }
       );
       if (!updated) return res.status(404).json({ message: 'Item not found' });
+
+      const Settings = require('../models/Settings');
+      const settings = await Settings.findOne();
+      if (settings && settings.isDryDay && (updated.isAlcoholic || updated.isAlcohol)) {
+        updated.isAvailable = false;
+        updated.available = false;
+        await updated.save();
+      }
       if (oldItem && oldItem.stock !== updated.stock) {
         try {
           const stockDiff = updated.stock - oldItem.stock;
@@ -347,22 +364,10 @@ router.post('/dry-day', requireRole(['admin', 'manager']), async (req, res) => {
     settings.isDryDay = dryDayBool;
     await settings.save();
 
-    const alcoholCategories = [
-      'BEER', 'WHISKY', 'VODKA', 'LIQUEUR', 'GIN', 'CLASSIC SCOTCH', 'SINGLE MALT',
-      'SHOOTERS', 'RUM', 'TEQUILA', 'WINE', 'COCKTAILS', 'BEERS', 'WHISKEY', 'CHAMPAGNE', 'SPIRITS'
-    ];
-
     const alcoholFilter = {
-      $and: [
-        { isAlcoholic: { $ne: false } },
-        { isAlcohol: { $ne: false } },
-        {
-          $or: [
-            { isAlcoholic: true },
-            { isAlcohol: true },
-            { category: { $in: alcoholCategories.map(c => new RegExp(`^${c}$`, 'i')) } }
-          ]
-        }
+      $or: [
+        { isAlcoholic: true },
+        { isAlcohol: true }
       ]
     };
 

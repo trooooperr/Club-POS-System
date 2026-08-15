@@ -1637,12 +1637,7 @@ export function AppProvider({ children }) {
     // 1. INSTANT OPTIMISTIC STATE UPDATE (0ms UI latency)
     setSettings(prev => ({ ...prev, isDryDay: isDry }));
 
-    const isAlcoholicItem = (i) => {
-      if (i.isAlcoholic === false || i.isAlcohol === false) return false;
-      if (i.isAlcoholic === true || i.isAlcohol === true) return true;
-      const alcoholCats = ['BEER', 'WHISKY', 'VODKA', 'LIQUEUR', 'GIN', 'CLASSIC SCOTCH', 'SINGLE MALT', 'SHOOTERS', 'RUM', 'TEQUILA', 'WINE', 'COCKTAILS', 'BEERS', 'WHISKEY', 'CHAMPAGNE', 'SPIRITS'];
-      return alcoholCats.includes((i.category || '').toUpperCase());
-    };
+    const isAlcoholicItem = (i) => !!(i.isAlcoholic || i.isAlcohol);
 
     setInventory(prev => prev.map(item => {
       if (isAlcoholicItem(item)) {
