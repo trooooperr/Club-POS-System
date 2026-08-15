@@ -133,11 +133,7 @@ router.post(
         const { syncChildStocks } = require('../lib/inventoryStock');
         await syncChildStocks([savedInv.linkInventoryId]);
       }
-      await MenuItem.findOneAndUpdate(
-        { name },
-        { name, category, price, available: initialAvailability ? (trackStock === false ? true : (stock > 0)) : false, shortcut, department: 'bar', imageUrl: imageUrl || '' },
-        { upsert: true, new: true, setDefaultsOnInsert: true }
-      );
+      await updateMenuAvailability();
       await deleteCache([INVENTORY_CACHE_KEY, MENU_CACHE_KEY]);
       if (req.app.locals.io) {
         req.app.locals.io.emit('REFRESH_MENU');
@@ -232,19 +228,7 @@ router.put(
       } else {
         await syncChildStocks([updated._id]);
       }
-      await MenuItem.findOneAndUpdate(
-        { name: updated.name },
-        {
-          name: updated.name,
-          category: updated.category,
-          price: updated.price,
-          available: updated.isAvailable === false ? false : (updated.trackStock === false ? true : (updated.stock > 0)),
-          shortcut: (updated.shortcut || '').toLowerCase().trim(),
-          department: 'bar',
-          imageUrl: updated.imageUrl || '',
-        },
-        { upsert: true, new: true, setDefaultsOnInsert: true }
-      );
+      await updateMenuAvailability();
       await deleteCache([INVENTORY_CACHE_KEY, MENU_CACHE_KEY]);
       if (req.app.locals.io) {
         req.app.locals.io.emit('REFRESH_MENU');

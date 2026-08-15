@@ -110,8 +110,8 @@ describe('HumTum POS - Rigorous API and Security Audit Suite', () => {
     });
   });
 
-  describe('2. Inventory API & Auto-Menu Creation Checks', () => {
-    it('should ALLOW manager to create inventory item and verify auto menu-sync', async () => {
+  describe('2. Inventory API & Decoupled Menu Checks', () => {
+    it('should ALLOW manager to create inventory item and verify it is NOT added to menu automatically', async () => {
       const res = await request(app)
         .post('/api/inventory')
         .set('Authorization', `Bearer ${managerToken}`)
@@ -129,12 +129,18 @@ describe('HumTum POS - Rigorous API and Security Audit Suite', () => {
       expect(res.body.name).toBe('Jack Daniels Whisky');
       sampleInventoryItem = res.body;
 
-      // Verify that MenuItem was auto-created/updated
+      // Verify that MenuItem was NOT auto-created
       const menuItem = await MenuItem.findOne({ name: 'Jack Daniels Whisky' });
-      expect(menuItem).toBeDefined();
-      expect(menuItem.price).toBe(250);
-      expect(menuItem.shortcut).toBe('jd');
-      sampleMenuItem = menuItem;
+      expect(menuItem).toBeNull();
+
+      // Create MenuItem explicitly for menu test suite
+      sampleMenuItem = await MenuItem.create({
+        name: 'Jack Daniels Whisky',
+        category: 'Spirits',
+        price: 250,
+        shortcut: 'jd',
+        department: 'bar'
+      });
     });
 
     it('should BLOCK staff from creating inventory items', async () => {
@@ -173,7 +179,7 @@ describe('HumTum POS - Rigorous API and Security Audit Suite', () => {
       expect(res.body.success).toBe(true);
     });
 
-    it('should ALLOW creating an inventory item with trackStock: false and verify it is available with no stock', async () => {
+    it('should ALLOW creating an inventory item with trackStock: false without creating menu item', async () => {
       const res = await request(app)
         .post('/api/inventory')
         .set('Authorization', `Bearer ${managerToken}`)
@@ -188,10 +194,9 @@ describe('HumTum POS - Rigorous API and Security Audit Suite', () => {
       expect(res.statusCode).toBe(201);
       expect(res.body.trackStock).toBe(false);
 
-      // Verify that corresponding MenuItem has available: true
+      // Verify that corresponding MenuItem was not auto-created
       const menuItem = await MenuItem.findOne({ name: 'Chocolate Milkshake' });
-      expect(menuItem).toBeDefined();
-      expect(menuItem.available).toBe(true);
+      expect(menuItem).toBeNull();
     });
   });
 
