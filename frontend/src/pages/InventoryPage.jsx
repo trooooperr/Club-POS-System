@@ -577,10 +577,11 @@ export default function InventoryPage() {
               alert('Only Admin/Manager can toggle Dry Day mode.');
             }
           }}
-          title={isDryDay ? 'Dry Day is ACTIVE (Alcohol items disabled)' : 'Click to activate Dry Day (Disable all alcohol items)'}
+          title={isDryDay ? 'Dry Day mode is ACTIVE' : 'Click to activate Dry Day mode'}
           style={{ cursor: isAdmin ? 'pointer' : 'not-allowed', margin: 0 }}
         >
-          {isDryDay ? '🚫 DRY DAY: ON' : '🍺 Dry Day: OFF'}
+          <span className="dry-day-dot" />
+          <span>{isDryDay ? 'DRY DAY: ACTIVE' : 'DRY DAY: OFF'}</span>
         </button>
       </div>
 

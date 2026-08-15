@@ -1633,6 +1633,27 @@ export function AppProvider({ children }) {
 
   const toggleDryDay = useCallback(async (targetState) => {
     const isDry = targetState !== undefined ? !!targetState : !settings.isDryDay;
+
+    // 1. INSTANT OPTIMISTIC STATE UPDATE (0ms UI latency)
+    setSettings(prev => ({ ...prev, isDryDay: isDry }));
+
+    const isAlcoholicItem = (i) => {
+      if (i.isAlcoholic === false || i.isAlcohol === false) return false;
+      if (i.isAlcoholic === true || i.isAlcohol === true) return true;
+      const alcoholCats = ['BEER', 'WHISKY', 'VODKA', 'LIQUEUR', 'GIN', 'CLASSIC SCOTCH', 'SINGLE MALT', 'SHOOTERS', 'RUM', 'TEQUILA', 'WINE', 'COCKTAILS', 'BEERS', 'WHISKEY', 'CHAMPAGNE', 'SPIRITS'];
+      return alcoholCats.includes((i.category || '').toUpperCase());
+    };
+
+    setInventory(prev => prev.map(item => {
+      if (isAlcoholicItem(item)) {
+        return { ...item, isAvailable: !isDry, available: !isDry };
+      }
+      return item;
+    }));
+
+    showToast(isDry ? 'Dry Day Activated: Alcohol items disabled' : 'Dry Day Deactivated: Alcohol items restored', isDry ? 'amber' : 'green');
+
+    // 2. BACKGROUND API SYNC
     try {
       const res = await authFetch(apiUrl('/api/inventory/dry-day'), {
         method: 'POST',
@@ -1645,14 +1666,14 @@ export function AppProvider({ children }) {
       if (Array.isArray(data.inventory)) {
         applyInventoryUpdate(data.inventory);
       }
-      showToast(data.isDryDay ? '🚫 Dry Day Activated: All alcohol items disabled' : '🍺 Dry Day Deactivated: Alcohol items restored', data.isDryDay ? 'amber' : 'green');
       return data;
     } catch (err) {
       console.error('Toggle dry day error:', err);
+      // Rollback on error
+      setSettings(prev => ({ ...prev, isDryDay: !isDry }));
       showToast('Failed to toggle Dry Day status', 'red');
-      throw err;
     }
-  }, [settings.isDryDay, applyInventoryUpdate, setSettings, showToast]);
+  }, [settings.isDryDay, applyInventoryUpdate, setSettings, showToast, setInventory]);
 
   return (
     <AppContext.Provider value={{

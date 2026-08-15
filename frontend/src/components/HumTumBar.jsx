@@ -61,9 +61,10 @@ export default function HumTumBar({
                 alert('Only Admin/Manager can toggle Dry Day mode.');
               }
             }}
-            title={isDryDay ? 'Dry Day is ACTIVE (Alcohol items disabled)' : 'Click to activate Dry Day (Disable all alcohol items)'}
+            title={isDryDay ? 'Dry Day mode is ACTIVE' : 'Click to activate Dry Day mode'}
           >
-            {isDryDay ? '🚫 DRY DAY: ON' : '🍺 Dry Day: OFF'}
+            <span className="dry-day-dot" />
+            <span>{isDryDay ? 'DRY DAY: ACTIVE' : 'DRY DAY: OFF'}</span>
           </button>
         )}
         {hint && <div className="hnav-hint-pill">{hint}</div>}

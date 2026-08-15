@@ -353,10 +353,16 @@ router.post('/dry-day', requireRole(['admin', 'manager']), async (req, res) => {
     ];
 
     const alcoholFilter = {
-      $or: [
-        { isAlcoholic: true },
-        { isAlcohol: true },
-        { category: { $in: alcoholCategories.map(c => new RegExp(`^${c}$`, 'i')) } }
+      $and: [
+        { isAlcoholic: { $ne: false } },
+        { isAlcohol: { $ne: false } },
+        {
+          $or: [
+            { isAlcoholic: true },
+            { isAlcohol: true },
+            { category: { $in: alcoholCategories.map(c => new RegExp(`^${c}$`, 'i')) } }
+          ]
+        }
       ]
     };
 
