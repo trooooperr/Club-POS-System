@@ -409,7 +409,7 @@ app.post('/test-print', authMiddleware, (req, res) => {
         </style>
       </head>
       <body>
-        <div class="bold">HumTum POS</div>
+        <div class="bold">HUMTUM Billing System</div>
         <div>Print Agent Test</div>
         <div class="divider"></div>
         <div>Printer: ${printerName}</div>

@@ -65,7 +65,7 @@ export default function LoginPage() {
         <div className="lcard fi">
           <div className="llogo">
             <img src="/favicon.ico" alt="Logo" className="llogo-img" />
-            <div className="ltitle">{settings.restaurantName || 'HumTum'}</div>
+          <div className="ltitle">{settings.restaurantName || 'HUMTUM Billing System'}</div>
             <div className="lsub">
               {fpMode === 'done' ? '✓ Password Reset!' : fpMode === 'otp' ? 'Enter Verification Code' : 'Account Recovery'}
             </div>
@@ -230,7 +230,7 @@ export default function LoginPage() {
         {/* Brand */}
         <div className="llogo">
           <img src="/favicon.ico" alt="Logo" className="llogo-img" />
-          <div className="ltitle">{settings.restaurantName || 'HumTum The Bar & Restaurant'}</div>
+          <div className="ltitle">{settings.restaurantName || 'HUMTUM Billing System'}</div>
           <div className="lsub">Point of Sale</div>
         </div>
 

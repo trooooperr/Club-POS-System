@@ -58,7 +58,7 @@ function removeCategory(list, category) {
 function normalizeSettings(data) {
   return {
     ...data.toObject(),
-    restaurantName: data.restaurantName || '',
+    restaurantName: data.restaurantName || 'HUMTUM Billing System',
     address: data.address || '',
     gstin: data.gstin || '',
     phone: data.phone || '',

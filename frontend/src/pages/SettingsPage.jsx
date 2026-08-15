@@ -493,7 +493,7 @@ export default function SettingsPage() {
           <div className="settings-fields">
             <div className="settings-field settings-wide">
               <label>Restaurant Name</label>
-              <input value={form.restaurantName || ''} onChange={e => set('restaurantName', e.target.value)} placeholder="HumTum Bar & Restaurant" />
+              <input value={form.restaurantName || ''} onChange={e => set('restaurantName', e.target.value)} placeholder="HUMTUM Billing System" />
             </div>
             <div className="settings-field settings-wide">
               <label>Address</label>

@@ -70,7 +70,7 @@ const INVENTORY_CACHE = 'ht_inventory_cache';
 const NUM_TABLES = 20;
 
 const DEFAULT_SETTINGS = {
-  restaurantName:  'HumTum Bar & Restaurant',
+  restaurantName:  'HUMTUM Billing System',
   address:         'Rajendra Nagar, Gorakhpur',
   gstin:           '09AXFPG9491D1Z8',
   phone:           '',

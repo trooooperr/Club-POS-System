@@ -731,7 +731,7 @@ export default function BillingPage() {
           name: i.name,
           quantity: i.quantity,
           price: i.price,
-          department: isInv ? 'bar' : (master?.department || i.department || 'kitchen'),
+          department: (i.department === 'bar' || master?.department === 'bar' || isInv) ? 'bar' : 'kitchen',
           notes: i.note || ''
         };
       });

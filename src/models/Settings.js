@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const settingsSchema = new mongoose.Schema({
-  restaurantName: { type: String, default: '' },
+  restaurantName: { type: String, default: 'HUMTUM Billing System' },
   address:        { type: String, default: '' },
   gstin:          { type: String, default: '' },
   phone:          { type: String, default: '' },
