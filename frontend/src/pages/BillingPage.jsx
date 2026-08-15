@@ -1492,7 +1492,7 @@ export default function BillingPage() {
                       }}
                       title="Click to view KOT details"
                     >
-                      <span>{k.kotNo || `KOT-${i + 1}`} · {new Date(k.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
+                      <span>{k.kotNo || `KOT-${k._id?.slice(-4) || (i + 1)}`} · {new Date(k.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
                     </button>
                   ))}
                 </div>

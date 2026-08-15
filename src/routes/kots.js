@@ -77,14 +77,7 @@ async function generateKOTNo() {
   const boundary = getBusinessDayBoundary();
   const dateStr = getBusinessDateString(boundary);
 
-  // 1. Atomically increment the counter for today's business date
-  let counter = await KotCounter.findOneAndUpdate(
-    { businessDate: dateStr },
-    { $inc: { seq: 1 } },
-    { new: true, upsert: true }
-  );
-
-  // 2. Maximum sequence safety check across existing KOTs for today
+  // 1. Calculate highest existing sequence number among KOTs created today
   const kotsToday = await KOT.find({ createdAt: { $gte: boundary } }, { kotNo: 1 });
   let maxSeqInDb = 0;
   for (const k of kotsToday) {
@@ -97,20 +90,41 @@ async function generateKOTNo() {
     }
   }
 
-  // If the counter sequence is less than or equal to an existing KOT number today, boost it atomically!
-  if (counter.seq <= maxSeqInDb) {
-    const nextSeq = maxSeqInDb + 1;
+  // 2. Atomically increment the counter for today's business date
+  let counter = await KotCounter.findOneAndUpdate(
+    { businessDate: dateStr },
+    { $inc: { seq: 1 } },
+    { new: true, upsert: true }
+  );
+
+  let seqNumber = (counter && typeof counter.seq === 'number') ? counter.seq : 1;
+
+  // 3. If counter sequence is <= max existing KOT number today, boost it atomically
+  if (seqNumber <= maxSeqInDb) {
+    seqNumber = maxSeqInDb + 1;
     const updated = await KotCounter.findOneAndUpdate(
-      { businessDate: dateStr, seq: { $lt: nextSeq } },
-      { $set: { seq: nextSeq } },
-      { new: true }
+      { businessDate: dateStr },
+      { $set: { seq: seqNumber } },
+      { new: true, upsert: true }
     );
-    counter = updated || { seq: nextSeq };
+    if (updated && updated.seq) seqNumber = updated.seq;
   }
 
-  const seqNumber = counter.seq;
+  // 4. Absolute DB collision check: loop until candidateKotNo is 100% unique for today
+  let candidateKotNo = `KOT-${seqNumber.toString().padStart(3, '0')}`;
+  let existing = await KOT.findOne({ kotNo: candidateKotNo, createdAt: { $gte: boundary } });
+  while (existing) {
+    seqNumber += 1;
+    candidateKotNo = `KOT-${seqNumber.toString().padStart(3, '0')}`;
+    await KotCounter.findOneAndUpdate(
+      { businessDate: dateStr },
+      { $set: { seq: seqNumber } },
+      { upsert: true }
+    );
+    existing = await KOT.findOne({ kotNo: candidateKotNo, createdAt: { $gte: boundary } });
+  }
 
-  // 3. Passively sync to Redis if available
+  // 5. Passively sync to Redis if available
   try {
     const client = await redis.connectRedis();
     if (client) {
@@ -119,10 +133,10 @@ async function generateKOTNo() {
       await client.expire(kotCounterKey, 172800); // 48h expiration
     }
   } catch (redisErr) {
-    // Non-blocking fallback if Redis connection has issues
+    // Non-blocking fallback
   }
 
-  return `KOT-${seqNumber.toString().padStart(3, '0')}`;
+  return candidateKotNo;
 }
 
 
