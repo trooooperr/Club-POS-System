@@ -1191,92 +1191,135 @@ export default function BillingPage() {
 
             <div className="section-divider" />
             <input className="mini-input customer-input" value={table.customerName || ''} onChange={e => setTableField(activeTableId, 'customerName', e.target.value)} placeholder="Customer Name" />
-            <input 
-              className="mini-input customer-input" 
-              type={role === 'admin' ? 'text' : 'password'} 
-              value={table.customerPhone || ''} 
-              onChange={e => setTableField(activeTableId, 'customerPhone', e.target.value)} 
-              placeholder="Mobile No" 
-              maxLength={10} 
-              title={role !== 'admin' ? 'Customer mobile number is hidden for privacy' : 'Mobile No'}
-            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+              <input 
+                className="mini-input customer-input" 
+                type={role === 'admin' ? 'text' : 'password'} 
+                value={table.customerPhone || ''} 
+                onChange={e => setTableField(activeTableId, 'customerPhone', e.target.value)} 
+                placeholder="Mobile No" 
+                maxLength={10} 
+                title={role !== 'admin' ? 'Customer mobile number is hidden for privacy' : 'Mobile No'}
+                style={{ flex: 1, marginBottom: 0 }}
+              />
 
-            {/* Expandable CRM Customer History Div */}
-            {table.customerPhone && table.customerPhone.replace(/\D/g, '').length === 10 && customerHistoryMap[activeTableId] && (
+              {table.customerPhone && table.customerPhone.replace(/\D/g, '').length === 10 && customerHistoryMap[activeTableId] && (
+                <div style={{ display: 'flex', alignItems: 'center', height: '24px', flexShrink: 0 }}>
+                  {(customerHistoryMap[activeTableId]?.totalOrders || 0) > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowHistory(!showHistory)}
+                      style={{
+                        background: 'rgba(245, 158, 11, 0.12)',
+                        border: '1px solid rgba(245, 158, 11, 0.35)',
+                        borderRadius: '6px',
+                        color: '#f59e0b',
+                        padding: '0 8px',
+                        fontSize: '10.5px',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        height: '24px',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      <span>Old Customer ({customerHistoryMap[activeTableId].totalOrders} Visits)</span>
+                      <span style={{ fontSize: '9px' }}>{showHistory ? '▲' : '▼'}</span>
+                    </button>
+                  ) : (
+                    <span
+                      style={{
+                        background: 'rgba(16, 185, 129, 0.12)',
+                        border: '1px solid rgba(16, 185, 129, 0.35)',
+                        borderRadius: '6px',
+                        color: '#10b981',
+                        padding: '0 8px',
+                        fontSize: '10.5px',
+                        fontWeight: '700',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        height: '24px',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      New Customer
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Expanded CRM Customer History Div (Full Width of Billing Area) */}
+            {showHistory && table.customerPhone && table.customerPhone.replace(/\D/g, '').length === 10 && (customerHistoryMap[activeTableId]?.totalOrders || 0) > 0 && (
               <div style={{
+                width: '100%',
                 background: 'var(--bg3)',
                 border: '1px solid var(--b2)',
                 borderRadius: '8px',
-                padding: '6px 10px',
-                marginTop: '4px',
-                marginBottom: '8px'
+                padding: '8px 10px',
+                marginTop: '2px',
+                marginBottom: '8px',
+                boxSizing: 'border-box'
               }}>
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   fontSize: '11px',
-                  fontWeight: '700'
+                  fontWeight: '700',
+                  color: 'var(--t1)',
+                  marginBottom: '6px',
+                  paddingBottom: '4px',
+                  borderBottom: '1px dashed var(--b2)'
                 }}>
-                  <span style={{ color: (customerHistoryMap[activeTableId]?.totalOrders || 0) > 0 ? '#f59e0b' : '#10b981' }}>
-                    {(customerHistoryMap[activeTableId]?.totalOrders || 0) > 0 
-                      ? `Old Customer (${customerHistoryMap[activeTableId].totalOrders} Visits)` 
-                      : 'New Customer'}
+                  <span style={{ color: '#f59e0b' }}>
+                    Old Customer ({customerHistoryMap[activeTableId].totalOrders} Visits History)
                   </span>
-                  {(customerHistoryMap[activeTableId]?.totalOrders || 0) > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setShowHistory(!showHistory)}
-                      style={{
-                        background: 'var(--b2)',
-                        border: 'none',
-                        borderRadius: '4px',
-                        color: 'var(--t1)',
-                        padding: '2px 8px',
-                        fontSize: '10px',
-                        fontWeight: '600',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px'
-                      }}
-                    >
-                      <span>History</span>
-                      <span style={{ fontSize: '9px' }}>{showHistory ? '▲' : '▼'}</span>
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowHistory(false)}
+                    style={{
+                      background: 'var(--b2)',
+                      border: 'none',
+                      borderRadius: '4px',
+                      color: 'var(--t1)',
+                      padding: '2px 8px',
+                      fontSize: '10px',
+                      fontWeight: '600',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Close ▲
+                  </button>
                 </div>
 
-                {showHistory && (customerHistoryMap[activeTableId]?.totalOrders || 0) > 0 && (
-                  <div style={{
-                    maxHeight: '130px',
-                    overflowY: 'auto',
-                    marginTop: '6px',
-                    paddingTop: '6px',
-                    borderTop: '1px dashed var(--b2)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '4px'
-                  }}>
-                    {customerHistoryMap[activeTableId]?.orders?.map((ord, idx) => (
-                      <div key={idx} style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        fontSize: '11px',
-                        color: 'var(--t1)',
-                        padding: '4px 6px',
-                        borderRadius: '4px',
-                        background: 'var(--bg2)',
-                        fontWeight: '700'
-                      }}>
-                        <span>{new Date(ord.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                        <span style={{ fontWeight: '700', color: 'var(--t1)' }}>
-                          {ord.billNo ? `Bill: ${ord.billNo}` : 'Visit'} {ord.total ? `(₹${ord.total})` : ''}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <div style={{
+                  maxHeight: '130px',
+                  overflowY: 'auto',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px'
+                }}>
+                  {customerHistoryMap[activeTableId]?.orders?.map((ord, idx) => (
+                    <div key={idx} style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      fontSize: '11px',
+                      color: 'var(--t1)',
+                      padding: '4px 6px',
+                      borderRadius: '4px',
+                      background: 'var(--bg2)',
+                      fontWeight: '700'
+                    }}>
+                      <span>{new Date(ord.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                      <span style={{ fontWeight: '700', color: 'var(--t1)' }}>
+                        {ord.billNo ? `Bill: ${ord.billNo}` : 'Visit'} {ord.total ? `(₹${ord.total})` : ''}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
