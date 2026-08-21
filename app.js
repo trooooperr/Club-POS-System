@@ -200,13 +200,22 @@ app.use('/api/admin',     requireAuth, require('./src/routes/admin'));
 // ── Static files (frontend dist) ────────────────────────────────
 const frontendDist = path.join(__dirname, 'frontend', 'dist');
 app.use(express.static(frontendDist, {
-  maxAge: '1d',
+  maxAge: '1y',
+  immutable: true,
   etag: true,
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('index.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    }
+  }
 }));
 
 app.get('*', (req, res) => {
   const file = path.join(frontendDist, 'index.html');
-  if (fs.existsSync(file)) return res.sendFile(file);
+  if (fs.existsSync(file)) {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    return res.sendFile(file);
+  }
   res.json({ message: 'API running only' });
 });
 

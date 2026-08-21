@@ -40,6 +40,9 @@ const sortMenuItems = async (items) => {
 // Get all menu items (Staff and above can view menu)
 router.get('/', async (req, res) => {
   try {
+    const cached = await getCache(MENU_CACHE_KEY);
+    if (cached) return res.json(cached);
+
     const rawItems = await MenuItem.find();
     const items = await sortMenuItems(rawItems);
     await setCache(MENU_CACHE_KEY, items, 300);

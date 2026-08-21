@@ -49,26 +49,6 @@ export default function HumTumBar({
         </div>
       </div>
 
-      {/* CENTER ─ Dry Day Button on Inventory Page & shortcut hint */}
-      {/* <div className="hnav-center" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        {isInventoryPage && (
-          <button
-            className={`dry-day-btn ${isDryDay ? 'active' : ''}`}
-            onClick={() => {
-              if (isAdmin) {
-                toggleDryDay();
-              } else {
-                alert('Only Admin/Manager can toggle Dry Day mode.');
-              }
-            }}
-            title={isDryDay ? 'Dry Day mode is ACTIVE' : 'Click to activate Dry Day mode'}
-          >
-            <span className="dry-day-dot" />
-            <span>{isDryDay ? 'DRY DAY: ACTIVE' : 'DRY DAY: OFF'}</span>
-          </button>
-        )}
-        {hint && <div className="hnav-hint-pill">{hint}</div>}
-      </div> */}
 
       {/* RIGHT ─ live table stats */}
       <div className="hnav-stats">

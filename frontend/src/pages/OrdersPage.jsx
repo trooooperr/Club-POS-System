@@ -1,6 +1,7 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Search, CalendarDays, X } from 'lucide-react';
+import { Search, CalendarDays, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { authFetch, apiUrl } from '../lib/api';
 import TopNavBar from '../components/TopNavBar';
 
 function DateField({ value, onChange, inputRef, label }) {
@@ -267,9 +268,69 @@ export default function OrdersPage() {
   const [search, setSearch] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [editingPaymentOrder, setEditingPaymentOrder] = useState(null); // Full order object being edited
-  const [editingDiscountOrder, setEditingDiscountOrder] = useState(null); // Discount edit
+  const [editingPaymentOrder, setEditingPaymentOrder] = useState(null);
+  const [editingDiscountOrder, setEditingDiscountOrder] = useState(null);
   const c = settings.currency;
+
+  const getCurrentMonthStr = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  };
+
+  const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthStr);
+  const [monthOrders, setMonthOrders] = useState(null);
+  const [loadingMonth, setLoadingMonth] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    setLoadingMonth(true);
+    authFetch(apiUrl(`/api/orders?month=${selectedMonth}`))
+      .then(res => res.ok ? res.json() : [])
+      .then(data => {
+        if (isMounted) {
+          setMonthOrders(data);
+          setLoadingMonth(false);
+        }
+      })
+      .catch(err => {
+        console.error('Failed to load month orders:', err);
+        if (isMounted) setLoadingMonth(false);
+      });
+    return () => { isMounted = false; };
+  }, [selectedMonth]);
+
+  const activeOrdersList = monthOrders !== null ? monthOrders : (Array.isArray(orderHistory) ? orderHistory : []);
+
+  const formatMonthLabel = (ymStr) => {
+    if (!ymStr) return '';
+    const [y, m] = ymStr.split('-').map(Number);
+    const date = new Date(y, m - 1, 1);
+    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  };
+
+  const handlePrevMonth = () => {
+    const [y, m] = selectedMonth.split('-').map(Number);
+    let prevY = y;
+    let prevM = m - 1;
+    if (prevM < 1) {
+      prevM = 12;
+      prevY -= 1;
+    }
+    setSelectedMonth(`${prevY}-${String(prevM).padStart(2, '0')}`);
+  };
+
+  const handleNextMonth = () => {
+    const [y, m] = selectedMonth.split('-').map(Number);
+    let nextY = y;
+    let nextM = m + 1;
+    if (nextM > 12) {
+      nextM = 1;
+      nextY += 1;
+    }
+    setSelectedMonth(`${nextY}-${String(nextM).padStart(2, '0')}`);
+  };
+
+  const isCurrentOrFutureMonth = (ymStr) => ymStr >= getCurrentMonthStr();
 
   const getLocalDateString = (dateObj) => {
     if (!dateObj) return '';
@@ -305,6 +366,7 @@ export default function OrdersPage() {
     if (window.confirm(`Are you sure you want to delete order ${displayBillNo}?`)) {
       try {
         await deleteOrder(id);
+        setMonthOrders(prev => prev ? prev.filter(o => o._id !== id) : null);
         showToast('Order deleted successfully', 'success');
       } catch (err) {
         showToast(err.message || 'Failed to delete order', 'error');
@@ -314,7 +376,10 @@ export default function OrdersPage() {
 
   const handlePaymentSave = async (orderId, paymentMode, cashAmount, upiAmount) => {
     try {
-      await updateOrderPayment(orderId, paymentMode, cashAmount, upiAmount);
+      const updated = await updateOrderPayment(orderId, paymentMode, cashAmount, upiAmount);
+      if (updated && monthOrders) {
+        setMonthOrders(prev => prev.map(o => o._id === orderId ? { ...o, paymentMode: updated.paymentMode, cashAmount: updated.cashAmount, upiAmount: updated.upiAmount } : o));
+      }
       showToast('Payment mode updated', 'success');
     } catch (err) {
       showToast(err.message || 'Failed to update payment', 'error');
@@ -323,7 +388,10 @@ export default function OrdersPage() {
 
   const handleDiscountSave = async (orderId, discount) => {
     try {
-      await updateOrderDiscount(orderId, discount);
+      const updated = await updateOrderDiscount(orderId, discount);
+      if (updated && monthOrders) {
+        setMonthOrders(prev => prev.map(o => o._id === orderId ? updated : o));
+      }
       showToast('Discount updated successfully', 'success');
     } catch (err) {
       showToast(err.message || 'Failed to update discount', 'error');
@@ -331,7 +399,7 @@ export default function OrdersPage() {
   };
 
   const filtered = useMemo(() => {
-    const list = (Array.isArray(orderHistory) ? orderHistory : []).filter(o => {
+    const list = (Array.isArray(activeOrdersList) ? activeOrdersList : []).filter(o => {
       if (o.isActive) return false;
       if (!o.billNo || o.billNo.trim() === '') return false;
       const localDateStr = o.businessDate || getLocalDateString(o.date);
@@ -342,14 +410,12 @@ export default function OrdersPage() {
       return matchDate && matchSearch;
     });
 
-    // Group by business calendar day descending, then sort by billNo numeric value descending (newest prints on top)
-    // This ensures sorting order is stable and does not shift when updating payment mode or discounts.
     return list.sort((a, b) => {
       const aBiz = a.businessDate || getLocalDateString(a.date || a.createdAt);
       const bBiz = b.businessDate || getLocalDateString(b.date || b.createdAt);
 
       if (aBiz !== bBiz) {
-        return bBiz.localeCompare(aBiz); // Descending: latest business day first
+        return bBiz.localeCompare(aBiz);
       }
 
       const aNo = a.billNo || '';
@@ -361,9 +427,9 @@ export default function OrdersPage() {
       const aNum = aMatch ? parseInt(aMatch[1], 10) : 0;
       const bNum = bMatch ? parseInt(bMatch[1], 10) : 0;
 
-      return bNum - aNum; // Descending: higher bill numbers first
+      return bNum - aNum;
     });
-  }, [orderHistory, search, startDate, endDate]);
+  }, [activeOrdersList, search, startDate, endDate]);
 
   const payBadge = (mode, order) => {
     const cls = { cash: 'badge-cash', card: 'badge-card', upi: 'badge-upi', split: 'badge-split' };
@@ -399,6 +465,48 @@ export default function OrdersPage() {
   return (
     <div className="fi fade-in orders-container">
 
+      {/* MONTH PAGINATION BAR */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '10px 16px',
+        background: 'var(--s1)',
+        borderRadius: '12px',
+        border: '1px solid var(--b1)',
+        marginBottom: 12
+      }}>
+        <button
+          className="btn btn-sm btn-subtle"
+          onClick={handlePrevMonth}
+          style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px', cursor: 'pointer' }}
+          title="Previous Month"
+        >
+          <ChevronLeft size={16} />
+          <span>Previous</span>
+        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 800, color: 'var(--t0)' }}>
+          <CalendarDays size={16} style={{ color: 'var(--a)' }} />
+          <span>{formatMonthLabel(selectedMonth)}</span>
+          {loadingMonth && <span style={{ fontSize: '11px', color: 'var(--a)' }}>(Loading...)</span>}
+        </div>
+
+        <button
+          className="btn btn-sm btn-subtle"
+          onClick={handleNextMonth}
+          disabled={isCurrentOrFutureMonth(selectedMonth)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px',
+            cursor: isCurrentOrFutureMonth(selectedMonth) ? 'not-allowed' : 'pointer',
+            opacity: isCurrentOrFutureMonth(selectedMonth) ? 0.4 : 1
+          }}
+          title="Next Month"
+        >
+          <span>Next</span>
+          <ChevronRight size={16} />
+        </button>
+      </div>
 
       {/* FILTER BAR - FIXED ALIGNMENT */}
       <div className="orders-filters-row">

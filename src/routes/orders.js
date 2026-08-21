@@ -72,15 +72,43 @@ router.get('/customer-history/:phone', async (req, res) => {
 
 router.get('/', async (req, res) => {
   try {
-    const cached = await getCache(ORDERS_CACHE_KEY);
+    const { month, limit } = req.query;
+    
+    // Default to current business date month if not specified
+    let targetMonth = month;
+    if (!targetMonth || !/^\d{4}-\d{2}$/.test(targetMonth)) {
+      targetMonth = getBusinessDateString(new Date()).substring(0, 7);
+    }
+    
+    const cacheKey = `orders:month:${targetMonth}`;
+    const cached = await getCache(cacheKey);
     if (cached) return res.json(cached);
 
-    const orders = await Order.find({
+    const monthRegex = new RegExp(`^${targetMonth}`);
+    const [yearStr, mStr] = targetMonth.split('-');
+    const year = parseInt(yearStr, 10);
+    const mIndex = parseInt(mStr, 10) - 1;
+    const startDate = new Date(Date.UTC(year, mIndex, 1));
+    const endDate = new Date(Date.UTC(year, mIndex + 1, 1));
+
+    const maxLimit = limit ? parseInt(limit, 10) : 0;
+    
+    let query = Order.find({
       isActive: { $ne: true },
       grandTotal: { $gt: 0 },
-      billNo: { $ne: '' }
+      billNo: { $ne: '' },
+      $or: [
+        { businessDate: monthRegex },
+        { date: { $gte: startDate, $lt: endDate } }
+      ]
     }).sort({ date: -1, billNo: -1 });
-    await setCache(ORDERS_CACHE_KEY, orders, 180);
+
+    if (maxLimit > 0) {
+      query = query.limit(maxLimit);
+    }
+
+    const orders = await query;
+    await setCache(cacheKey, orders, 180);
     res.json(orders);
   } catch (err) { res.status(500).json({ message: err.message }); }
 });

@@ -40,6 +40,9 @@ const sortInventoryItems = async (items) => {
 // GET ALL INVENTORY ITEMS (Allowed for all authenticated staff)
 router.get('/', async (req, res) => {
   try {
+    const cached = await getCache(INVENTORY_CACHE_KEY);
+    if (cached) return res.json(cached);
+
     const rawItems = await Inventory.find().populate('linkInventoryId');
     const items = await sortInventoryItems(rawItems);
     await setCache(INVENTORY_CACHE_KEY, items, 300);

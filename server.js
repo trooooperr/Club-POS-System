@@ -38,7 +38,7 @@ const server = http.createServer(app);
 const io = socketIO(server, {
   cors: { origin: true, credentials: true },
   pingTimeout: 60000,
-  pingInterval: 25000,
+  pingInterval: 45000,
 });
 
 // ── MongoDB URI resolution ───────────────────────────────────────

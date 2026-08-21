@@ -257,8 +257,12 @@ async function deductInventoryForItems(items = [], dateOrBusinessDate = null) {
   });
   await syncChildStocks(uniqueParentIds);
   await updateMenuAvailability();
-  await deleteCache([INVENTORY_CACHE_KEY, MENU_CACHE_KEY]);
-  return getInventorySnapshot();
+  const snapshot = await getInventorySnapshot();
+  const freshMenuItems = await MenuItem.find();
+  const { setCache } = require('./redis');
+  await setCache(INVENTORY_CACHE_KEY, snapshot, 300).catch(() => {});
+  await setCache(MENU_CACHE_KEY, freshMenuItems, 300).catch(() => {});
+  return snapshot;
 }
 
 function buildInventoryDelta(finalItems = [], alreadyDeducted = new Map()) {
@@ -395,8 +399,12 @@ async function refundInventoryForItems(items = [], dateOrBusinessDate = null) {
   });
   await syncChildStocks(uniqueParentIds);
   await updateMenuAvailability();
-  await deleteCache([INVENTORY_CACHE_KEY, MENU_CACHE_KEY]);
-  return getInventorySnapshot();
+  const snapshot = await getInventorySnapshot();
+  const freshMenuItems = await MenuItem.find();
+  const { setCache } = require('./redis');
+  await setCache(INVENTORY_CACHE_KEY, snapshot, 300).catch(() => {});
+  await setCache(MENU_CACHE_KEY, freshMenuItems, 300).catch(() => {});
+  return snapshot;
 }
 
 module.exports = {
