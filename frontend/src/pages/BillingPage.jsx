@@ -638,8 +638,9 @@ export default function BillingPage() {
   // Auto-fill returning customer details and load CRM history when 10-digit phone number is entered
   useEffect(() => {
     const rawPhone = (table.customerPhone || '').replace(/\D/g, '');
-    if (rawPhone.length === 10) {
-      authFetch(apiUrl(`/api/orders/customer-history/${rawPhone}`))
+    const cleanDigits = rawPhone.length >= 10 ? rawPhone.slice(-10) : '';
+    if (cleanDigits.length === 10) {
+      authFetch(apiUrl(`/api/orders/customer-history/${cleanDigits}`))
         .then(res => res.json())
         .then(data => {
           if (data && data.customerName && !table.customerName) {

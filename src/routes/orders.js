@@ -330,6 +330,20 @@ router.post('/', async (req, res) => {
     });
     const saved = await order.save();
 
+    // Record customer visit in CRM if completed
+    if (saved.customerPhone && !saved.isActive) {
+      const { recordCustomerVisit } = require('../lib/crmService');
+      recordCustomerVisit({
+        phone: saved.customerPhone,
+        name: saved.customerName,
+        billNo: saved.billNo,
+        amount: saved.grandTotal,
+        items: saved.items,
+        orderType: saved.orderType,
+        date: saved.date || saved.createdAt
+      }).catch(err => console.error('CRM record visit error:', err.message));
+    }
+
     // Trigger WhatsApp Thank You notification in the background
     if (saved.customerPhone && !saved.isActive) {
       (async () => {
@@ -564,6 +578,20 @@ router.patch('/:id/settle', async (req, res) => {
 
     const saved = await order.save();
 
+    // Record customer visit in CRM if completed/paid
+    if (saved.customerPhone && !saved.isActive) {
+      const { recordCustomerVisit } = require('../lib/crmService');
+      recordCustomerVisit({
+        phone: saved.customerPhone,
+        name: saved.customerName,
+        billNo: saved.billNo,
+        amount: saved.grandTotal,
+        items: saved.items,
+        orderType: saved.orderType,
+        date: saved.date || saved.createdAt
+      }).catch(err => console.error('CRM record visit error:', err.message));
+    }
+
     // Update table session
     await TableSession.findOneAndUpdate(
       { activeOrderId: order._id },
@@ -672,6 +700,20 @@ router.patch('/:id/complete', async (req, res) => {
       order.businessDate = getBusinessDateString(order.date || order.createdAt);
     }
     const saved = await order.save();
+
+    // Record customer visit in CRM if completed
+    if (saved.customerPhone && !saved.isActive) {
+      const { recordCustomerVisit } = require('../lib/crmService');
+      recordCustomerVisit({
+        phone: saved.customerPhone,
+        name: saved.customerName,
+        billNo: saved.billNo,
+        amount: saved.grandTotal,
+        items: saved.items,
+        orderType: saved.orderType,
+        date: saved.date || saved.createdAt
+      }).catch(err => console.error('CRM record visit error:', err.message));
+    }
 
     // Trigger WhatsApp Thank You notification in the background
     if (saved.customerPhone && !saved.isActive) {

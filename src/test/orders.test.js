@@ -414,4 +414,67 @@ describe('Orders API', () => {
     expect(finalizeRes.body.serviceTax).toBe(5);
     expect(finalizeRes.body.grandTotal).toBe(110);
   });
+
+  it('should record and update customer visits correctly for new and returning customers', async () => {
+    const testPhone = '9998887776';
+
+    // 1. Initial check: should have 0 visits
+    let historyRes = await request(app)
+      .get(`/api/orders/customer-history/${testPhone}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(historyRes.statusCode).toBe(200);
+    expect(historyRes.body.totalOrders).toBe(0);
+
+    // 2. Complete first order for customer
+    const order1 = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        tableNo: 1,
+        items: [{ name: 'Test Soda', quantity: 1, price: 50 }],
+        subtotal: 50,
+        sgst: 2.5,
+        cgst: 2.5,
+        grandTotal: 55,
+        paymentMode: 'cash',
+        customerName: 'John Doe',
+        customerPhone: testPhone,
+        isActive: false
+      });
+    expect(order1.statusCode).toBe(201);
+
+    // 3. Second check: should now have 1 visit
+    historyRes = await request(app)
+      .get(`/api/orders/customer-history/+91${testPhone}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(historyRes.statusCode).toBe(200);
+    expect(historyRes.body.totalOrders).toBe(1);
+    expect(historyRes.body.customerName).toBe('John Doe');
+
+    // 4. Complete second order for customer
+    const order2 = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        tableNo: 2,
+        items: [{ name: 'Test Soda', quantity: 2, price: 50 }],
+        subtotal: 100,
+        sgst: 5,
+        cgst: 5,
+        grandTotal: 110,
+        paymentMode: 'upi',
+        customerName: 'John Doe',
+        customerPhone: `+91${testPhone}`,
+        isActive: false
+      });
+    expect(order2.statusCode).toBe(201);
+
+    // 5. Final check: should now show 2 visits
+    historyRes = await request(app)
+      .get(`/api/orders/customer-history/${testPhone}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(historyRes.statusCode).toBe(200);
+    expect(historyRes.body.totalOrders).toBe(2);
+  });
 });
+

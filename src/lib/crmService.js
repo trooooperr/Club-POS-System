@@ -12,15 +12,29 @@ function getEffectiveBusinessDate(inputDate = new Date()) {
   return d;
 }
 
+function getCustomerPhoneQuery(cleanPhone) {
+  const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
+  return {
+    $or: [
+      { phone: cleanPhone },
+      { phone: last10 },
+      { phone: `+91${last10}` },
+      { phone: `91${last10}` },
+      { phone: { $regex: new RegExp(last10 + '$', 'i') } }
+    ]
+  };
+}
+
 async function recordCustomerVisit({ phone, name = '', billNo = '', amount = 0, items = [], orderType = 'dine-in', date = null }) {
   if (!phone) return null;
   const cleanPhone = String(phone).replace(/\D/g, '').trim();
   if (cleanPhone.length < 5) return null;
+  const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
 
   try {
     const rawDate = date ? new Date(date) : new Date();
     const visitDate = getEffectiveBusinessDate(rawDate);
-    let customer = await Customer.findOne({ phone: cleanPhone });
+    let customer = await Customer.findOne(getCustomerPhoneQuery(cleanPhone));
 
     const visitEntry = {
       date: visitDate,
@@ -32,19 +46,41 @@ async function recordCustomerVisit({ phone, name = '', billNo = '', amount = 0, 
 
     if (!customer) {
       customer = new Customer({
-        phone: cleanPhone,
+        phone: last10,
         name: name || '',
         visitCount: 1,
+        visitsCount: 1,
         totalSpent: Number(amount) || 0,
+        sources: ['ordering'],
         lastVisitDate: visitDate,
         visits: [visitEntry]
       });
     } else {
       if (name && name.trim()) customer.name = name.trim();
-      customer.visitCount = (customer.visitCount || 0) + 1;
-      customer.totalSpent = (customer.totalSpent || 0) + (Number(amount) || 0);
-      customer.lastVisitDate = visitDate;
-      customer.visits.unshift(visitEntry);
+      if (!Array.isArray(customer.sources)) customer.sources = [];
+      if (!customer.sources.includes('ordering')) customer.sources.push('ordering');
+
+      const billKey = (billNo || '').trim().toUpperCase();
+      const dateStr = visitDate.toISOString().slice(0, 10);
+      
+      const isDuplicate = Array.isArray(customer.visits) && customer.visits.some(v => {
+        const vBill = (v.billNo || '').trim().toUpperCase();
+        if (billKey && vBill && billKey === vBill) return true;
+        const vDateStr = v.date ? new Date(v.date).toISOString().slice(0, 10) : '';
+        return !billKey && !vBill && vDateStr === dateStr && (v.amount === Number(amount));
+      });
+
+      if (!isDuplicate) {
+        if (!customer.visits) customer.visits = [];
+        customer.visits.unshift(visitEntry);
+        const newCount = Math.max((customer.visitCount || customer.visitsCount || 0) + 1, customer.visits.length);
+        customer.visitCount = newCount;
+        customer.visitsCount = newCount;
+        customer.totalSpent = (customer.totalSpent || 0) + (Number(amount) || 0);
+        customer.lastVisitDate = visitDate;
+      } else {
+        customer.lastVisitDate = visitDate;
+      }
     }
 
     await customer.save();
@@ -60,15 +96,21 @@ async function getCustomerCRMHistory(phone) {
   const cleanPhone = String(phone).replace(/\D/g, '').trim();
   if (cleanPhone.length < 5) return { totalOrders: 0, lastOrderDate: null, lastOrderItems: [], customerName: '', orders: [] };
 
+  const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
+
   try {
-    const crmDoc = await Customer.findOne({ phone: cleanPhone });
+    const crmDoc = await Customer.findOne(getCustomerPhoneQuery(cleanPhone));
     // Only completed/finalized past orders count as previous visits!
     const pastOrders = await Order.find({
-      customerPhone: { $regex: new RegExp(cleanPhone, 'i') },
+      customerPhone: { $regex: new RegExp(last10, 'i') },
       isActive: false
     }).sort({ date: -1 });
 
-    if ((!crmDoc || !crmDoc.visits || crmDoc.visits.length === 0) && pastOrders.length === 0) {
+    const totalCrmCount = (crmDoc?.visitCount || crmDoc?.visitsCount || crmDoc?.visits?.length || 0);
+    if (!crmDoc && pastOrders.length === 0) {
+      return { totalOrders: 0, lastOrderDate: null, lastOrderItems: [], customerName: '', orders: [] };
+    }
+    if (totalCrmCount === 0 && pastOrders.length === 0) {
       return { totalOrders: 0, lastOrderDate: null, lastOrderItems: [], customerName: crmDoc?.name || '', orders: [] };
     }
 
@@ -86,7 +128,7 @@ async function getCustomerCRMHistory(phone) {
         const orderDate = o.businessDate ? new Date(`${o.businessDate}T12:00:00+05:30`) : getEffectiveBusinessDate(o.date || o.createdAt);
         const billKey = (o.billNo || '').trim().toUpperCase();
         const dateKey = orderDate.toISOString().slice(0, 10);
-        const key = billKey ? `bill_${billKey}` : `date_${dateKey}`;
+        const key = billKey ? `bill_${billKey}` : `order_${o._id}`;
         
         visitsMap.set(key, {
           billNo: o.billNo || '',
@@ -96,7 +138,7 @@ async function getCustomerCRMHistory(phone) {
         });
       }
     }
-    if (crmDoc && crmDoc.visits) {
+    if (crmDoc && crmDoc.visits && crmDoc.visits.length > 0) {
       for (const v of crmDoc.visits) {
         const billKey = (v.billNo || '').trim().toUpperCase();
         const visitDate = v.date ? new Date(v.date) : new Date();
@@ -104,18 +146,25 @@ async function getCustomerCRMHistory(phone) {
         const key = billKey ? `bill_${billKey}` : `date_${dateKey}`;
 
         if (!visitsMap.has(key)) {
-          visitsMap.set(key, {
-            billNo: v.billNo || '',
-            date: visitDate,
-            total: v.amount || 0,
-            itemsCount: v.itemsCount || 0
+          const hasSameDate = [...visitsMap.values()].some(existing => {
+            const existingDateStr = new Date(existing.date).toISOString().slice(0, 10);
+            return existingDateStr === dateKey;
           });
+
+          if (!hasSameDate) {
+            visitsMap.set(key, {
+              billNo: v.billNo || '',
+              date: visitDate,
+              total: v.amount || 0,
+              itemsCount: v.itemsCount || 0
+            });
+          }
         }
       }
     }
 
     const mergedOrders = [...visitsMap.values()].sort((a, b) => new Date(b.date) - new Date(a.date));
-    const totalOrders = mergedOrders.length;
+    const totalOrders = Math.max(mergedOrders.length, totalCrmCount);
 
     return {
       totalOrders,
