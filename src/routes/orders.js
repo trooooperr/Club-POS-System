@@ -200,8 +200,9 @@ router.post('/table/:tableNo/open', async (req, res) => {
 router.get('/sessions/active', async (req, res) => {
   try {
     const sessions = await TableSession.find({ status: { $ne: 'COMPLETED' } })
-      .populate('kotIds')
-      .populate('activeOrderId');
+      .populate({ path: 'kotIds', select: 'kotNo tableNo items status orderType waiterName createdAt' })
+      .populate({ path: 'activeOrderId', select: 'billNo tableNo items grandTotal dueAmount paidAmount status orderType waiterName customerName customerPhone' })
+      .lean();
     res.json(sessions);
   } catch (err) {
     res.status(500).json({ message: err.message });

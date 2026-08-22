@@ -890,10 +890,11 @@ export function AppProvider({ children }) {
 
     let sessionFetchTimer = null;
     newSocket.on('TABLE_SESSION_UPDATED', () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       if (sessionFetchTimer) clearTimeout(sessionFetchTimer);
       sessionFetchTimer = setTimeout(() => {
         safeFetch(apiUrl('/api/orders/sessions/active')).then(setActiveSessions);
-      }, 300);
+      }, 1500);
     });
 
     newSocket.on('NEW_KOT', (kot) => {
