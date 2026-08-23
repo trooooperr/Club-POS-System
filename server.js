@@ -401,8 +401,8 @@ async function startServer() {
 }
 
 function setupDbChangeStreams(io) {
-  if (process.env.ENABLE_CHANGE_STREAMS !== 'true') {
-    console.log('⚡ MongoDB Change Streams disabled to save server network bandwidth (Socket.IO endpoints handle real-time sync).');
+  if (process.env.ENABLE_CHANGE_STREAMS === 'false') {
+    console.log('⚡ MongoDB Change Streams explicitly disabled via ENABLE_CHANGE_STREAMS=false.');
     return;
   }
   try {

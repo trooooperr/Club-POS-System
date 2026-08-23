@@ -225,6 +225,7 @@ export function AppProvider({ children }) {
   const [inventory,    setInventory]    = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [error,        setError]        = useState(null);
+  const printedKotIdsRef = useRef(new Set());
 
   const applyInventoryUpdate = useCallback((nextInventory) => {
     if (!Array.isArray(nextInventory)) return;
@@ -915,6 +916,18 @@ export function AppProvider({ children }) {
             console.error(e);
           }
         }
+      }
+
+      const kotKey = kot?._id ? String(kot._id) : (kot?.kotNo ? `${kot.kotNo}_${kot.tableNo}` : null);
+      if (kotKey) {
+        if (printedKotIdsRef.current.has(kotKey)) {
+          console.log('Skipping duplicate NEW_KOT print/alarm:', kot.kotNo);
+          return;
+        }
+        printedKotIdsRef.current.add(kotKey);
+        setTimeout(() => {
+          printedKotIdsRef.current.delete(kotKey);
+        }, 30000);
       }
 
       playAlarmChime();
