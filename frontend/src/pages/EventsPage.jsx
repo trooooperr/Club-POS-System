@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { apiUrl, authFetch } from '../lib/api';
 import { 
@@ -97,7 +97,7 @@ export default function EventsPage() {
   const [saving, setSaving] = useState(false);
 
   // Fetch Events
-  const fetchEvents = React.useCallback(() => {
+  const fetchEvents = useCallback(() => {
     let url = apiUrl('/api/events');
     if (range === 'today') {
       url += `?date=${todayStr}`;
