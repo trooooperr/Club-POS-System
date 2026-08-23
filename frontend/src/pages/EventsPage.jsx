@@ -308,34 +308,26 @@ export default function EventsPage() {
 
   return (
     <div className="fi events-page">
-      {/* Header & Controls */}
+      {/* Controls Bar */}
       <div className="events-header-res">
-        <div className="events-title-wrap">
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: 'var(--t0)', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Sparkles size={20} style={{ color: 'var(--a)' }} />
-            Event Billing & Management
-          </h2>
-          <span style={{ fontSize: 12, color: 'var(--t2)' }}>
-            Track per-plate functions, DJ/dancers expenses, and daily event revenues
-          </span>
-        </div>
+        <div className="events-controls-right" style={{ width: '100%', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div className="unified-pill-box filter-pills">
+              {['all', 'today', 'week', 'month'].map(f => (
+                <button key={f} className={`f-pill ${range === f ? 'active' : ''}`} onClick={() => setRange(f)}>
+                  {f.toUpperCase()}
+                </button>
+              ))}
+            </div>
 
-        <div className="events-controls-right">
-          <div className="unified-pill-box filter-pills">
-            {['all', 'today', 'week', 'month'].map(f => (
-              <button key={f} className={`f-pill ${range === f ? 'active' : ''}`} onClick={() => setRange(f)}>
-                {f.toUpperCase()}
-              </button>
-            ))}
+            <div className={`unified-pill-box date-box-res ${range === 'custom' ? 'active-border' : ''}`} style={{ gap: 8, paddingLeft: 10, paddingRight: 10 }}>
+              <DateField label="From" value={startDate} onChange={e => handleDateChange('start', e.target.value)} inputRef={startInputRef} />
+              <ArrowRight size={13} style={{ color: 'var(--t2)', flexShrink: 0 }} />
+              <DateField label="To" value={endDate} onChange={e => handleDateChange('end', e.target.value)} inputRef={endInputRef} />
+            </div>
           </div>
 
-          <div className={`unified-pill-box date-box-res ${range === 'custom' ? 'active-border' : ''}`} style={{ gap: 8, paddingLeft: 10, paddingRight: 10 }}>
-            <DateField label="From" value={startDate} onChange={e => handleDateChange('start', e.target.value)} inputRef={startInputRef} />
-            <ArrowRight size={13} style={{ color: 'var(--t2)', flexShrink: 0 }} />
-            <DateField label="To" value={endDate} onChange={e => handleDateChange('end', e.target.value)} inputRef={endInputRef} />
-          </div>
-
-          <button className="btn btn-primary" style={{ padding: '0 16px', height: 42, borderRadius: 12, display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700 }} onClick={handleOpenAddModal}>
+          <button className="btn btn-primary" style={{ padding: '0 18px', height: 42, borderRadius: 12, display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700 }} onClick={handleOpenAddModal}>
             <Plus size={16} /> New Event
           </button>
         </div>
@@ -344,43 +336,23 @@ export default function EventsPage() {
       {/* KPI Cards */}
       <div className="kpi-row-4">
         <div className="kpi-card-custom">
-          <div className="kpi-icon-wrap" style={{ background: 'rgba(13, 148, 136, 0.15)', color: 'var(--a)' }}>
-            <Wallet size={18} />
-          </div>
-          <div>
-            <div className="kpi-card-label">Total Event Revenue</div>
-            <div className="kpi-card-val mono">₹{(summary.totalRevenue || 0).toLocaleString('en-IN')}</div>
-          </div>
+          <div className="kpi-card-label">Total Event Revenue</div>
+          <div className="kpi-card-val mono">₹{(summary.totalRevenue || 0).toLocaleString('en-IN')}</div>
         </div>
 
         <div className="kpi-card-custom">
-          <div className="kpi-icon-wrap" style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#EF4444' }}>
-            <Disc size={18} />
-          </div>
-          <div>
-            <div className="kpi-card-label">Total Event Expenses</div>
-            <div className="kpi-card-val mono" style={{ color: '#EF4444' }}>₹{(summary.totalExpenses || 0).toLocaleString('en-IN')}</div>
-          </div>
+          <div className="kpi-card-label">Total Event Expenses</div>
+          <div className="kpi-card-val mono" style={{ color: '#EF4444' }}>₹{(summary.totalExpenses || 0).toLocaleString('en-IN')}</div>
         </div>
 
         <div className="kpi-card-custom">
-          <div className="kpi-icon-wrap" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10B981' }}>
-            <Sparkles size={18} />
-          </div>
-          <div>
-            <div className="kpi-card-label">Net Event Earnings</div>
-            <div className="kpi-card-val mono" style={{ color: '#10B981' }}>₹{(summary.netRevenue || 0).toLocaleString('en-IN')}</div>
-          </div>
+          <div className="kpi-card-label">Net Event Earnings</div>
+          <div className="kpi-card-val mono" style={{ color: '#10B981' }}>₹{(summary.netRevenue || 0).toLocaleString('en-IN')}</div>
         </div>
 
         <div className="kpi-card-custom">
-          <div className="kpi-icon-wrap" style={{ background: 'rgba(59, 130, 246, 0.15)', color: '#3B82F6' }}>
-            <Calendar size={18} />
-          </div>
-          <div>
-            <div className="kpi-card-label">Total Events</div>
-            <div className="kpi-card-val mono">{summary.count || 0}</div>
-          </div>
+          <div className="kpi-card-label">Total Events</div>
+          <div className="kpi-card-val mono">{summary.count || 0}</div>
         </div>
       </div>
 
@@ -526,7 +498,28 @@ export default function EventsPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="mbody">
-              {/* Event Name & Host */}
+              {/* 1. Billing Type Mode (First in Form - Horizontal Flex) */}
+              <div className="fg" style={{ marginBottom: 14 }}>
+                <label className="flbl" style={{ marginBottom: 6, fontWeight: 700 }}>Billing Type Mode</label>
+                <div className="billing-mode-tabs">
+                  <button
+                    type="button"
+                    className={`mode-tab ${billingType === 'custom' ? 'active' : ''}`}
+                    onClick={() => setBillingType('custom')}
+                  >
+                    Custom / Menu & Expenses
+                  </button>
+                  <button
+                    type="button"
+                    className={`mode-tab ${billingType === 'per_plate' ? 'active' : ''}`}
+                    onClick={() => setBillingType('per_plate')}
+                  >
+                    Per Plate Basis
+                  </button>
+                </div>
+              </div>
+
+              {/* 2. Event Name & Host */}
               <div className="form-grid-2">
                 <div className="fg">
                   <label className="flbl">Event Name *</label>
@@ -551,10 +544,10 @@ export default function EventsPage() {
                 </div>
               </div>
 
-              {/* Event Date & Billing Option */}
+              {/* 3. Event Date & Billed Fee */}
               <div className="form-grid-2" style={{ marginTop: 12 }}>
                 <div className="fg">
-                  <label className="flbl">Event Date</label>
+                  <label className="flbl">Event Date *</label>
                   <input
                     type="date"
                     required
@@ -563,29 +556,22 @@ export default function EventsPage() {
                     className="finput"
                   />
                 </div>
-
                 <div className="fg">
-                  <label className="flbl">Billing Type Mode</label>
-                  <div className="billing-mode-tabs">
-                    <button
-                      type="button"
-                      className={`mode-tab ${billingType === 'custom' ? 'active' : ''}`}
-                      onClick={() => setBillingType('custom')}
-                    >
-                      Option 1: Custom / Menu & Expenses (Primary)
-                    </button>
-                    <button
-                      type="button"
-                      className={`mode-tab ${billingType === 'per_plate' ? 'active' : ''}`}
-                      onClick={() => setBillingType('per_plate')}
-                    >
-                      Option 2: Per Plate Basis (Secondary)
-                    </button>
-                  </div>
+                  <label className="flbl">
+                    {billingType === 'custom' ? 'Event Charges / Billed Fee (₹)' : 'Additional Billed Fee (₹)'}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="e.g. 15000"
+                    value={additionalCharges}
+                    onChange={e => setAdditionalCharges(e.target.value)}
+                    className="finput"
+                  />
                 </div>
               </div>
 
-              {/* Per Plate Section (If per_plate selected) */}
+              {/* 4. Per Plate Section (If per_plate selected) */}
               {billingType === 'per_plate' && (
                 <div className="per-plate-box">
                   <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--a)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -593,7 +579,7 @@ export default function EventsPage() {
                   </div>
                   <div className="form-grid-3">
                     <div className="fg">
-                      <label className="flbl">Number of Customers / Guests</label>
+                      <label className="flbl">Number of Guests</label>
                       <input
                         type="number"
                         min="0"
@@ -628,22 +614,7 @@ export default function EventsPage() {
                 </div>
               )}
 
-              {/* Billed Fee / Additional Package Charge */}
-              <div className="fg" style={{ marginTop: 12 }}>
-                <label className="flbl">
-                  {billingType === 'custom' ? 'Event Charges / Billed Fee (₹)' : 'Additional Event Billed Charges (₹)'}
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="e.g. 15000"
-                  value={additionalCharges}
-                  onChange={e => setAdditionalCharges(e.target.value)}
-                  className="finput"
-                />
-              </div>
-
-              {/* Expenses Breakdown Section (DJ, Dancers, etc.) */}
+              {/* 5. Expenses Breakdown Section (DJ, Dancers, etc.) */}
               <div className="expenses-section-builder">
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                   <label className="flbl" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -682,68 +653,7 @@ export default function EventsPage() {
                 ))}
               </div>
 
-              {/* Payment Mode */}
-              <div className="form-grid-2" style={{ marginTop: 12 }}>
-                <div className="fg">
-                  <label className="flbl">Payment Mode</label>
-                  <select value={paymentMode} onChange={e => setPaymentMode(e.target.value)} className="finput">
-                    <option value="cash">Cash</option>
-                    <option value="upi">UPI</option>
-                    <option value="card">Card</option>
-                    <option value="split">Split (Cash + UPI)</option>
-                    <option value="pending">Pending</option>
-                  </select>
-                </div>
-
-                <div className="fg">
-                  <label className="flbl">Event Status</label>
-                  <select value={status} onChange={e => setStatus(e.target.value)} className="finput">
-                    <option value="completed">Completed</option>
-                    <option value="ongoing">Ongoing</option>
-                    <option value="cancelled">Cancelled</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Split Payment Options if Split selected */}
-              {paymentMode === 'split' && (
-                <div className="form-grid-2" style={{ marginTop: 8 }}>
-                  <div className="fg">
-                    <label className="flbl">Cash Portion (₹)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={cashAmount}
-                      onChange={e => setCashAmount(e.target.value)}
-                      className="finput"
-                    />
-                  </div>
-                  <div className="fg">
-                    <label className="flbl">UPI Portion (₹)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={upiAmount}
-                      onChange={e => setUpiAmount(e.target.value)}
-                      className="finput"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Notes */}
-              <div className="fg" style={{ marginTop: 12 }}>
-                <label className="flbl">Notes / Special Instructions</label>
-                <input
-                  type="text"
-                  placeholder="Optional details..."
-                  value={notes}
-                  onChange={e => setNotes(e.target.value)}
-                  className="finput"
-                />
-              </div>
-
-              {/* Summary Calculation Box */}
+              {/* 6. Summary Calculation Box */}
               <div className="modal-summary-box">
                 <div className="sum-row">
                   <span>Total Event Revenue Billed:</span>
@@ -807,19 +717,11 @@ export default function EventsPage() {
           background: var(--s1);
           border: 1px solid var(--b1);
           border-radius: var(--rl);
-          padding: 16px;
+          padding: 16px 20px;
           display: flex;
-          align-items: center;
-          gap: 14px;
-        }
-        .kpi-icon-wrap {
-          width: 44px;
-          height: 44px;
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
+          flex-direction: column;
           justify-content: center;
-          flex-shrink: 0;
+          gap: 4px;
         }
         .kpi-card-label {
           font-size: 11px;
@@ -830,7 +732,7 @@ export default function EventsPage() {
           margin-bottom: 2px;
         }
         .kpi-card-val {
-          font-size: 20px;
+          font-size: 22px;
           font-weight: 900;
           color: var(--t0);
         }
@@ -999,26 +901,32 @@ export default function EventsPage() {
         }
         .billing-mode-tabs {
           display: flex;
-          flex-direction: column;
-          gap: 6px;
+          flex-direction: row;
+          gap: 10px;
+          width: 100%;
           margin-top: 4px;
         }
         .mode-tab {
+          flex: 1;
           background: var(--s2);
           border: 1px solid var(--b1);
           color: var(--t2);
-          padding: 8px 12px;
-          border-radius: 8px;
-          font-size: 11px;
+          padding: 10px 14px;
+          border-radius: 10px;
+          font-size: 12px;
           font-weight: 700;
           cursor: pointer;
-          text-align: left;
-          transition: all 0.2s;
+          text-align: center;
+          transition: all 0.2s ease;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
         .mode-tab.active {
           background: var(--a);
           color: #000;
           border-color: var(--a);
+          box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25);
         }
         .per-plate-box {
           background: rgba(13, 148, 136, 0.05);
@@ -1063,6 +971,7 @@ export default function EventsPage() {
           .events-controls-right { flex-direction: column; align-items: stretch; }
           .kpi-row-4 { grid-template-columns: 1fr; }
           .events-grid { grid-template-columns: 1fr; }
+          .billing-mode-tabs { flex-direction: column; }
         }
       `}</style>
     </div>
