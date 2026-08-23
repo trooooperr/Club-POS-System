@@ -46,19 +46,19 @@ export const ROLE_HIERARCHY = {
     label: 'Admin',
     level: 3,
     color: '#FF8C00',
-    permissions: ['billing','menu','orders','sales','events','workers','inventory','settings','kitchen']
+    permissions: ['billing','menu','orders','sales','workers','inventory','settings','kitchen']
   },
   manager: {
     label: 'Manager',
     level: 2,
     color: '#B8860B',
-    permissions: ['billing','menu','orders','sales','events','inventory','settings','kitchen']
+    permissions: ['billing','menu','orders','sales','inventory','settings','kitchen']
   },
   staff: {
     label: 'Staff',
     level: 1,
     color: '#22C55E',
-    permissions: ['billing','orders','events','inventory','kitchen']
+    permissions: ['billing','orders','inventory','kitchen']
   },
 };
 

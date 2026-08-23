@@ -198,27 +198,15 @@ export default function SalesPage() {
         </div>
       </div>
 
-      <div className="kpi-row-2" style={{ gridTemplateColumns: analytics?.eventCount > 0 ? '1fr 1fr 1fr 1fr' : '1fr 1fr' }}>
+      <div className="kpi-row-2">
         <div className="kpi" style={{ 'color': 'var(--t0)' }}>
-          <div className="kpi-label">Total Revenue</div>
+          <div className="kpi-label">Revenue</div>
           <div className="kpi-value mono">{loading ? '...' : `₹${(analytics?.revenue || 0).toLocaleString('en-IN')}`}</div>
         </div>
         <div className="kpi" style={{ 'color': 'var(--t0)' }}>
-          <div className="kpi-label">POS Orders</div>
-          <div className="kpi-value mono">{loading ? '...' : (analytics?.orderCount ?? (analytics?.count || 0))}</div>
+          <div className="kpi-label">Orders</div>
+          <div className="kpi-value mono">{loading ? '...' : (analytics?.count || 0)}</div>
         </div>
-        {analytics?.eventCount > 0 && (
-          <>
-            <div className="kpi" style={{ 'color': 'var(--t0)' }}>
-              <div className="kpi-label">Event Revenue</div>
-              <div className="kpi-value mono" style={{ color: 'var(--a)' }}>{loading ? '...' : `₹${(analytics?.eventRevenue || 0).toLocaleString('en-IN')}`}</div>
-            </div>
-            <div className="kpi" style={{ 'color': 'var(--t0)' }}>
-              <div className="kpi-label">Event Expenses</div>
-              <div className="kpi-value mono" style={{ color: '#EF4444' }}>{loading ? '...' : `₹${(analytics?.eventExpenses || 0).toLocaleString('en-IN')}`}</div>
-            </div>
-          </>
-        )}
       </div>
 
       <div className="charts-equal-row">
