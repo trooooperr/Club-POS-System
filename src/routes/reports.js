@@ -1,6 +1,7 @@
 const express = require('express');
 const router  = express.Router();
 const Order   = require('../models/Order');
+const Event   = require('../models/Event');
 const Inventory = require('../models/Inventory');
 const Settings = require('../models/Settings');
 const nodemailer = require('nodemailer');
@@ -312,40 +313,67 @@ router.get('/daily-summary', requireRole(['admin', 'manager']), async (req, res)
   }
 });
 
-router.get('/analytics', requireRole(['admin', 'manager']), async (req, res) => {
+router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     if (!startDate || !endDate) return res.status(400).json({ message: 'startDate and endDate required' });
 
-    const match = { businessDate: { $gte: startDate, $lte: endDate }, grandTotal: { $gt: 0 } };
+    const orderMatch = { businessDate: { $gte: startDate, $lte: endDate }, grandTotal: { $gt: 0 } };
+    const eventMatch = { date: { $gte: startDate, $lte: endDate } };
 
-    // 1. Basic Stats
+    // 1. Order Stats & Event Stats
     const statsResult = await Order.aggregate([
-      { $match: match },
+      { $match: orderMatch },
       { $group: { _id: null, revenue: { $sum: "$grandTotal" }, count: { $sum: 1 } } }
     ]);
-    const stats = statsResult[0] || { revenue: 0, count: 0 };
+    const orderStats = statsResult[0] || { revenue: 0, count: 0 };
 
-    // 2. Daily Data
-    const dailyResult = await Order.aggregate([
-      { $match: match },
-      { $group: {
-          _id: "$businessDate",
-          sales: { $sum: "$grandTotal" }
-      }},
+    const eventStatsResult = await Event.aggregate([
+      { $match: eventMatch },
+      { $group: { 
+          _id: null, 
+          revenue: { $sum: "$grandTotal" }, 
+          expenses: { $sum: "$totalExpenses" },
+          net: { $sum: "$netRevenue" },
+          count: { $sum: 1 } 
+      }}
+    ]);
+    const eventStats = eventStatsResult[0] || { revenue: 0, expenses: 0, net: 0, count: 0 };
+
+    // 2. Daily Data Merged (Orders + Events)
+    const dailyOrderResult = await Order.aggregate([
+      { $match: orderMatch },
+      { $group: { _id: "$businessDate", sales: { $sum: "$grandTotal" } } },
       { $sort: { _id: 1 } }
     ]);
-    
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    const dailyData = dailyResult.map(d => {
-      const dateParts = d._id.split('-');
-      const day = dateParts[2];
-      const month = months[parseInt(dateParts[1], 10) - 1];
-      return { name: `${day} ${month}`, sales: d.sales };
+
+    const dailyEventResult = await Event.aggregate([
+      { $match: eventMatch },
+      { $group: { _id: "$date", sales: { $sum: "$grandTotal" }, expenses: { $sum: "$totalExpenses" } } },
+      { $sort: { _id: 1 } }
+    ]);
+
+    const dailyMap = {};
+    dailyOrderResult.forEach(d => {
+      dailyMap[d._id] = (dailyMap[d._id] || 0) + d.sales;
+    });
+    dailyEventResult.forEach(d => {
+      dailyMap[d._id] = (dailyMap[d._id] || 0) + d.sales;
     });
 
-    // 3. Payment Breakdown (Cash vs UPI, with split allocation)
-    const orders = await Order.find(match).select('paymentMode grandTotal cashAmount upiAmount').lean();
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const sortedDates = Object.keys(dailyMap).sort();
+    const dailyData = sortedDates.map(dateStr => {
+      const dateParts = dateStr.split('-');
+      const day = dateParts[2];
+      const month = months[parseInt(dateParts[1], 10) - 1];
+      return { name: `${day} ${month}`, sales: dailyMap[dateStr] };
+    });
+
+    // 3. Payment Breakdown (Cash vs UPI, with split allocation for Orders & Events)
+    const orders = await Order.find(orderMatch).select('paymentMode grandTotal cashAmount upiAmount').lean();
+    const events = await Event.find(eventMatch).select('paymentMode grandTotal cashAmount upiAmount').lean();
+
     let cashTotal = 0, upiTotal = 0;
     orders.forEach(o => {
       if (o.paymentMode === 'split') {
@@ -354,14 +382,32 @@ router.get('/analytics', requireRole(['admin', 'manager']), async (req, res) => 
       } else if (o.paymentMode === 'upi') {
         upiTotal += o.grandTotal;
       } else {
-        // cash, card, or any other mode goes to cash
         cashTotal += o.grandTotal;
       }
     });
 
+    events.forEach(e => {
+      if (e.paymentMode === 'split') {
+        cashTotal += (e.cashAmount || 0);
+        upiTotal  += (e.upiAmount  || 0);
+      } else if (e.paymentMode === 'upi') {
+        upiTotal += (e.grandTotal || 0);
+      } else {
+        cashTotal += (e.grandTotal || 0);
+      }
+    });
+
+    const combinedRevenue = (orderStats.revenue || 0) + (eventStats.revenue || 0);
+
     res.json({
-      revenue: stats.revenue || 0,
-      count: stats.count || 0,
+      revenue: combinedRevenue,
+      orderRevenue: orderStats.revenue || 0,
+      eventRevenue: eventStats.revenue || 0,
+      eventExpenses: eventStats.expenses || 0,
+      netEventRevenue: eventStats.net || 0,
+      count: (orderStats.count || 0) + (eventStats.count || 0),
+      orderCount: orderStats.count || 0,
+      eventCount: eventStats.count || 0,
       dailyData,
       paymentBreakdown: { cash: cashTotal, upi: upiTotal }
     });

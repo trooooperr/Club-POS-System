@@ -8,6 +8,7 @@ import BillingPage from './pages/BillingPage';
 import MenuPage from './pages/MenuPage';
 import OrdersPage from './pages/OrdersPage';
 import SalesPage from './pages/SalesPage';
+import EventsPage from './pages/EventsPage';
 import WorkersPage from './pages/WorkersPage';
 import InventoryPage from './pages/InventoryPage';
 import SettingsPage from './pages/SettingsPage';
@@ -31,7 +32,8 @@ function Shell() {
     menu: 'Menu',
     inventory: 'Inventory',
     orders: 'Orders',
-    sales: 'Sales',
+    sales: 'Analytics',
+    events: 'Events Management',
     workers: 'Workers',
     settings: 'Settings',
     kitchen: 'Kitchen Display',
@@ -87,7 +89,18 @@ function Shell() {
 
   if (!currentUser) return <LoginPage />;
 
-  const pages = { billing:<BillingPage/>, menu:<MenuPage/>, orders:<OrdersPage/>, sales:<SalesPage/>, workers:<WorkersPage/>, inventory:<InventoryPage/>, settings:<SettingsPage/>, kitchen:<KitchenDisplay department="kitchen" />, bar:<KitchenDisplay department="bar" /> };
+  const pages = { 
+    billing:<BillingPage/>, 
+    menu:<MenuPage/>, 
+    orders:<OrdersPage/>, 
+    sales:<SalesPage/>, 
+    events:<EventsPage/>, 
+    workers:<WorkersPage/>, 
+    inventory:<InventoryPage/>, 
+    settings:<SettingsPage/>, 
+    kitchen:<KitchenDisplay department="kitchen" />, 
+    bar:<KitchenDisplay department="bar" /> 
+  };
 
   const showTopBar = activeSection !== 'billing'; // Hide HumTumBar entirely on billing page
   const navHint = activeSection === 'billing' ? 'BILL = Ctrl+B   ·   KOT = Ctrl+K' : '';
