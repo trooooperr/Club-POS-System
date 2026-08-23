@@ -500,7 +500,7 @@ export default function EventsPage() {
             <form onSubmit={handleSubmit} className="mbody">
               {/* 1. Billing Type Mode (First in Form - Horizontal Flex) */}
               <div className="fg" style={{ marginBottom: 14 }}>
-                <label className="flbl" style={{ marginBottom: 6, fontWeight: 700 }}>Billing Type Mode</label>
+                <label className="flbl" style={{ marginBottom: 6, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: 11 }}>BILLING TYPE MODE</label>
                 <div className="billing-mode-tabs">
                   <button
                     type="button"
@@ -522,7 +522,7 @@ export default function EventsPage() {
               {/* 2. Event Name & Host */}
               <div className="form-grid-2">
                 <div className="fg">
-                  <label className="flbl">Event Name *</label>
+                  <label className="flbl" style={{ textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: 11 }}>EVENT NAME *</label>
                   <input
                     type="text"
                     required
@@ -533,7 +533,7 @@ export default function EventsPage() {
                   />
                 </div>
                 <div className="fg">
-                  <label className="flbl">Hosted By (Optional)</label>
+                  <label className="flbl" style={{ textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: 11 }}>HOSTED BY (OPTIONAL)</label>
                   <input
                     type="text"
                     placeholder="e.g. Rahul Sharma"
@@ -547,7 +547,7 @@ export default function EventsPage() {
               {/* 3. Event Date & Billed Fee */}
               <div className="form-grid-2" style={{ marginTop: 12 }}>
                 <div className="fg">
-                  <label className="flbl">Event Date *</label>
+                  <label className="flbl" style={{ textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: 11 }}>EVENT DATE *</label>
                   <input
                     type="date"
                     required
@@ -557,8 +557,8 @@ export default function EventsPage() {
                   />
                 </div>
                 <div className="fg">
-                  <label className="flbl">
-                    {billingType === 'custom' ? 'Event Charges / Billed Fee (₹)' : 'Additional Billed Fee (₹)'}
+                  <label className="flbl" style={{ textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: 11 }}>
+                    {billingType === 'custom' ? 'EVENT CHARGES / BILLED FEE (₹)' : 'ADDITIONAL BILLED FEE (₹)'}
                   </label>
                   <input
                     type="number"
@@ -573,13 +573,13 @@ export default function EventsPage() {
 
               {/* 4. Per Plate Section (If per_plate selected) */}
               {billingType === 'per_plate' && (
-                <div className="per-plate-box">
-                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--a)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Users size={14} /> Per Plate Calculation
+                <div className="per-plate-box" style={{ background: 'rgba(255,255,255,0.015)', border: '1px solid var(--b1)', borderRadius: 10, padding: 12, marginTop: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--a)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Users size={14} /> PER PLATE CALCULATION
                   </div>
-                  <div className="form-grid-3">
+                  <div className="form-grid-2">
                     <div className="fg">
-                      <label className="flbl">Number of Guests</label>
+                      <label className="flbl" style={{ textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: 11 }}>NUMBER OF GUESTS</label>
                       <input
                         type="number"
                         min="0"
@@ -590,7 +590,7 @@ export default function EventsPage() {
                       />
                     </div>
                     <div className="fg">
-                      <label className="flbl">Price Per Plate (₹)</label>
+                      <label className="flbl" style={{ textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: 11 }}>PRICE PER PLATE (₹)</label>
                       <input
                         type="number"
                         min="0"
@@ -600,25 +600,25 @@ export default function EventsPage() {
                         className="finput"
                       />
                     </div>
-                    <div className="fg">
-                      <label className="flbl">Calculated Plate Total</label>
-                      <input
-                        type="text"
-                        disabled
-                        value={`₹${calculatedPlateTotal.toLocaleString('en-IN')}`}
-                        className="finput mono"
-                        style={{ background: 'var(--s2)', fontWeight: 800, color: 'var(--a)' }}
-                      />
-                    </div>
+                  </div>
+                  <div className="fg" style={{ marginTop: 10 }}>
+                    <label className="flbl" style={{ textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: 11 }}>CALCULATED PLATE TOTAL</label>
+                    <input
+                      type="text"
+                      disabled
+                      value={`₹${calculatedPlateTotal.toLocaleString('en-IN')}`}
+                      className="finput mono"
+                      style={{ background: 'var(--s2)', fontWeight: 800, color: 'var(--a)' }}
+                    />
                   </div>
                 </div>
               )}
 
               {/* 5. Expenses Breakdown Section (DJ, Dancers, etc.) */}
-              <div className="expenses-section-builder">
+              <div className="expenses-section-builder" style={{ marginTop: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <label className="flbl" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Disc size={14} style={{ color: '#EF4444' }} /> Event Expenses (DJ, Dancers, Decoration, etc.)
+                  <label className="flbl" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 6, textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: 11 }}>
+                    <Disc size={14} style={{ color: '#EF4444' }} /> EVENT EXPENSES (DJ, DANCERS, DECORATION, ETC.)
                   </label>
                   <button type="button" className="btn btn-ghost btn-sm" onClick={handleAddExpenseRow} style={{ fontSize: 11 }}>
                     + Add Expense Row
@@ -675,12 +675,12 @@ export default function EventsPage() {
                 </div>
               </div>
 
-              {/* Modal Actions */}
-              <div className="mfoot" style={{ marginTop: 16, padding: 0 }}>
+              {/* Modal Actions - Flex Horizontal on Right */}
+              <div className="mfoot-actions">
                 <button type="button" className="btn btn-ghost" onClick={() => setIsModalOpen(false)}>
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary" disabled={saving} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <button type="submit" className="btn btn-primary" disabled={saving}>
                   {saving ? <RefreshCw size={14} className="spin" /> : <Check size={16} />}
                   {editingEvent ? 'Update Event' : 'Save Event'}
                 </button>
@@ -961,6 +961,27 @@ export default function EventsPage() {
           font-size: 12px;
           margin-bottom: 4px;
           color: var(--t1);
+        }
+
+        .mfoot-actions {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 10px;
+          margin-top: 18px;
+          width: 100%;
+        }
+        .mfoot-actions .btn {
+          width: auto !important;
+          min-width: 110px;
+          height: 42px;
+          padding: 0 20px;
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          font-weight: 700;
         }
 
         @media (max-width: 1024px) {
