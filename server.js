@@ -420,8 +420,8 @@ function setupDbChangeStreams(io) {
       }
     });
 
-    // Watch kots collection
-    const kotStream = db.collection('kots').watch([], { fullDocument: 'updateLookup' });
+    // Watch kots collection (insert operations only for minimum bandwidth)
+    const kotStream = db.collection('kots').watch([{ $match: { operationType: 'insert' } }], { fullDocument: 'updateLookup' });
     kotStream.on('change', async (change) => {
       if (change.operationType === 'insert') {
         const doc = change.fullDocument;
