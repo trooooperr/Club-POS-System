@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useMemo, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { API_BASE, apiUrl, authFetch } from '../lib/api';
 import io from 'socket.io-client';
 import QRCode from 'qrcode';
@@ -679,7 +679,7 @@ export function AppProvider({ children }) {
     }
   }, []);
 
-  const isFetching = React.useRef(false);
+  const isFetching = useRef(false);
   const loadData = useCallback(async (isSilent = false, components = ['menu', 'orders', 'workers', 'inventory', 'settings', 'sessions']) => {
     if (isFetching.current) return;
     isFetching.current = true;

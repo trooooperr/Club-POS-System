@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Plus, X, ChevronDown, ChevronUp, Search, Trash2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { apiUrl, authFetch } from '../lib/api';
@@ -337,8 +337,8 @@ export default function InventoryPage() {
   const [search, setSearch] = useState('');
   const [startDate, setStartDate] = useState(getTodayLocalDate);
   const [endDate, setEndDate] = useState(getTodayLocalDate);
-  const startInputRef = React.useRef(null);
-  const endInputRef = React.useRef(null);
+  const startInputRef = useRef(null);
+  const endInputRef = useRef(null);
   const [cat, setCat] = useState('All');
   const [confirmDelete, setConfirmDelete] = useState(null);
 

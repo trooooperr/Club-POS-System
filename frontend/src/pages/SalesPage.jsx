@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   AreaChart, Area, PieChart, Pie, Cell,
@@ -116,13 +116,13 @@ export default function SalesPage() {
   const [range, setRange] = useState('today');
   const [startDate, setStartDate] = useState(todayStr);
   const [endDate, setEndDate] = useState(todayStr);
-  const startInputRef = React.useRef(null);
-  const endInputRef = React.useRef(null);
+  const startInputRef = useRef(null);
+  const endInputRef = useRef(null);
 
   const [analytics, setAnalytics] = useState({ revenue: 0, count: 0, dailyData: [], paymentBreakdown: { cash: 0, upi: 0 } });
   const [loading, setLoading] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     let start = startDate;
     let end = endDate;
     const now = new Date();

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { X, Printer, Phone, Send, Check, Download, Share2 } from 'lucide-react';
 import { apiUrl, authFetch } from '../lib/api';
@@ -20,7 +20,7 @@ export default function InvoiceModal() {
   const [qrCodeUrl, setQrCodeUrl] = useState('');
   const [waiterTipQrUrl, setWaiterTipQrUrl] = useState('');
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!o) return;
     const generateQRs = async () => {
       try {
