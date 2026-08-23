@@ -226,17 +226,19 @@ function setupSocketIO() {
     socket.on('admin-broadcast', async (data) => {
       console.log('📢 Received admin-broadcast:', data);
       if (data && data.event) {
-        if (data.event === 'NEW_KOT' && data.kotNo) {
+        if (data.event === 'NEW_KOT' && (data.kotNo || data.kotId)) {
           try {
             const KOT = require('./src/models/KOT');
-            const kotDoc = await KOT.findOne({ kotNo: data.kotNo });
+            const kotDoc = data.kotId 
+              ? await KOT.findById(data.kotId) 
+              : await KOT.findOne({ kotNo: data.kotNo }).sort({ createdAt: -1 });
             if (kotDoc) {
               console.log('🎯 Found KOT from admin-broadcast:', kotDoc.kotNo);
               io.to('kitchen').emit('NEW_KOT', kotDoc);
               io.emit('NEW_KOT', kotDoc); // Broadcast globally for print receivers on any tab
               io.emit('TABLE_SESSION_UPDATED', { tableNo: kotDoc.tableNo });
             } else {
-              console.warn('⚠️ KOT not found for kotNo:', data.kotNo);
+              console.warn('⚠️ KOT not found for kotNo/kotId:', data.kotNo || data.kotId);
             }
           } catch (err) {
             console.error('❌ Error handling NEW_KOT admin-broadcast:', err.message);
