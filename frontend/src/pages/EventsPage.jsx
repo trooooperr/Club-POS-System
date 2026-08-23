@@ -86,8 +86,7 @@ export default function EventsPage() {
   const [pricePerPlate, setPricePerPlate] = useState('');
   const [additionalCharges, setAdditionalCharges] = useState('');
   const [expenses, setExpenses] = useState([
-    { name: 'DJ', amount: '' },
-    { name: 'Dancers', amount: '' }
+    { name: 'DJ', amount: '' }
   ]);
   const [paymentMode, setPaymentMode] = useState('cash');
   const [cashAmount, setCashAmount] = useState('');
@@ -153,8 +152,7 @@ export default function EventsPage() {
     setPricePerPlate('');
     setAdditionalCharges('');
     setExpenses([
-      { name: 'DJ', amount: '' },
-      { name: 'Dancers', amount: '' }
+      { name: 'DJ', amount: '' }
     ]);
     setPaymentMode('cash');
     setCashAmount('');
@@ -175,8 +173,7 @@ export default function EventsPage() {
     setPricePerPlate(ev.pricePerPlate || '');
     setAdditionalCharges(ev.additionalCharges || '');
     setExpenses(ev.expenses && ev.expenses.length > 0 ? ev.expenses.map(e => ({ name: e.name, amount: e.amount || '' })) : [
-      { name: 'DJ', amount: '' },
-      { name: 'Dancers', amount: '' }
+      { name: 'DJ', amount: '' }
     ]);
     setPaymentMode(ev.paymentMode || 'cash');
     setCashAmount(ev.cashAmount || '');
@@ -216,11 +213,10 @@ export default function EventsPage() {
   }, [expenses]);
 
   const calculatedGrandTotal = useMemo(() => {
-    const add = parseFloat(additionalCharges) || 0;
     if (billingType === 'per_plate') {
-      return calculatedPlateTotal + add;
+      return calculatedPlateTotal;
     }
-    return add;
+    return parseFloat(additionalCharges) || 0;
   }, [billingType, calculatedPlateTotal, additionalCharges]);
 
   const calculatedNetRevenue = useMemo(() => {
@@ -490,8 +486,7 @@ export default function EventsPage() {
         <div className="moverlay" onClick={() => setIsModalOpen(false)}>
           <div className="mcard event-modal" onClick={e => e.stopPropagation()}>
             <div className="mhead">
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Sparkles size={18} style={{ color: 'var(--a)' }} />
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>
                 {editingEvent ? 'Edit Event' : 'Create New Event'}
               </h3>
               <button className="iBtn" onClick={() => setIsModalOpen(false)}><X size={16} /></button>
@@ -544,9 +539,35 @@ export default function EventsPage() {
                 </div>
               </div>
 
-              {/* 3. Event Date & Billed Fee */}
-              <div className="form-grid-2" style={{ marginTop: 12 }}>
-                <div className="fg">
+              {/* 3. Event Date & Charges */}
+              {billingType === 'custom' ? (
+                <div className="form-grid-2" style={{ marginTop: 12 }}>
+                  <div className="fg">
+                    <label className="flbl" style={{ textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: 11 }}>EVENT DATE *</label>
+                    <input
+                      type="date"
+                      required
+                      value={date}
+                      onChange={e => setDate(e.target.value)}
+                      className="finput"
+                    />
+                  </div>
+                  <div className="fg">
+                    <label className="flbl" style={{ textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: 11 }}>
+                      EVENT CHARGES / BILLED FEE (₹)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="e.g. 15000"
+                      value={additionalCharges}
+                      onChange={e => setAdditionalCharges(e.target.value)}
+                      className="finput"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="fg" style={{ marginTop: 12 }}>
                   <label className="flbl" style={{ textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: 11 }}>EVENT DATE *</label>
                   <input
                     type="date"
@@ -556,20 +577,7 @@ export default function EventsPage() {
                     className="finput"
                   />
                 </div>
-                <div className="fg">
-                  <label className="flbl" style={{ textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: 11 }}>
-                    {billingType === 'custom' ? 'EVENT CHARGES / BILLED FEE (₹)' : 'ADDITIONAL BILLED FEE (₹)'}
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    placeholder="e.g. 15000"
-                    value={additionalCharges}
-                    onChange={e => setAdditionalCharges(e.target.value)}
-                    className="finput"
-                  />
-                </div>
-              </div>
+              )}
 
               {/* 4. Per Plate Section (If per_plate selected) */}
               {billingType === 'per_plate' && (
@@ -898,6 +906,11 @@ export default function EventsPage() {
         .event-modal {
           max-width: 600px;
           width: 90%;
+          background: var(--s1);
+          border: 1px solid var(--b2);
+          border-radius: 16px;
+          box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+          overflow: hidden;
         }
         .billing-mode-tabs {
           display: flex;
