@@ -904,14 +904,23 @@ export default function EventsPage() {
 
         /* Modal Styles */
         .event-modal {
-          max-width: 600px;
+          max-width: 520px;
           width: 90%;
+          padding: 24px;
           background: var(--s1);
           border: 1px solid var(--b2);
           border-radius: 16px;
           box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
-          overflow: hidden;
+          max-height: 90vh;
+          overflow-y: auto;
         }
+
+        .form-grid-2 {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+        }
+
         .billing-mode-tabs {
           display: flex;
           flex-direction: row;
@@ -1005,6 +1014,10 @@ export default function EventsPage() {
           .events-controls-right { flex-direction: column; align-items: stretch; }
           .kpi-row-4 { grid-template-columns: 1fr; }
           .events-grid { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 600px) {
+          .event-modal { padding: 16px; width: 94%; }
+          .form-grid-2 { grid-template-columns: 1fr; }
           .billing-mode-tabs { flex-direction: column; }
         }
       `}</style>
