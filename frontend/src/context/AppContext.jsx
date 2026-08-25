@@ -525,7 +525,6 @@ export function AppProvider({ children }) {
     const pageHeight = 120 + (itemCount * 9) + (hasQr ? 55 : 0) + (hasTipQr ? 45 : 0);
 
     const restName = (settings.restaurantName || 'HUMTUM').trim();
-    const brandFontSize = restName.length > 25 ? '12px' : restName.length > 18 ? '14px' : restName.length > 14 ? '16px' : '18px';
 
     const html = `
       <html>
@@ -535,7 +534,7 @@ export function AppProvider({ children }) {
             @page { size: 80mm ${pageHeight}mm; margin: 0; }
             body { font-family: 'Courier New', Courier, monospace; width: 70mm; margin: 0; padding: 0; font-size: 13px; color: #000; line-height: 1.2; font-weight: bold; }
             .center { text-align: center; }
-            .brand { font-size: ${brandFontSize}; font-weight: 900; margin-bottom: 2px; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+            .brand { font-size: 18px; font-weight: 900; margin-bottom: 2px; text-transform: uppercase; display: block; }
             .address { font-size: 12px; margin-bottom: 6px; line-height: 1.2; }
             .dash-line { border-top: 1px dashed #000; margin: 6px 0; }
             .thick-line { border-top: 2px solid #000; margin: 4px 0; }
