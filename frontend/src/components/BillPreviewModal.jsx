@@ -48,9 +48,12 @@ export default function BillPreviewModal({ bill, table, tableNo, settings, onClo
         <div style={{ padding: '24px 20px', background: 'white', color: '#000' }}>
           {/* Header */}
           <div style={{ textAlign: 'center', marginBottom: 16 }}>
-            <div style={{ fontSize: 16, fontWeight: 900, letterSpacing: '2px' }}>{settings.restaurantName || 'HumTum'}</div>
+            <div style={{ fontSize: 16, fontWeight: 900, letterSpacing: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{settings.restaurantName || 'HumTum'}</div>
             {settings.address && (
               <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>{settings.address}</div>
+            )}
+            {settings.phone && (
+              <div style={{ fontSize: 11, color: '#666' }}>Ph: {settings.phone}</div>
             )}
             {settings.gstin && (
               <div style={{ fontSize: 11, color: '#666' }}>GSTIN: {settings.gstin}</div>

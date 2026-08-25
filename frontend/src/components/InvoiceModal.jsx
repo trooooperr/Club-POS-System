@@ -144,8 +144,9 @@ ${s.thankYouMsg}
             <div className="bill-inner">
               <div className="bill-top-center">
                 <div className="bill-name-heavy">{s.restaurantName}</div>
-                <div className="bill-sub-info">{s.address}</div>
-                <div className="bill-sub-info">GSTIN: {s.gstin}</div>
+                {s.address && <div className="bill-sub-info">{s.address}</div>}
+                {s.phone && <div className="bill-sub-info">Ph: {s.phone}</div>}
+                {s.gstin && <div className="bill-sub-info">GSTIN: {s.gstin}</div>}
               </div>
 
               <div className="bill-zig-zag-sep"></div>
@@ -269,7 +270,7 @@ ${s.thankYouMsg}
           box-shadow: 0 4px 20px rgba(0,0,0,0.25);
         }
         .bill-inner { border: 1px dashed #e2e8f0; border-radius: 6px; padding: 12px; color: #1e293b; font-family: 'Courier New', Courier, monospace; }
-        .bill-name-heavy { font-size: 13px; font-weight: 900; text-align: center; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1px; }
+        .bill-name-heavy { font-size: 13px; font-weight: 900; text-align: center; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .bill-sub-info { font-size: 10px; text-align: center; color: #64748b; text-transform: uppercase; margin-bottom: 1px; line-height: 1.3; }
         .bill-zig-zag-sep { border-top: 1px dashed #cbd5e1; margin: 8px 0; }
         

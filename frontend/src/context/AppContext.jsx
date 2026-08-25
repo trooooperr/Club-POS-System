@@ -524,6 +524,9 @@ export function AppProvider({ children }) {
     const hasTipQr = !!waiterTipQrUrl;
     const pageHeight = 120 + (itemCount * 9) + (hasQr ? 55 : 0) + (hasTipQr ? 45 : 0);
 
+    const restName = (settings.restaurantName || 'HUMTUM').trim();
+    const brandFontSize = restName.length > 25 ? '12px' : restName.length > 18 ? '14px' : restName.length > 14 ? '16px' : '18px';
+
     const html = `
       <html>
         <head>
@@ -532,7 +535,7 @@ export function AppProvider({ children }) {
             @page { size: 80mm ${pageHeight}mm; margin: 0; }
             body { font-family: 'Courier New', Courier, monospace; width: 70mm; margin: 0; padding: 0; font-size: 13px; color: #000; line-height: 1.2; font-weight: bold; }
             .center { text-align: center; }
-            .brand { font-size: 18px; font-weight: 900; margin-bottom: 2px; text-transform: uppercase; }
+            .brand { font-size: ${brandFontSize}; font-weight: 900; margin-bottom: 2px; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
             .address { font-size: 12px; margin-bottom: 6px; line-height: 1.2; }
             .dash-line { border-top: 1px dashed #000; margin: 6px 0; }
             .thick-line { border-top: 2px solid #000; margin: 4px 0; }
@@ -548,8 +551,9 @@ export function AppProvider({ children }) {
         </head>
         <body>
           <div class="center">
-            <div class="brand">${settings.restaurantName || 'HUMTUM'}</div>
+            <div class="brand">${restName}</div>
             ${settings.address ? `<div class="address">${settings.address}</div>` : ''}
+            ${settings.phone ? `<div class="address" style="margin-top:-4px">Ph: ${settings.phone}</div>` : ''}
             ${settings.gstin ? `<div class="address" style="margin-top:-4px">GSTIN: ${settings.gstin}</div>` : ''}
           </div>
 

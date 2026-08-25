@@ -306,8 +306,8 @@ export default function EventsPage() {
     <div className="fi events-page">
       {/* Controls Bar */}
       <div className="events-header-res">
-        <div className="events-controls-right" style={{ width: '100%', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div className="events-controls-right">
+          <div className="events-filters-group">
             <div className="unified-pill-box filter-pills">
               {['all', 'today', 'week', 'month'].map(f => (
                 <button key={f} className={`f-pill ${range === f ? 'active' : ''}`} onClick={() => setRange(f)}>
@@ -316,14 +316,14 @@ export default function EventsPage() {
               ))}
             </div>
 
-            <div className={`unified-pill-box date-box-res ${range === 'custom' ? 'active-border' : ''}`} style={{ gap: 8, paddingLeft: 10, paddingRight: 10 }}>
+            <div className={`unified-pill-box date-box-res ${range === 'custom' ? 'active-border' : ''}`}>
               <DateField label="From" value={startDate} onChange={e => handleDateChange('start', e.target.value)} inputRef={startInputRef} />
-              <ArrowRight size={13} style={{ color: 'var(--t2)', flexShrink: 0 }} />
+              <ArrowRight size={13} className="date-arrow-icon" />
               <DateField label="To" value={endDate} onChange={e => handleDateChange('end', e.target.value)} inputRef={endInputRef} />
             </div>
           </div>
 
-          <button className="btn btn-primary" style={{ padding: '0 18px', height: 42, borderRadius: 12, display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700 }} onClick={handleOpenAddModal}>
+          <button className="btn btn-primary btn-add-event" onClick={handleOpenAddModal}>
             <Plus size={16} /> New Event
           </button>
         </div>
@@ -712,8 +712,36 @@ export default function EventsPage() {
         .events-controls-right {
           display: flex;
           align-items: center;
+          justify-content: space-between;
           gap: 12px;
           flex-wrap: wrap;
+          width: 100%;
+        }
+        .events-filters-group {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+        .btn-add-event {
+          padding: 0 18px;
+          height: 42px;
+          border-radius: 12px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-weight: 700;
+          white-space: nowrap;
+        }
+        .date-box-res {
+          gap: 8px;
+          padding: 0 10px;
+          display: flex;
+          align-items: center;
+        }
+        .date-arrow-icon {
+          color: var(--t2);
+          flex-shrink: 0;
         }
         
         .kpi-row-4 {
@@ -1007,18 +1035,118 @@ export default function EventsPage() {
         }
 
         @media (max-width: 1024px) {
-          .kpi-row-4 { grid-template-columns: 1fr 1fr; }
+          .kpi-row-4 { grid-template-columns: repeat(2, 1fr); }
         }
-        @media (max-width: 750px) {
+
+        @media (max-width: 768px) {
           .events-header-res { flex-direction: column; align-items: stretch; }
-          .events-controls-right { flex-direction: column; align-items: stretch; }
-          .kpi-row-4 { grid-template-columns: 1fr; }
+          .events-controls-right { flex-direction: column; align-items: stretch; gap: 12px; }
+          .events-filters-group { flex-direction: column; align-items: stretch; width: 100%; gap: 10px; }
+          .filter-pills {
+            width: 100%;
+            justify-content: space-around;
+            height: 40px;
+            padding: 3px;
+          }
+          .filter-pills .f-pill {
+            flex: 1;
+            padding: 6px 4px;
+            font-size: 10px;
+            text-align: center;
+            white-space: nowrap;
+          }
+          .date-box-res {
+            width: 100%;
+            height: auto;
+            padding: 8px 10px;
+            flex-direction: row;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            gap: 8px;
+          }
+          .date-box-res .sales-date-field {
+            flex: 1;
+            min-width: 125px;
+          }
+          .date-box-res .sales-date-input-wrapper {
+            min-width: 0;
+            width: 100%;
+            padding: 0 6px;
+          }
+          .btn-add-event {
+            width: 100%;
+            justify-content: center;
+          }
+          .events-search-bar {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 10px;
+          }
+          .search-input-wrap {
+            max-width: 100%;
+          }
+          .events-search-bar .btn {
+            width: 100%;
+            justify-content: center;
+          }
+          .kpi-row-4 {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+          }
+          .kpi-card-custom {
+            padding: 12px 14px;
+          }
+          .kpi-card-val {
+            font-size: 18px;
+          }
           .events-grid { grid-template-columns: 1fr; }
         }
-        @media (max-width: 600px) {
-          .event-modal { padding: 16px; width: 94%; }
-          .form-grid-2 { grid-template-columns: 1fr; }
-          .billing-mode-tabs { flex-direction: column; }
+
+        @media (max-width: 480px) {
+          .date-box-res {
+            flex-direction: column;
+            align-items: stretch;
+          }
+          .date-arrow-icon {
+            display: none;
+          }
+          .event-card-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 6px;
+          }
+          .event-card-header > div:last-child {
+            align-items: flex-start !important;
+            width: 100%;
+            flex-direction: row !important;
+            justify-content: space-between;
+          }
+          .event-card-footer {
+            flex-wrap: wrap;
+            gap: 10px;
+          }
+          .event-modal {
+            padding: 14px;
+            width: 95%;
+          }
+          .form-grid-2 {
+            grid-template-columns: 1fr;
+          }
+          .billing-mode-tabs {
+            flex-direction: column;
+          }
+          .expense-builder-row {
+            flex-direction: column;
+            align-items: stretch;
+          }
+          .mfoot-actions {
+            flex-direction: row;
+            gap: 8px;
+          }
+          .mfoot-actions .btn {
+            flex: 1;
+            min-width: 0;
+          }
         }
       `}</style>
     </div>
