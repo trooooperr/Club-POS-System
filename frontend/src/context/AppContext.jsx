@@ -368,15 +368,15 @@ export function AppProvider({ children }) {
     const isKitchen = printerLabel === 'KITCHEN';
     const paperWidth = 80;
     const bodyWidth = 70;
-    const fontSize = 13;
-    const headerFontSize = 16;
-    const subFontSize = 12;
-    const qtyWidth = 26;
+    const fontSize = 15;
+    const headerFontSize = 18;
+    const subFontSize = 14;
+    const qtyWidth = 28;
     const qtyAlign = 'left';
-    const noteFontSize = 11;
+    const noteFontSize = 13;
     
     const itemCount = items.length;
-    const pageHeight = Math.max(105, 70 + (itemCount * 10));
+    const pageHeight = Math.max(110, 75 + (itemCount * 12));
 
     return `
     <html>
@@ -390,14 +390,16 @@ export function AppProvider({ children }) {
             margin: 0; 
             padding: 0; 
             font-size: ${fontSize}px; 
-            font-weight: 600;
+            font-weight: 900;
+            -webkit-text-stroke: 0.35px #000;
+            letter-spacing: 0.2px;
           }
-          .header { text-align: center; font-weight: 700; margin-bottom: 6px; font-size: ${subFontSize}px; }
-          .sub { text-align: center; font-size: ${subFontSize}px; margin-bottom: 4px; font-weight: 600; }
-          .divider { border-top: 1px dashed #000; margin: 5px 0; }
-          .item { display: flex; justify-content: space-between; margin: 3px 0; font-weight: 600; font-size: ${fontSize}px; }
-          .qty { font-weight: 700; min-width: ${qtyWidth}px; text-align: ${qtyAlign}; font-size: ${fontSize}px; }
-          .note { font-size: ${noteFontSize}px; margin: 0 0 4px 8px; border-left: 2px solid #000; padding-left: 4px; font-weight: 600; }
+          .header { text-align: center; font-weight: 900; margin-bottom: 6px; font-size: ${subFontSize}px; }
+          .sub { text-align: center; font-size: ${subFontSize}px; margin-bottom: 4px; font-weight: 800; }
+          .divider { border-top: 2px dashed #000; margin: 6px 0; }
+          .item { display: flex; justify-content: space-between; margin: 4px 0; font-weight: 900; font-size: ${fontSize}px; }
+          .qty { font-weight: 900; min-width: ${qtyWidth}px; text-align: ${qtyAlign}; font-size: ${fontSize + 1}px; }
+          .note { font-size: ${noteFontSize}px; margin: 0 0 4px 8px; border-left: 2.5px solid #000; padding-left: 5px; font-weight: 800; }
         </style>
       </head>
       <body>
