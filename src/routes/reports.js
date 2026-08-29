@@ -518,7 +518,7 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
     const fullOrdersForShots = await Order.find(orderMatch).select('items businessDate date').lean();
     const isShotItem = (name, category = '') => {
       const combined = (name + ' ' + (category || '')).toUpperCase();
-      return /SHOT|30\s*ML|60\s*ML|90\s*ML|120\s*ML|PEG|WHISKY|VODKA|RUM|GIN|TEQUILA|BRANDY|SCOTCH|COCKTAIL|BEER|LIQUOR|BEVERAGE|BAR/i.test(combined);
+      return combined.includes('SHOOTER') || combined.includes('SHOT');
     };
 
     const shotItemsMap = {};
@@ -585,7 +585,7 @@ router.get('/shots', requireRole(['admin', 'manager', 'staff']), async (req, res
 
     const isShotItem = (name, category = '') => {
       const combined = (name + ' ' + (category || '')).toUpperCase();
-      return /SHOT|30\s*ML|60\s*ML|90\s*ML|120\s*ML|PEG|WHISKY|VODKA|RUM|GIN|TEQUILA|BRANDY|SCOTCH|COCKTAIL|BEER|LIQUOR|BEVERAGE|BAR/i.test(combined);
+      return combined.includes('SHOOTER') || combined.includes('SHOT');
     };
 
     const shotItemsMap = {};

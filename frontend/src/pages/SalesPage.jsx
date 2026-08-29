@@ -220,18 +220,18 @@ export default function SalesPage() {
           <div className="kpi-value mono">{loading ? '...' : (analytics?.orderCount ?? (analytics?.count || 0))}</div>
         </div>
 
-        <div className="kpi" style={{ color: 'var(--t0)', borderLeft: '3px solid #F59E0B' }}>
-          <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#F59E0B' }}>
-            <Wine size={13} /> Shots Sold
+        <div className="kpi" style={{ color: 'var(--t0)' }}>
+          <div className="kpi-label" style={{ color: '#F59E0B' }}>
+            Shots Sold
           </div>
           <div className="kpi-value mono" style={{ color: '#F59E0B' }}>
             {loading ? '...' : `${totalShotsCount} Shots`}
           </div>
         </div>
 
-        <div className="kpi" style={{ color: 'var(--t0)', borderLeft: '3px solid #10B981' }}>
-          <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#10B981' }}>
-            <Zap size={13} /> Shots Revenue
+        <div className="kpi" style={{ color: 'var(--t0)' }}>
+          <div className="kpi-label" style={{ color: '#10B981' }}>
+            Shots Revenue
           </div>
           <div className="kpi-value mono" style={{ color: '#10B981' }}>
             {loading ? '...' : `₹${totalShotsRevenue.toLocaleString('en-IN')}`}
@@ -312,31 +312,26 @@ export default function SalesPage() {
         </div>
       </div>
 
-      {/* Itemized Shots Sales Analytics Card */}
+      {/* Itemized Shooters & Shots Sales Analytics Card */}
       <div className="card chart-box" style={{ marginTop: '4px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ background: '#F59E0B1A', border: '1px solid #F59E0B33', padding: '6px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Wine size={18} style={{ color: '#F59E0B' }} />
-            </div>
-            <div>
-              <h3 style={{ fontSize: '15px', fontWeight: 800, color: 'var(--t0)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                Shots & Liquor Sales Breakdown
-                <span style={{ background: '#F59E0B20', color: '#F59E0B', fontSize: '11px', padding: '2px 8px', borderRadius: '12px', fontWeight: 700 }}>
-                  {totalShotsCount} Shots Total
-                </span>
-              </h3>
-              <span style={{ fontSize: '11.5px', color: 'var(--t2)' }}>
-                Detailed itemized record of shots and liquor sold ({range.toUpperCase()})
+          <div>
+            <h3 style={{ fontSize: '15px', fontWeight: 800, color: 'var(--t0)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              Shooters & Shots Sales Breakdown
+              <span style={{ background: '#F59E0B20', color: '#F59E0B', fontSize: '11px', padding: '2px 8px', borderRadius: '12px', fontWeight: 700 }}>
+                {totalShotsCount} Shots Total
               </span>
-            </div>
+            </h3>
+            <span style={{ fontSize: '11.5px', color: 'var(--t2)' }}>
+              Detailed record of shooter items sold ({range.toUpperCase()})
+            </span>
           </div>
 
           <div style={{ position: 'relative', width: '260px' }}>
             <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--t2)' }} />
             <input
               type="text"
-              placeholder="Search shot name..."
+              placeholder="Search shooter name..."
               value={shotSearch}
               onChange={e => setShotSearch(e.target.value)}
               style={{
@@ -367,12 +362,12 @@ export default function SalesPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={5} style={{ textAlign: 'center', padding: '24px', color: 'var(--t2)' }}>Loading shots analytics...</td>
+                  <td colSpan={5} style={{ textAlign: 'center', padding: '24px', color: 'var(--t2)' }}>Loading shooters analytics...</td>
                 </tr>
               ) : shotsList.length === 0 ? (
                 <tr>
                   <td colSpan={5} style={{ textAlign: 'center', padding: '28px', color: 'var(--t2)' }}>
-                    No shots or liquor sales recorded in this period.
+                    No shooter items recorded in this period.
                   </td>
                 </tr>
               ) : (
@@ -381,10 +376,7 @@ export default function SalesPage() {
                   return (
                     <tr key={idx} style={{ borderBottom: '1px solid var(--b0)' }}>
                       <td style={{ padding: '10px', fontWeight: 700, color: 'var(--t0)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <Flame size={13} style={{ color: '#F59E0B' }} />
-                          <span>{item.name}</span>
-                        </div>
+                        {item.name}
                       </td>
                       <td style={{ padding: '10px', textAlign: 'right', fontWeight: 600, color: 'var(--t1)' }}>
                         ₹{(item.price || 0).toLocaleString('en-IN')}
