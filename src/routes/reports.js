@@ -316,10 +316,13 @@ router.get('/daily-summary', requireRole(['admin', 'manager']), async (req, res)
 router.get('/today-discounts', requireRole(['admin', 'manager', 'staff']), async (req, res) => {
   try {
     const businessDateStr = getBusinessDateString(new Date());
-    const ordersWithDiscount = await Order.find({
+    const rawOrders = await Order.find({
       businessDate: businessDateStr,
       discount: { $gt: 0 }
     }).sort({ updatedAt: -1, date: -1 });
+
+    // Exclude ₹1 unpaid bills & pending credit bills
+    const ordersWithDiscount = rawOrders.filter(o => o.grandTotal > 1 && o.paidAmount !== 1 && !o.isCredit && (o.dueAmount || 0) === 0);
 
     const totalDiscount = ordersWithDiscount.reduce((sum, o) => sum + (o.discount || 0), 0);
 
@@ -363,7 +366,10 @@ router.get('/discounts', requireRole(['admin', 'manager', 'staff']), async (req,
       matchQuery.businessDate = { $gte: startDate, $lte: endDate };
     }
 
-    const ordersWithDiscount = await Order.find(matchQuery).sort({ updatedAt: -1, date: -1 });
+    const rawOrders = await Order.find(matchQuery).sort({ updatedAt: -1, date: -1 });
+
+    // Exclude ₹1 unpaid bills & pending credit bills
+    const ordersWithDiscount = rawOrders.filter(o => o.grandTotal > 1 && o.paidAmount !== 1 && !o.isCredit && (o.dueAmount || 0) === 0);
 
     const totalDiscount = ordersWithDiscount.reduce((sum, o) => sum + (o.discount || 0), 0);
     const count = ordersWithDiscount.length;

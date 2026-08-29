@@ -33,6 +33,14 @@ const orderSchema = new mongoose.Schema({
   isActive:      { type: Boolean, default: true, index: true }, // Session is still open
   inventoryFinalized: { type: Boolean, default: false },
   inventoryFinalizedAt: { type: Date },
+  paymentStatus: { type: String, enum: ['paid', 'partial', 'pending'], default: 'paid', index: true },
+  isCredit:      { type: Boolean, default: false, index: true },
+  settlementHistory: [{
+    amount: { type: Number, required: true },
+    paymentMode: { type: String, default: 'cash' },
+    date: { type: Date, default: Date.now },
+    settledBy: { type: String, default: '' }
+  }],
 }, { timestamps: true });
 
 module.exports = mongoose.model('Order', orderSchema);

@@ -264,13 +264,59 @@ function DiscountEditModal({ order, currency, onSave, onClose }) {
 }
 
 export default function OrdersPage() {
-  const { orderHistory, setInvoiceOrder, invoiceOrder, settings, deleteOrder, updateOrderPayment, updateOrderDiscount, role, showToast } = useApp();
+  const { orderHistory, setInvoiceOrder, invoiceOrder, settings, deleteOrder, updateOrderPayment, updateOrderDiscount, role, showToast, loadData, setActiveSection, selectTable, setTableBills } = useApp();
   const [search, setSearch] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [editingPaymentOrder, setEditingPaymentOrder] = useState(null);
   const [editingDiscountOrder, setEditingDiscountOrder] = useState(null);
   const c = settings.currency;
+
+  const handleReopenBill = async (orderId, billNo) => {
+    try {
+      const res = await authFetch(apiUrl(`/api/orders/reopen-bill/${orderId}`), { method: 'POST' });
+      if (!res.ok) {
+        showToast('Failed to re-open bill', 'amber');
+        return;
+      }
+      const data = await res.json();
+      const order = data.order;
+      const tableNo = order?.tableNo;
+      const targetTableId = `t${tableNo}`;
+
+      // Populate local table bill state immediately so items show right away
+      if (setTableBills && order) {
+        const mappedItems = (order.items || []).map(i => ({
+          _id: i.menuItemId?._id || i.menuItemId || i._id,
+          name: i.name,
+          quantity: i.quantity,
+          price: i.price,
+          department: i.department || 'kitchen',
+          note: i.notes || i.note || ''
+        }));
+
+        setTableBills(prev => ({
+          ...prev,
+          [targetTableId]: {
+            items: mappedItems,
+            customerName: order.customerName || '',
+            customerPhone: order.customerPhone || '',
+            discount: order.discount ? String(order.discount) : '',
+            isCreditPay: order.isCredit || false,
+            paidAmount: order.paidAmount !== undefined ? String(order.paidAmount) : ''
+          }
+        }));
+      }
+
+      showToast(`Bill ${billNo} re-opened for editing on Table ${tableNo}!`, 'green');
+      if (loadData) await loadData();
+      if (setActiveSection) setActiveSection('billing');
+      if (selectTable) selectTable(tableNo);
+    } catch (err) {
+      console.error('Error reopening bill:', err);
+      showToast('Error re-opening bill', 'amber');
+    }
+  };
 
   const getCurrentMonthStr = () => {
     const d = new Date();
@@ -400,7 +446,6 @@ export default function OrdersPage() {
 
   const filtered = useMemo(() => {
     const list = (Array.isArray(activeOrdersList) ? activeOrdersList : []).filter(o => {
-      if (o.isActive) return false;
       if (!o.billNo || o.billNo.trim() === '') return false;
       const localDateStr = o.businessDate || getLocalDateString(o.date);
       const matchDate = (!startDate || localDateStr >= startDate) && (!endDate || localDateStr <= endDate);
@@ -607,6 +652,13 @@ export default function OrdersPage() {
                     View Bill
                   </button>
                   <button
+                    className="btn btn-amber btn-sm"
+                    style={{ padding: '2px 8px', fontSize: '11px', height: '24px', background: 'var(--a)', color: '#000', fontWeight: 800 }}
+                    onClick={(e) => { e.stopPropagation(); handleReopenBill(o._id, o.billNo); }}
+                  >
+                    Re-open Bill
+                  </button>
+                  <button
                     className="btn btn-blue btn-sm"
                     style={{ padding: '2px 8px', fontSize: '11px', height: '24px' }}
                     onClick={(e) => { e.stopPropagation(); setEditingDiscountOrder(o); }}
@@ -653,6 +705,7 @@ export default function OrdersPage() {
                   <td style={{ textAlign: 'center' }}>
                     <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
                       <button className="btn btn-primary btn-sm" onClick={() => setInvoiceOrder(o)}>View Bill</button>
+                      <button className="btn btn-amber btn-sm" style={{ background: 'var(--a)', color: '#000', fontWeight: 800 }} onClick={() => handleReopenBill(o._id, o.billNo)}>Re-open Bill</button>
                       <button className="btn btn-blue btn-sm" onClick={() => setEditingDiscountOrder(o)}>Edit</button>
                       {role === 'admin' && (
                         <button className="btn btn-danger btn-sm" onClick={() => handleDeleteOrder(o._id, o.billNo)}>Delete</button>

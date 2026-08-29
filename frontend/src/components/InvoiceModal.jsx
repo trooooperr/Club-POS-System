@@ -6,7 +6,7 @@ import QRCode from 'qrcode';
 const qz = typeof window !== 'undefined' ? window.qz : null;
 
 export default function InvoiceModal() {
-  const { invoiceOrder, setInvoiceOrder, settings, showToast, workers, role, deleteKOT, removeKOTItem, printBillDocument } = useApp();
+  const { invoiceOrder, setInvoiceOrder, settings, showToast, workers, role, deleteKOT, removeKOTItem, printBillDocument, loadData, setActiveSection, selectTable, setTableBills } = useApp();
   const [phone, setPhone] = useState(invoiceOrder?.customerPhone || '');
   const [sent, setSent] = useState(false);
   const [tab, setTab] = useState('whatsapp');
@@ -238,11 +238,61 @@ ${s.thankYouMsg}
         </div>
 
         {/* BOTTOM ACTION BAR - NEXT LEVEL ALIGNMENT */}
-        <div className="inv-m-actions">
+        <div className="inv-m-actions" style={{ gridTemplateColumns: '0.8fr 1fr 1fr 1.2fr' }}>
           <button className="btn-pill btn-minimal" onClick={() => setInvoiceOrder(null)}>CLOSE</button>
+          <button
+            className="btn-pill btn-outline-luxury"
+            style={{ borderColor: 'rgba(245, 158, 11, 0.4)', color: 'var(--a)' }}
+            onClick={async () => {
+              try {
+                const res = await authFetch(apiUrl(`/api/orders/reopen-bill/${o._id}`), { method: 'POST' });
+                if (!res.ok) {
+                  showToast('Failed to re-open bill', 'amber');
+                  return;
+                }
+                const data = await res.json();
+                const order = data.order;
+                const tableNo = order?.tableNo;
+                const targetTableId = `t${tableNo}`;
+
+                if (setTableBills && order) {
+                  const mappedItems = (order.items || []).map(i => ({
+                    _id: i.menuItemId?._id || i.menuItemId || i._id,
+                    name: i.name,
+                    quantity: i.quantity,
+                    price: i.price,
+                    department: i.department || 'kitchen',
+                    note: i.notes || i.note || ''
+                  }));
+
+                  setTableBills(prev => ({
+                    ...prev,
+                    [targetTableId]: {
+                      items: mappedItems,
+                      customerName: order.customerName || '',
+                      customerPhone: order.customerPhone || '',
+                      discount: order.discount ? String(order.discount) : '',
+                      isCreditPay: order.isCredit || false,
+                      paidAmount: order.paidAmount !== undefined ? String(order.paidAmount) : ''
+                    }
+                  }));
+                }
+
+                showToast(`Bill ${o.billNo} re-opened for editing on Table ${tableNo}!`, 'green');
+                setInvoiceOrder(null);
+                if (loadData) await loadData();
+                if (setActiveSection) setActiveSection('billing');
+                if (selectTable) selectTable(tableNo);
+              } catch (err) {
+                showToast('Error re-opening bill', 'amber');
+              }
+            }}
+          >
+            EDIT
+          </button>
           <button className="btn-pill btn-outline-luxury" onClick={handlePrint}><Download size={16}/> PDF</button>
           <button className="btn-pill btn-primary-luxury" onClick={handlePrint}>
-            <Printer size={16}/> PRINT BILL
+            <Printer size={16}/> PRINT
           </button>
         </div>
       </div>

@@ -856,12 +856,12 @@ export function AppProvider({ children }) {
       return;
     }
 
-    const newSocket = io(API_BASE, {
+    const newSocket = io(API_BASE || window.location.origin, {
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
-      reconnectionAttempts: 5,
-      transports: ['websocket'], // Force websocket to fix Render disconnect loops
+      reconnectionAttempts: 10,
+      transports: ['polling', 'websocket'],
       auth: {
         token: localStorage.getItem(TOKEN_KEY),
       }
@@ -1041,7 +1041,15 @@ export function AppProvider({ children }) {
   }, [allSellableItems]);
 
   // ── Table helpers ────────────────────────────────────────────────
-  const selectTable = useCallback((id) => setActiveTableId(id), []);
+  const selectTable = useCallback((id) => {
+    if (id === null || id === undefined || id === '') {
+      setActiveTableId(null);
+      return;
+    }
+    const str = String(id);
+    const formatted = (str.startsWith('t') || str.startsWith('T')) ? str.toLowerCase() : `t${str}`;
+    setActiveTableId(formatted);
+  }, []);
 
   const updateTableItem = useCallback((tableId, itemId, action) => {
     if (!tableId) return;
@@ -1146,6 +1154,16 @@ export function AppProvider({ children }) {
     
     return 'free';
   }, [tableBills, activeSessions]);
+
+  const activeTableCount = useMemo(() => {
+    let count = 0;
+    for (let i = 1; i <= NUM_TABLES; i++) {
+      if (getTableStatus(`t${i}`) !== 'free') {
+        count++;
+      }
+    }
+    return count;
+  }, [getTableStatus, NUM_TABLES]);
 
   const getTableInfo = useCallback((tableId) => {
     const tableNo = parseInt(tableId.substring(1));
@@ -1568,12 +1586,12 @@ export function AppProvider({ children }) {
     }
   }, [socket, applyInventoryUpdate, setOrderHistory, setInvoiceOrder]);
 
-  const finalizeBill = useCallback(async (orderId, items, subtotal, sgst, cgst, serviceTax, discount, roundOff, grandTotal, waiterName = '', orderType = 'dine-in', customerName = '', customerPhone = '', paymentMode = 'cash', cashAmount = 0, upiAmount = 0) => {
+  const finalizeBill = useCallback(async (orderId, items, subtotal, sgst, cgst, serviceTax, discount, roundOff, grandTotal, waiterName = '', orderType = 'dine-in', customerName = '', customerPhone = '', paymentMode = 'cash', cashAmount = 0, upiAmount = 0, isCredit = false, paidAmount = undefined, dueAmount = undefined) => {
     try {
       const res = await authFetch(apiUrl(`/api/orders/${orderId}/finalize-bill`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items, subtotal, sgst, cgst, serviceTax, discount, roundOff, grandTotal, waiterName, orderType, customerName, customerPhone, paymentMode, cashAmount, upiAmount })
+        body: JSON.stringify({ items, subtotal, sgst, cgst, serviceTax, discount, roundOff, grandTotal, waiterName, orderType, customerName, customerPhone, paymentMode, cashAmount, upiAmount, isCredit, paidAmount, dueAmount })
       });
       if (!res.ok) throw new Error('Failed to finalize bill');
       const orderResponse = await res.json();
@@ -1714,7 +1732,7 @@ export function AppProvider({ children }) {
       saveWorker, deleteWorker, updateWorkerStatus,
       toast, showToast,
       isDryDay: !!settings.isDryDay, toggleDryDay,
-      NUM_TABLES,
+      NUM_TABLES, activeTableCount,
       // Print Agent
       agentConnected, agentPrinters, fetchAgentPrinters, pingPrintAgent,
       // Socket.IO & KOT functions

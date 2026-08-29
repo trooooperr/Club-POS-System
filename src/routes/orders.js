@@ -79,10 +79,6 @@ router.get('/', async (req, res) => {
     if (!targetMonth || !/^\d{4}-\d{2}$/.test(targetMonth)) {
       targetMonth = getBusinessDateString(new Date()).substring(0, 7);
     }
-    
-    const cacheKey = `orders:month:${targetMonth}`;
-    const cached = await getCache(cacheKey);
-    if (cached) return res.json(cached);
 
     const monthRegex = new RegExp(`^${targetMonth}`);
     const [yearStr, mStr] = targetMonth.split('-');
@@ -90,13 +86,11 @@ router.get('/', async (req, res) => {
     const mIndex = parseInt(mStr, 10) - 1;
     const startDate = new Date(Date.UTC(year, mIndex, 1));
     const endDate = new Date(Date.UTC(year, mIndex + 1, 1));
-
     const maxLimit = limit ? parseInt(limit, 10) : 0;
     
     let query = Order.find({
-      isActive: { $ne: true },
       grandTotal: { $gt: 0 },
-      billNo: { $ne: '' },
+      billNo: { $exists: true, $ne: '' },
       $or: [
         { businessDate: monthRegex },
         { date: { $gte: startDate, $lt: endDate } }
@@ -108,9 +102,51 @@ router.get('/', async (req, res) => {
     }
 
     const orders = await query;
-    await setCache(cacheKey, orders, 180);
     res.json(orders);
   } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// ── GET DUE / REMAINING CREDIT PAYMENTS ─────────────────────────
+router.get('/due-payments', requireRole(['admin', 'manager', 'staff']), async (req, res) => {
+  try {
+    const dueOrders = await Order.find({
+      $or: [
+        { isCredit: true },
+        { dueAmount: { $gt: 0 } },
+        { paymentStatus: { $in: ['pending', 'partial'] } },
+        { grandTotal: 1 },
+        { paidAmount: 1 },
+        { grandTotal: { $lte: 1 } }
+      ]
+    }).sort({ updatedAt: -1, date: -1 });
+
+    const processedOrders = dueOrders.map(o => {
+      const isRs1Bill = o.grandTotal === 1 || o.paidAmount === 1 || (o.grandTotal <= 1 && (o.subtotal || 0) > 0);
+      const realTotal = (isRs1Bill && (o.subtotal || 0) > 1) ? o.subtotal : o.grandTotal;
+      const paid = isRs1Bill ? 0 : (o.paidAmount !== undefined && o.paidAmount > 0 && o.paidAmount !== 1 ? o.paidAmount : (o.paymentStatus === 'paid' ? realTotal : 0));
+      const due = isRs1Bill ? realTotal : (o.dueAmount > 0 ? o.dueAmount : Math.max(0, realTotal - paid));
+      const status = due === 0 ? 'paid' : (paid === 0 ? 'pending' : 'partial');
+
+      return {
+        ...o.toObject(),
+        grandTotal: realTotal,
+        paidAmount: paid,
+        dueAmount: due,
+        paymentStatus: status,
+        isCredit: due > 0
+      };
+    }).filter(o => o.grandTotal > 0 && o.dueAmount > 0);
+
+    const totalDue = processedOrders.reduce((sum, o) => sum + (o.dueAmount || 0), 0);
+
+    res.json({
+      totalDue,
+      count: processedOrders.length,
+      orders: processedOrders
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 });
 
 router.get('/:id', async (req, res) => {
@@ -400,7 +436,7 @@ router.post('/', async (req, res) => {
 // ── FINALIZE BILL (called when printing final bill) ─────────────
 router.patch('/:id/finalize-bill', async (req, res) => {
   try {
-    const { items, subtotal, sgst, cgst, serviceTax, discount, roundOff, grandTotal, waiterName, orderType, customerName, customerPhone, paymentMode, cashAmount, upiAmount } = req.body;
+    const { items, subtotal, sgst, cgst, serviceTax, discount, roundOff, grandTotal, waiterName, orderType, customerName, customerPhone, paymentMode, cashAmount, upiAmount, isCredit, paidAmount, dueAmount } = req.body;
 
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ message: 'Order not found' });
@@ -451,8 +487,21 @@ router.patch('/:id/finalize-bill', async (req, res) => {
     if (cashAmount !== undefined) order.cashAmount = parseFloat(cashAmount) || 0;
     if (upiAmount !== undefined) order.upiAmount = parseFloat(upiAmount) || 0;
 
-    // Generate and assign sequential bill number at checkout
-    if (wasActive || !order.billNo || order.billNo === 'PENDING') {
+    // Handle Credit / Partial Payments & User's ₹1 Unpaid Rule
+    let calculatedPaid = paidAmount !== undefined ? parseFloat(paidAmount) || 0 : grandTotal;
+    if (grandTotal === 1 && (paidAmount === undefined || paidAmount === 1)) {
+      calculatedPaid = 0;
+    }
+    const calculatedDue = Math.max(0, grandTotal - calculatedPaid);
+    const calculatedStatus = calculatedDue === 0 ? 'paid' : (calculatedPaid === 0 ? 'pending' : 'partial');
+
+    order.paidAmount = calculatedPaid;
+    order.dueAmount = calculatedDue;
+    order.paymentStatus = calculatedStatus;
+    order.isCredit = isCredit || calculatedDue > 0 || grandTotal === 1;
+
+    // Preserve existing sequential bill number if already generated (e.g. re-opening printed bill)
+    if (!order.billNo || order.billNo === 'PENDING') {
       order.date = new Date();
       order.businessDate = getBusinessDateString(order.date);
       order.billNo = await generateNextBillNo(order.businessDate);
@@ -534,7 +583,7 @@ router.patch('/:id/finalize-bill', async (req, res) => {
 // ── GET FULL ORDER HISTORY (including completed) ────────────────────
 router.get('/history/all', async (req, res) => {
   try {
-    const orders = await Order.find({ isActive: false, grandTotal: { $gt: 0 }, billNo: { $ne: '' } }).sort({ date: -1, billNo: -1 }).populate('kotIds');
+    const orders = await Order.find({ grandTotal: { $gt: 0 }, billNo: { $exists: true, $ne: '' } }).sort({ date: -1, billNo: -1 }).populate('kotIds');
     res.json(orders);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -768,11 +817,20 @@ router.delete('/table/:tableNo/cancel', async (req, res) => {
     for (const session of sessions) {
       const orderId = session.activeOrderId;
 
-      // Delete all KOTs linked to this order
       if (orderId) {
-        await KOT.deleteMany({ orderId });
-        // Delete the order itself (no history kept)
-        await Order.findByIdAndDelete(orderId);
+        const order = await Order.findById(orderId);
+        if (order) {
+          if (order.billNo && order.billNo !== 'PENDING') {
+            // NEVER DELETE PRINTED BILLS! Simply deactivate session and keep bill in history
+            order.isActive = false;
+            order.orderStatus = 'COMPLETED';
+            await order.save();
+          } else {
+            // Delete KOTs and temporary unbilled draft orders
+            await KOT.deleteMany({ orderId });
+            await Order.findByIdAndDelete(orderId);
+          }
+        }
       }
 
       // Delete the session
@@ -793,6 +851,95 @@ router.post('/admin/reset-bills', requireRole(['admin']), async (req, res) => {
     // Invalidate all relevant cache keys
     await deleteCache([ORDERS_CACHE_KEY, REPORT_SUMMARY_CACHE_KEY]);
     res.json({ message: 'All bills and counters have been reset.' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ── RE-OPEN COMPLETED/PRINTED BILL FOR EDITING ─────────────────
+router.post('/reopen-bill/:id', requireRole(['admin', 'manager', 'staff']), async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ message: 'Order not found' });
+
+    // Re-open order session (order.isActive = true keeps session active, while GET /orders keeps it in Order History via billNo filter)
+    order.isActive = true;
+    order.orderStatus = 'BILLING';
+    const saved = await order.save();
+
+    // Map order items to session pendingItems
+    const pendingItems = (order.items || []).map(i => ({
+      menuItemId: i.menuItemId || i._id,
+      name: i.name,
+      quantity: i.quantity,
+      price: i.price,
+      department: i.department || 'kitchen',
+      notes: i.notes || i.note || ''
+    }));
+
+    // Delete any old session for this table to prevent stale data conflicts
+    await TableSession.deleteMany({ tableNo: order.tableNo });
+
+    // Create fresh active table session with all items
+    const newSession = new TableSession({
+      tableNo: order.tableNo,
+      status: 'BILLING',
+      activeOrderId: order._id,
+      openedAt: new Date(),
+      lastActivityAt: new Date(),
+      totalAmount: order.grandTotal || 0,
+      pendingItems: pendingItems,
+      waiterName: order.waiterName || '',
+      orderType: order.orderType || 'dine-in'
+    });
+    await newSession.save();
+
+    await deleteCache([ORDERS_CACHE_KEY, REPORT_SUMMARY_CACHE_KEY]);
+    res.json({ success: true, order: saved });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+
+
+// ── SETTLE DUE BALANCE FOR AN ORDER ─────────────────────────────
+router.post('/:id/settle-due', requireRole(['admin', 'manager', 'staff']), async (req, res) => {
+  try {
+    const { amount, paymentMode, settledBy } = req.body;
+    const settleAmt = parseFloat(amount) || 0;
+    if (settleAmt <= 0) return res.status(400).json({ message: 'Invalid settlement amount' });
+
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ message: 'Order not found' });
+
+    const isRs1Bill = order.grandTotal === 1 || order.paidAmount === 1 || order.grandTotal <= 1;
+    const realTotal = (isRs1Bill && (order.subtotal || 0) > 1) ? order.subtotal : order.grandTotal;
+    const currentPaid = isRs1Bill ? 0 : (order.paidAmount !== undefined && order.paidAmount > 0 && order.paidAmount !== 1 ? order.paidAmount : (order.paymentStatus === 'paid' ? realTotal : 0));
+    const currentDue = isRs1Bill ? realTotal : (order.dueAmount > 0 ? order.dueAmount : Math.max(0, realTotal - currentPaid));
+
+    const newPaid = currentPaid + settleAmt;
+    const newDue = Math.max(0, realTotal - newPaid);
+    const newStatus = newDue === 0 ? 'paid' : 'partial';
+
+    order.grandTotal = realTotal;
+    order.paidAmount = newPaid;
+    order.dueAmount = newDue;
+    order.paymentStatus = newStatus;
+    order.isCredit = newDue > 0;
+
+    if (!order.settlementHistory) order.settlementHistory = [];
+    order.settlementHistory.push({
+      amount: settleAmt,
+      paymentMode: paymentMode || 'cash',
+      date: new Date(),
+      settledBy: settledBy || req.user?.name || 'Staff'
+    });
+
+    const saved = await order.save();
+    await deleteCache([ORDERS_CACHE_KEY, REPORT_SUMMARY_CACHE_KEY]);
+
+    res.json({ success: true, order: saved });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

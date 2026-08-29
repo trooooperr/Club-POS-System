@@ -198,7 +198,7 @@ export default function SalesPage() {
         </div>
       </div>
 
-      <div className="kpi-row-2" style={{ gridTemplateColumns: analytics?.eventCount > 0 ? '1fr 1fr 1fr 1fr 1fr' : '1fr 1fr 1fr' }}>
+      <div className="kpi-row-2" style={{ gridTemplateColumns: analytics?.eventCount > 0 ? '1fr 1fr 1fr 1fr' : '1fr 1fr' }}>
         <div className="kpi" style={{ 'color': 'var(--t0)' }}>
           <div className="kpi-label">Total Revenue</div>
           <div className="kpi-value mono">{loading ? '...' : `₹${(analytics?.revenue || 0).toLocaleString('en-IN')}`}</div>
@@ -206,10 +206,6 @@ export default function SalesPage() {
         <div className="kpi" style={{ 'color': 'var(--t0)' }}>
           <div className="kpi-label">POS Orders</div>
           <div className="kpi-value mono">{loading ? '...' : (analytics?.orderCount ?? (analytics?.count || 0))}</div>
-        </div>
-        <div className="kpi" style={{ 'color': 'var(--t0)' }}>
-          <div className="kpi-label">Discount Given</div>
-          <div className="kpi-value mono" style={{ color: '#EF4444' }}>{loading ? '...' : `₹${(analytics?.totalDiscount || 0).toLocaleString('en-IN')}`}</div>
         </div>
         {analytics?.eventCount > 0 && (
           <>

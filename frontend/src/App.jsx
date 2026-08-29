@@ -9,6 +9,7 @@ import MenuPage from './pages/MenuPage';
 import OrdersPage from './pages/OrdersPage';
 import SalesPage from './pages/SalesPage';
 import DiscountsPage from './pages/DiscountsPage';
+import DuePaymentsPage from './pages/DuePaymentsPage';
 import EventsPage from './pages/EventsPage';
 import WorkersPage from './pages/WorkersPage';
 import InventoryPage from './pages/InventoryPage';
@@ -26,7 +27,7 @@ function Shell() {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  const { currentUser, activeSection, setActiveSection, selectTable, settings, loading, error, loadData, sidebarOpen, setSidebarOpen, invoiceOrder, activeTableId, showToast, tableBills, getTableStatus, NUM_TABLES } = useApp();
+  const { currentUser, activeSection, setActiveSection, selectTable, settings, loading, error, loadData, sidebarOpen, setSidebarOpen, invoiceOrder, activeTableId, showToast, tableBills, getTableStatus, NUM_TABLES, activeTableCount } = useApp();
 
   const pageTitles = {
     billing: 'Billing',
@@ -35,6 +36,7 @@ function Shell() {
     orders: 'Orders',
     sales: 'Analytics',
     discounts: 'Discount Analytics',
+    'due-payments': 'Due Payments',
     events: 'Events Management',
     workers: 'Workers',
     settings: 'Settings',
@@ -42,7 +44,6 @@ function Shell() {
     bar: 'Bar Display',
   };
   const currentPageTitle = pageTitles[activeSection] || 'Dashboard';
-  const activeTableCount = Object.keys(tableBills || {}).filter(tableId => getTableStatus(tableId) !== 'free').length;
   const completeTableCount = Math.max(0, NUM_TABLES - activeTableCount);
   const tableStats = { active: activeTableCount, complete: completeTableCount };
 
@@ -97,6 +98,7 @@ function Shell() {
     orders:<OrdersPage/>, 
     sales:<SalesPage/>, 
     discounts:<DiscountsPage/>,
+    'due-payments':<DuePaymentsPage/>,
     events:<EventsPage/>, 
     workers:<WorkersPage/>, 
     inventory:<InventoryPage/>, 

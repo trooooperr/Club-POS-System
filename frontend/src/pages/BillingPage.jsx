@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { ArrowLeft, Search, Trash2, Printer, UtensilsCrossed, X, Menu, Clock, Tag, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Search, Trash2, Printer, UtensilsCrossed, X, Menu, Clock, Tag, ChevronDown, ChevronUp, Wallet } from 'lucide-react';
 import { apiUrl, authFetch } from '../lib/api';
 import LiveKOTModal from '../components/LiveKOTModal';
 
@@ -413,7 +413,7 @@ function TodayDiscountDropdown() {
                     marginTop: '2px',
                     fontWeight: 600
                   }}>
-                    <span>Total Bill: <strong style={{ color: 'var(--t0)' }}>₹{ord.subtotal.toLocaleString('en-IN')}</strong></span>
+                    <span>Total Bill: <strong style={{ color: 'var(--t0)' }}>₹{Math.round((ord.grandTotal || 0) + (ord.discount || 0)).toLocaleString('en-IN')}</strong></span>
                     <span>Discount: <strong style={{ color: '#EF4444' }}>-₹{ord.discount.toLocaleString('en-IN')}</strong></span>
                     <span>Paid Bill: <strong style={{ color: '#10B981', fontWeight: 800 }}>₹{ord.grandTotal.toLocaleString('en-IN')}</strong></span>
                     {ord.waiterName && <span>Staff: <span style={{ color: 'var(--t1)' }}>{ord.waiterName}</span></span>}
@@ -427,6 +427,11 @@ function TodayDiscountDropdown() {
     </div>
   );
 }
+
+const parseTableNum = (id) => {
+  if (id === null || id === undefined || id === '') return 0;
+  return parseInt(String(id).replace(/\D/g, ''), 10) || 0;
+};
 
 /* ─── BILLING NAV BAR ─────────────────────────────────────────── */
 function BillingNavBar({
@@ -448,7 +453,7 @@ function BillingNavBar({
           <UtensilsCrossed size={16} className="bnav-icon" />
           <span className="bnav-title">Billing</span>
           {activeTableId && (
-            <span className="bnav-table-badge">Table {activeTableId.substring(1)}</span>
+            <span className="bnav-table-badge">Table {parseTableNum(activeTableId)}</span>
           )}
         </div>
       </div>
@@ -525,7 +530,7 @@ export default function BillingPage() {
     setItemNote: setItemNoteRaw,
     allSellableItems,
     billTotals, filteredMenu, categories, categoryFilter, setCategoryFilter,
-    menuSearch, setMenuSearch, inventory, workers, getTableStatus, getTableInfo, settings, NUM_TABLES,
+    menuSearch, setMenuSearch, inventory, workers, getTableStatus, getTableInfo, settings, NUM_TABLES, activeTableCount,
     openTableSession, createKOT, finalizeBill, completeOrder, socket, syncTableSession, cancelTableSession,
     setSidebarOpen, showToast, printKOTDocument, printBillDocument,
     removeKOTItem, deleteKOT, role
@@ -658,11 +663,11 @@ export default function BillingPage() {
   const { subtotal, sgst, cgst, serviceTax, discountAmount, grandTotal, roundOff } = totals;
 
   const tableList = Array.from({ length: NUM_TABLES }, (_, i) => {
-    const id = `T${i + 1}`;
+    const id = `t${i + 1}`;
     const info = getTableInfo(id);
     return { id, num: i + 1, status: getTableStatus(id), items: info.itemsCount, total: info.totalAmount };
   });
-  const occupiedCount = tableList.filter(t => t.status !== 'free').length;
+  const occupiedCount = activeTableCount;
 
   const [billError, setBillError] = useState('');
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth <= 750 : false);
@@ -696,9 +701,11 @@ export default function BillingPage() {
 
   // When table is selected, load/open session
   const ensureActiveOrder = async (tableIdOverride, createIfMissing = true) => {
-    const targetTableId = tableIdOverride || activeTableId;
-    if (!targetTableId) return null;
-    const tableNo = parseInt(targetTableId.substring(1));
+    const rawId = tableIdOverride || activeTableId;
+    if (!rawId && rawId !== 0) return null;
+    const tableNo = parseTableNum(rawId);
+    if (!tableNo) return null;
+    const targetTableId = `t${tableNo}`;
 
     try {
       const response = await authFetch(apiUrl(`/api/orders/table/${tableNo}/session`));
@@ -741,14 +748,18 @@ export default function BillingPage() {
         return newOrderId;
       }
 
-      // Map database pending items to local table format
-      const dbPendingItems = (session?.pendingItems || []).map(i => ({
-        _id: i.menuItemId?._id || i.menuItemId,
+      // Map database pending items or active order items to local table format
+      const rawItems = (session?.pendingItems && session.pendingItems.length > 0)
+        ? session.pendingItems
+        : (session?.activeOrderId?.items || []);
+
+      const dbPendingItems = rawItems.map(i => ({
+        _id: i.menuItemId?._id || i.menuItemId || i._id,
         name: i.name,
         quantity: i.quantity,
         price: i.price,
         department: i.department || 'kitchen',
-        note: i.notes || ''
+        note: i.notes || i.note || ''
       }));
 
       // Update local storage/state table bills if not edited recently
@@ -810,7 +821,7 @@ export default function BillingPage() {
   // Sync changes to backend session
   useEffect(() => {
     if (!activeTableId || !activeOrder) return;
-    const tableNo = parseInt(activeTableId.substring(1));
+    const tableNo = parseTableNum(activeTableId);
 
     const delayDebounceFn = setTimeout(() => {
       // ONLY sync if the user made local changes recently (in the last 2 seconds)
@@ -865,7 +876,7 @@ export default function BillingPage() {
   // Listen to real-time socket events for current table
   useEffect(() => {
     if (!activeTableId || !socket) return;
-    const tableNo = parseInt(activeTableId.substring(1));
+    const tableNo = parseTableNum(activeTableId);
 
     socket.emit('join-table', tableNo);
 
@@ -911,7 +922,7 @@ export default function BillingPage() {
       if (hasClrItem) {
         setBusy(true);
         try {
-          const tableNo = parseInt(activeTableId.substring(1));
+          const tableNo = parseTableNum(activeTableId);
           await cancelTableSession(tableNo);
           clearTable(activeTableId);
           setKots([]);
@@ -930,7 +941,7 @@ export default function BillingPage() {
       }
 
       setBusy(true);
-      const tableNo = parseInt(activeTableId.substring(1));
+      const tableNo = parseTableNum(activeTableId);
 
       const itemsToSubmit = table.items.map(i => {
         const master = allSellableItems.find(m => String(m._id) === String(i._id) || m.name === i.name);
@@ -1004,7 +1015,7 @@ export default function BillingPage() {
         return;
       }
 
-      const tableNo = parseInt(activeTableId.substring(1));
+      const tableNo = parseTableNum(activeTableId);
 
       const hasClrItem = combinedItems.all.some(i => i.name && i.name.toUpperCase() === 'CLR');
       if (hasClrItem) {
@@ -1026,6 +1037,10 @@ export default function BillingPage() {
         return;
       }
 
+      const isCreditPay = !!table.isCreditPay;
+      const paidVal = isCreditPay ? (parseFloat(table.paidAmount) || 0) : grandTotal;
+      const dueVal = Math.max(0, grandTotal - paidVal);
+
       // Finalize bill (combines all KOTs and leftover items)
       const finalizedOrder = await finalizeBill(
         orderId,
@@ -1042,8 +1057,11 @@ export default function BillingPage() {
         table.customerName || '',
         table.customerPhone || '',
         pm,
-        pm === 'cash' ? grandTotal : 0,
-        0
+        pm === 'cash' ? paidVal : 0,
+        pm === 'upi' ? paidVal : 0,
+        isCreditPay,
+        paidVal,
+        dueVal
       );
 
       // Print bill
@@ -1093,7 +1111,7 @@ export default function BillingPage() {
   // CLR TABLE: Cancel session without saving to order history
   const handleClearTable = async () => {
     if (!activeTableId) return;
-    const tableNo = parseInt(activeTableId.substring(1));
+    const tableNo = parseTableNum(activeTableId);
     const hasItems = combinedItems.all.length > 0 || kots.length > 0;
     const msg = hasItems
       ? `Clear Table ${tableNo}? This will discard all items and KOTs for this table. Nothing will be saved to order history.`
@@ -1369,7 +1387,7 @@ export default function BillingPage() {
 
           <div className="bill-scroll-content">
             <div className="bill-header-row">
-              <span>Table {activeTableId ? activeTableId.substring(1) : ''}</span>
+              <span>Table {activeTableId ? parseTableNum(activeTableId) : ''}</span>
               {activeTableId && <button onClick={() => clearTable(activeTableId)} className="trash-btn"><Trash2 size={14} /></button>}
             </div>
 
@@ -1639,8 +1657,8 @@ export default function BillingPage() {
                       const maxLimit = settings?.maxDiscountLimit !== undefined ? settings.maxDiscountLimit : 30;
                       const raw = e.target.value.replace(/[^0-9.]/g, '');
                       const val = parseFloat(raw) || 0;
-                      if (val > maxLimit) {
-                        showToast(`Discount limit exceeded! Maximum allowed is ${maxLimit}%`, 'amber');
+                      if (role !== 'admin' && val > maxLimit) {
+                        showToast(`Discount limit exceeded! Maximum allowed for staff/manager is ${maxLimit}%`, 'amber');
                         setTableField(activeTableId, 'discount', String(maxLimit));
                       } else {
                         setTableField(activeTableId, 'discount', raw);
@@ -1650,7 +1668,71 @@ export default function BillingPage() {
                   />
                 </div>
                 <div className="s-row total-big"><span>Total</span><span>{c}{grandTotal.toFixed(0)}</span></div>
+
+                {/* Pay Later / Credit Payment Option */}
+                <div style={{ borderTop: '1px dashed var(--b2)', paddingTop: '8px', marginTop: '6px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setTableField(activeTableId, 'isCreditPay', !table.isCreditPay)}
+                    style={{
+                      width: '100%',
+                      padding: '7px 10px',
+                      borderRadius: '8px',
+                      border: table.isCreditPay ? '1px solid #F59E0B' : '1px solid var(--b2)',
+                      background: table.isCreditPay ? 'rgba(245, 158, 11, 0.15)' : 'var(--s2)',
+                      color: table.isCreditPay ? '#F59E0B' : 'var(--t1)',
+                      fontSize: '11.5px',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Wallet size={14} />
+                      <span>Pay Later / Partial (Credit)</span>
+                    </span>
+                    <span style={{
+                      fontSize: '10px',
+                      padding: '2px 8px',
+                      borderRadius: '6px',
+                      background: table.isCreditPay ? '#F59E0B' : 'var(--b2)',
+                      color: table.isCreditPay ? '#000000' : 'var(--t2)',
+                      fontWeight: 900
+                    }}>
+                      {table.isCreditPay ? 'ENABLED' : 'OFF'}
+                    </span>
+                  </button>
+
+                  {table.isCreditPay && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px', background: 'var(--s2)', padding: '8px 10px', borderRadius: '8px', border: '1px solid var(--b2)' }}>
+                      <div className="s-row">
+                        <span style={{ fontSize: '11.5px', fontWeight: 600 }}>Paid Now</span>
+                        <input
+                          className="mini-input"
+                          style={{ width: 80, textAlign: 'right', fontWeight: 700 }}
+                          value={table.paidAmount !== undefined ? table.paidAmount : ''}
+                          onChange={e => setTableField(activeTableId, 'paidAmount', e.target.value.replace(/[^0-9.]/g, ''))}
+                          placeholder="0"
+                        />
+                      </div>
+                      <div className="s-row" style={{ color: '#EF4444', fontWeight: 800, fontSize: '11.5px' }}>
+                        <span>Remaining Due</span>
+                        <span>{c}{Math.max(0, grandTotal - (parseFloat(table.paidAmount) || 0)).toFixed(0)}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
+
+              {activeOrder?.billNo && activeOrder?.billNo !== 'PENDING' && (
+                <div style={{ background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.3)', color: '#F59E0B', borderRadius: 8, padding: '6px 10px', fontSize: 11, fontWeight: 800, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span>Editing Bill: {activeOrder.billNo}</span>
+                  <span style={{ fontSize: 10, opacity: 0.8 }}>(Preserving Bill #)</span>
+                </div>
+              )}
 
 
 

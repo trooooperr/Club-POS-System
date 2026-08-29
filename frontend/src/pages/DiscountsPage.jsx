@@ -164,12 +164,8 @@ export default function DiscountsPage() {
       {/* Header & Date Range Filter */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
         <div>
-          <h1 style={{ fontSize: '22px', fontWeight: 800, color: 'var(--t0)', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-            <Tag size={22} style={{ color: '#EF4444' }} />
-            Discount Analytics
-          </h1>
-          <p style={{ fontSize: '12.5px', color: 'var(--t2)', marginTop: '2px', margin: 0 }}>
-            Comprehensive overview of discounts given across daily, weekly, monthly, and custom time periods.
+          <p style={{ fontSize: '12.5px', color: 'var(--t2)', margin: 0 }}>
+            Overview of discounts given across daily, weekly, monthly, and custom time periods.
           </p>
         </div>
 
@@ -344,7 +340,7 @@ export default function DiscountsPage() {
                       </div>
                     </td>
                     <td style={{ padding: '10px', textAlign: 'right', fontWeight: 600, color: 'var(--t1)' }}>
-                      {currency}{ord.subtotal.toLocaleString('en-IN')}
+                      {currency}{Math.round((ord.grandTotal || 0) + (ord.discount || 0)).toLocaleString('en-IN')}
                     </td>
                     <td style={{ padding: '10px', textAlign: 'right', fontWeight: 800, color: '#EF4444' }}>
                       -{currency}{ord.discount.toLocaleString('en-IN')} {ord.discountPercent > 0 ? `(${ord.discountPercent}%)` : ''}
