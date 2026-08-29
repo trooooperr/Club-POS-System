@@ -343,9 +343,18 @@ export default function OrdersPage() {
         if (isMounted) setLoadingMonth(false);
       });
     return () => { isMounted = false; };
-  }, [selectedMonth]);
+  }, [selectedMonth, orderHistory]);
 
-  const activeOrdersList = monthOrders !== null ? monthOrders : (Array.isArray(orderHistory) ? orderHistory : []);
+  const activeOrdersList = useMemo(() => {
+    const listMap = new Map();
+    (Array.isArray(orderHistory) ? orderHistory : []).forEach(o => {
+      if (o && o._id && o.billNo) listMap.set(String(o._id), o);
+    });
+    (Array.isArray(monthOrders) ? monthOrders : []).forEach(o => {
+      if (o && o._id && o.billNo) listMap.set(String(o._id), o);
+    });
+    return Array.from(listMap.values());
+  }, [monthOrders, orderHistory]);
 
   const formatMonthLabel = (ymStr) => {
     if (!ymStr) return '';

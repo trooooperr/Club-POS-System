@@ -89,13 +89,14 @@ router.get('/', async (req, res) => {
     const maxLimit = limit ? parseInt(limit, 10) : 0;
     
     let query = Order.find({
-      grandTotal: { $gt: 0 },
       billNo: { $exists: true, $ne: '' },
       $or: [
         { businessDate: monthRegex },
-        { date: { $gte: startDate, $lt: endDate } }
+        { date: { $gte: startDate, $lt: endDate } },
+        { createdAt: { $gte: startDate, $lt: endDate } },
+        { updatedAt: { $gte: startDate, $lt: endDate } }
       ]
-    }).sort({ date: -1, billNo: -1 });
+    }).sort({ date: -1, createdAt: -1, billNo: -1 });
 
     if (maxLimit > 0) {
       query = query.limit(maxLimit);
@@ -583,7 +584,7 @@ router.patch('/:id/finalize-bill', async (req, res) => {
 // ── GET FULL ORDER HISTORY (including completed) ────────────────────
 router.get('/history/all', async (req, res) => {
   try {
-    const orders = await Order.find({ grandTotal: { $gt: 0 }, billNo: { $exists: true, $ne: '' } }).sort({ date: -1, billNo: -1 }).populate('kotIds');
+    const orders = await Order.find({ billNo: { $exists: true, $ne: '' } }).sort({ date: -1, createdAt: -1, billNo: -1 }).populate('kotIds');
     res.json(orders);
   } catch (err) {
     res.status(500).json({ message: err.message });
