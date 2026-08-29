@@ -90,6 +90,7 @@ function normalizeSettings(data) {
     whatsappEnabled: !!data.whatsappEnabled,
     whatsappTemplate: data.whatsappTemplate || 'Hello {customerName}!\n\nThank you for visiting HumTum Bar & Club. We hope you had a wonderful time! 🍹✨\n\nCould you please take a moment to share your experience with us? It helps us grow!\nGoogle Review: {googleReviewLink}\n\nFollow us to stay updated with our events and offers:\nInstagram: {instagramLink}\nFacebook: {facebookLink}\n\nHope to see you again soon!\nTeam HumTum',
     isDryDay: !!data.isDryDay,
+    maxDiscountLimit: data.maxDiscountLimit !== undefined ? Number(data.maxDiscountLimit) : 30,
   };
 }
 
@@ -237,6 +238,7 @@ router.put('/', requireRole(['admin', 'manager']), async (req, res) => {
   if (req.body.whatsappEnabled !== undefined) settings.whatsappEnabled = !!req.body.whatsappEnabled;
   if (req.body.whatsappTemplate !== undefined) settings.whatsappTemplate = cleanString(req.body.whatsappTemplate);
   if (req.body.isDryDay !== undefined) settings.isDryDay = !!req.body.isDryDay;
+  if (req.body.maxDiscountLimit !== undefined) settings.maxDiscountLimit = cleanNumber(req.body.maxDiscountLimit, 30);
 
   const inventoryCategories = cleanCategoryList(req.body.inventoryCategories);
   if (inventoryCategories !== undefined) {

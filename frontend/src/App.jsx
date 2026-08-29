@@ -8,6 +8,7 @@ import BillingPage from './pages/BillingPage';
 import MenuPage from './pages/MenuPage';
 import OrdersPage from './pages/OrdersPage';
 import SalesPage from './pages/SalesPage';
+import DiscountsPage from './pages/DiscountsPage';
 import EventsPage from './pages/EventsPage';
 import WorkersPage from './pages/WorkersPage';
 import InventoryPage from './pages/InventoryPage';
@@ -33,6 +34,7 @@ function Shell() {
     inventory: 'Inventory',
     orders: 'Orders',
     sales: 'Analytics',
+    discounts: 'Discount Analytics',
     events: 'Events Management',
     workers: 'Workers',
     settings: 'Settings',
@@ -94,6 +96,7 @@ function Shell() {
     menu:<MenuPage/>, 
     orders:<OrdersPage/>, 
     sales:<SalesPage/>, 
+    discounts:<DiscountsPage/>,
     events:<EventsPage/>, 
     workers:<WorkersPage/>, 
     inventory:<InventoryPage/>, 

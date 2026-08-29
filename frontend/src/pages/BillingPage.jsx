@@ -1635,7 +1635,17 @@ export default function BillingPage() {
                     className="mini-input"
                     style={{ width: 60, textAlign: 'right' }}
                     value={table.discount || ''}
-                    onChange={e => setTableField(activeTableId, 'discount', e.target.value.replace(/[^0-9.]/g, ''))}
+                    onChange={e => {
+                      const maxLimit = settings?.maxDiscountLimit !== undefined ? settings.maxDiscountLimit : 30;
+                      const raw = e.target.value.replace(/[^0-9.]/g, '');
+                      const val = parseFloat(raw) || 0;
+                      if (val > maxLimit) {
+                        showToast(`Discount limit exceeded! Maximum allowed is ${maxLimit}%`, 'amber');
+                        setTableField(activeTableId, 'discount', String(maxLimit));
+                      } else {
+                        setTableField(activeTableId, 'discount', raw);
+                      }
+                    }}
                     placeholder="0"
                   />
                 </div>

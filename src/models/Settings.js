@@ -34,6 +34,7 @@ const settingsSchema = new mongoose.Schema({
   whatsappEnabled:     { type: Boolean, default: true },
   whatsappTemplate:    { type: String, default: 'Hello {customerName}!\n\nThank you for visiting HumTum Bar & Club. We hope you had a wonderful time! 🍹✨\n\nCould you please take a moment to share your experience with us? It helps us grow!\nGoogle Review: {googleReviewLink}\n\nFollow us to stay updated with our events and offers:\nInstagram: {instagramLink}\nFacebook: {facebookLink}\n\nHope to see you again soon!\nTeam HumTum' },
   isDryDay:            { type: Boolean, default: false },
+  maxDiscountLimit:    { type: Number, default: 30 },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Settings', settingsSchema);

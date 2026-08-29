@@ -354,6 +354,76 @@ router.get('/today-discounts', requireRole(['admin', 'manager', 'staff']), async
   }
 });
 
+router.get('/discounts', requireRole(['admin', 'manager', 'staff']), async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    let matchQuery = { discount: { $gt: 0 } };
+
+    if (startDate && endDate) {
+      matchQuery.businessDate = { $gte: startDate, $lte: endDate };
+    }
+
+    const ordersWithDiscount = await Order.find(matchQuery).sort({ updatedAt: -1, date: -1 });
+
+    const totalDiscount = ordersWithDiscount.reduce((sum, o) => sum + (o.discount || 0), 0);
+    const count = ordersWithDiscount.length;
+    const avgDiscount = count > 0 ? Math.round(totalDiscount / count) : 0;
+    const maxDiscount = ordersWithDiscount.reduce((max, o) => Math.max(max, o.discount || 0), 0);
+
+    // Group daily discounts for chart visualization
+    const dailyMap = {};
+    ordersWithDiscount.forEach(o => {
+      const bDate = o.businessDate || (o.date ? new Date(o.date).toISOString().slice(0, 10) : 'Other');
+      dailyMap[bDate] = (dailyMap[bDate] || 0) + (o.discount || 0);
+    });
+
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const sortedDates = Object.keys(dailyMap).sort();
+    const dailyData = sortedDates.map(dateStr => {
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        const day = parts[2];
+        const month = months[parseInt(parts[1], 10) - 1] || parts[1];
+        return { name: `${day} ${month}`, discount: dailyMap[dateStr] };
+      }
+      return { name: dateStr, discount: dailyMap[dateStr] };
+    });
+
+    const details = ordersWithDiscount.map(o => ({
+      _id: o._id,
+      billNo: o.billNo || `HTB-T${o.tableNo}`,
+      tableNo: o.tableNo,
+      customerName: o.customerName || 'Walk-in Guest',
+      customerPhone: o.customerPhone || '',
+      waiterName: o.waiterName || '',
+      subtotal: o.subtotal || 0,
+      discount: o.discount || 0,
+      discountPercent: (o.subtotal || 0) > 0 ? Math.round((o.discount / o.subtotal) * 100) : 0,
+      sgst: o.sgst || 0,
+      cgst: o.cgst || 0,
+      totalGst: Number(((o.sgst || 0) + (o.cgst || 0)).toFixed(2)),
+      serviceTax: o.serviceTax || 0,
+      roundOff: o.roundOff || 0,
+      grandTotal: o.grandTotal || 0,
+      date: o.updatedAt || o.date,
+      paymentMode: o.paymentMode || 'cash'
+    }));
+
+    res.json({
+      startDate: startDate || '',
+      endDate: endDate || '',
+      totalDiscount,
+      count,
+      avgDiscount,
+      maxDiscount,
+      dailyData,
+      orders: details
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
