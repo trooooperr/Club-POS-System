@@ -514,6 +514,42 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
       }
     });
 
+    // 4. Shots / Liquor Sales Analytics
+    const fullOrdersForShots = await Order.find(orderMatch).select('items businessDate date').lean();
+    const isShotItem = (name, category = '') => {
+      const combined = (name + ' ' + (category || '')).toUpperCase();
+      return /SHOT|30\s*ML|60\s*ML|90\s*ML|120\s*ML|PEG|WHISKY|VODKA|RUM|GIN|TEQUILA|BRANDY|SCOTCH|COCKTAIL|BEER|LIQUOR|BEVERAGE|BAR/i.test(combined);
+    };
+
+    const shotItemsMap = {};
+    let totalShotsCount = 0;
+    let totalShotsRevenue = 0;
+
+    fullOrdersForShots.forEach(o => {
+      (o.items || []).forEach(item => {
+        if (item && item.name && isShotItem(item.name)) {
+          const key = item.name.trim();
+          const qty = item.quantity || 1;
+          const rev = (item.quantity || 1) * (item.price || 0);
+
+          if (!shotItemsMap[key]) {
+            shotItemsMap[key] = {
+              name: key,
+              quantity: 0,
+              revenue: 0,
+              price: item.price || 0
+            };
+          }
+          shotItemsMap[key].quantity += qty;
+          shotItemsMap[key].revenue += rev;
+          totalShotsCount += qty;
+          totalShotsRevenue += rev;
+        }
+      });
+    });
+
+    const shotsBreakdown = Object.values(shotItemsMap).sort((a, b) => b.quantity - a.quantity);
+
     const combinedRevenue = (orderStats.revenue || 0) + (eventStats.revenue || 0);
 
     res.json({
@@ -527,7 +563,66 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
       orderCount: orderStats.count || 0,
       eventCount: eventStats.count || 0,
       dailyData,
-      paymentBreakdown: { cash: cashTotal, upi: upiTotal }
+      paymentBreakdown: { cash: cashTotal, upi: upiTotal },
+      shotsStats: {
+        totalShots: totalShotsCount,
+        totalRevenue: totalShotsRevenue,
+        items: shotsBreakdown
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/shots', requireRole(['admin', 'manager', 'staff']), async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    if (!startDate || !endDate) return res.status(400).json({ message: 'startDate and endDate required' });
+
+    const orderMatch = { businessDate: { $gte: startDate, $lte: endDate }, grandTotal: { $gt: 0 } };
+    const orders = await Order.find(orderMatch).select('items billNo tableNo customerName businessDate date').lean();
+
+    const isShotItem = (name, category = '') => {
+      const combined = (name + ' ' + (category || '')).toUpperCase();
+      return /SHOT|30\s*ML|60\s*ML|90\s*ML|120\s*ML|PEG|WHISKY|VODKA|RUM|GIN|TEQUILA|BRANDY|SCOTCH|COCKTAIL|BEER|LIQUOR|BEVERAGE|BAR/i.test(combined);
+    };
+
+    const shotItemsMap = {};
+    let totalShotsCount = 0;
+    let totalShotsRevenue = 0;
+
+    orders.forEach(o => {
+      (o.items || []).forEach(item => {
+        if (item && item.name && isShotItem(item.name)) {
+          const key = item.name.trim();
+          const qty = item.quantity || 1;
+          const rev = (item.quantity || 1) * (item.price || 0);
+
+          if (!shotItemsMap[key]) {
+            shotItemsMap[key] = {
+              name: key,
+              quantity: 0,
+              revenue: 0,
+              price: item.price || 0
+            };
+          }
+          shotItemsMap[key].quantity += qty;
+          shotItemsMap[key].revenue += rev;
+          totalShotsCount += qty;
+          totalShotsRevenue += rev;
+        }
+      });
+    });
+
+    const shotsBreakdown = Object.values(shotItemsMap).sort((a, b) => b.quantity - a.quantity);
+
+    res.json({
+      startDate,
+      endDate,
+      totalShots: totalShotsCount,
+      totalRevenue: totalShotsRevenue,
+      items: shotsBreakdown
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

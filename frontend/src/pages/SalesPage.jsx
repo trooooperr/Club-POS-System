@@ -6,7 +6,7 @@ import {
   ResponsiveContainer, Legend
 } from 'recharts';
 import { apiUrl, authFetch } from '../lib/api';
-import { TrendingUp, Zap, ArrowRight, CalendarDays, Wallet } from 'lucide-react';
+import { TrendingUp, Zap, ArrowRight, CalendarDays, Wallet, Wine, Search, Flame } from 'lucide-react';
 
 const Tip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
@@ -116,10 +116,11 @@ export default function SalesPage() {
   const [range, setRange] = useState('today');
   const [startDate, setStartDate] = useState(todayStr);
   const [endDate, setEndDate] = useState(todayStr);
+  const [shotSearch, setShotSearch] = useState('');
   const startInputRef = useRef(null);
   const endInputRef = useRef(null);
 
-  const [analytics, setAnalytics] = useState({ revenue: 0, count: 0, dailyData: [], paymentBreakdown: { cash: 0, upi: 0 } });
+  const [analytics, setAnalytics] = useState({ revenue: 0, count: 0, dailyData: [], paymentBreakdown: { cash: 0, upi: 0 }, shotsStats: { totalShots: 0, totalRevenue: 0, items: [] } });
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -180,6 +181,15 @@ export default function SalesPage() {
     return data;
   }, [analytics.paymentBreakdown]);
 
+  const shotsList = useMemo(() => {
+    const items = analytics.shotsStats?.items || [];
+    if (!shotSearch.trim()) return items;
+    return items.filter(i => (i.name || '').toLowerCase().includes(shotSearch.toLowerCase()));
+  }, [analytics.shotsStats, shotSearch]);
+
+  const totalShotsCount = analytics.shotsStats?.totalShots || 0;
+  const totalShotsRevenue = analytics.shotsStats?.totalRevenue || 0;
+
   return (
     <div className="fi sales-page">
       <div className="sales-header-res">
@@ -198,22 +208,43 @@ export default function SalesPage() {
         </div>
       </div>
 
-      <div className="kpi-row-2" style={{ gridTemplateColumns: analytics?.eventCount > 0 ? '1fr 1fr 1fr 1fr' : '1fr 1fr' }}>
-        <div className="kpi" style={{ 'color': 'var(--t0)' }}>
+      {/* KPI Cards Row */}
+      <div className="kpi-row-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
+        <div className="kpi" style={{ color: 'var(--t0)' }}>
           <div className="kpi-label">Total Revenue</div>
           <div className="kpi-value mono">{loading ? '...' : `₹${(analytics?.revenue || 0).toLocaleString('en-IN')}`}</div>
         </div>
-        <div className="kpi" style={{ 'color': 'var(--t0)' }}>
+
+        <div className="kpi" style={{ color: 'var(--t0)' }}>
           <div className="kpi-label">POS Orders</div>
           <div className="kpi-value mono">{loading ? '...' : (analytics?.orderCount ?? (analytics?.count || 0))}</div>
         </div>
+
+        <div className="kpi" style={{ color: 'var(--t0)', borderLeft: '3px solid #F59E0B' }}>
+          <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#F59E0B' }}>
+            <Wine size={13} /> Shots Sold
+          </div>
+          <div className="kpi-value mono" style={{ color: '#F59E0B' }}>
+            {loading ? '...' : `${totalShotsCount} Shots`}
+          </div>
+        </div>
+
+        <div className="kpi" style={{ color: 'var(--t0)', borderLeft: '3px solid #10B981' }}>
+          <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#10B981' }}>
+            <Zap size={13} /> Shots Revenue
+          </div>
+          <div className="kpi-value mono" style={{ color: '#10B981' }}>
+            {loading ? '...' : `₹${totalShotsRevenue.toLocaleString('en-IN')}`}
+          </div>
+        </div>
+
         {analytics?.eventCount > 0 && (
           <>
-            <div className="kpi" style={{ 'color': 'var(--t0)' }}>
+            <div className="kpi" style={{ color: 'var(--t0)' }}>
               <div className="kpi-label">Event Revenue</div>
               <div className="kpi-value mono" style={{ color: 'var(--a)' }}>{loading ? '...' : `₹${(analytics?.eventRevenue || 0).toLocaleString('en-IN')}`}</div>
             </div>
-            <div className="kpi" style={{ 'color': 'var(--t0)' }}>
+            <div className="kpi" style={{ color: 'var(--t0)' }}>
               <div className="kpi-label">Event Expenses</div>
               <div className="kpi-value mono" style={{ color: '#EF4444' }}>{loading ? '...' : `₹${(analytics?.eventExpenses || 0).toLocaleString('en-IN')}`}</div>
             </div>
@@ -221,6 +252,7 @@ export default function SalesPage() {
         )}
       </div>
 
+      {/* Charts Row */}
       <div className="charts-equal-row">
         <div className="card chart-box">
           <div className="chart-info"><Zap size={16} style={{ color: 'var(--a)' }} /><span>Revenue Growth</span></div>
@@ -277,6 +309,106 @@ export default function SalesPage() {
               )
             )}
           </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Itemized Shots Sales Analytics Card */}
+      <div className="card chart-box" style={{ marginTop: '4px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ background: '#F59E0B1A', border: '1px solid #F59E0B33', padding: '6px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Wine size={18} style={{ color: '#F59E0B' }} />
+            </div>
+            <div>
+              <h3 style={{ fontSize: '15px', fontWeight: 800, color: 'var(--t0)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                Shots & Liquor Sales Breakdown
+                <span style={{ background: '#F59E0B20', color: '#F59E0B', fontSize: '11px', padding: '2px 8px', borderRadius: '12px', fontWeight: 700 }}>
+                  {totalShotsCount} Shots Total
+                </span>
+              </h3>
+              <span style={{ fontSize: '11.5px', color: 'var(--t2)' }}>
+                Detailed itemized record of shots and liquor sold ({range.toUpperCase()})
+              </span>
+            </div>
+          </div>
+
+          <div style={{ position: 'relative', width: '260px' }}>
+            <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--t2)' }} />
+            <input
+              type="text"
+              placeholder="Search shot name..."
+              value={shotSearch}
+              onChange={e => setShotSearch(e.target.value)}
+              style={{
+                width: '100%',
+                background: 'var(--s2)',
+                border: '1px solid var(--b2)',
+                borderRadius: '8px',
+                padding: '6px 10px 6px 30px',
+                fontSize: '12px',
+                color: 'var(--t0)',
+                outline: 'none'
+              }}
+            />
+          </div>
+        </div>
+
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px', textAlign: 'left' }}>
+            <thead>
+              <tr style={{ borderBottom: '1.5px solid var(--b2)', color: 'var(--t2)', fontSize: '11.5px' }}>
+                <th style={{ padding: '8px 10px' }}>Item Name</th>
+                <th style={{ padding: '8px 10px', textAlign: 'right' }}>Price</th>
+                <th style={{ padding: '8px 10px', textAlign: 'right' }}>Shots Sold</th>
+                <th style={{ padding: '8px 10px', textAlign: 'right' }}>Total Revenue</th>
+                <th style={{ padding: '8px 10px', width: '180px' }}>Sales Share</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={5} style={{ textAlign: 'center', padding: '24px', color: 'var(--t2)' }}>Loading shots analytics...</td>
+                </tr>
+              ) : shotsList.length === 0 ? (
+                <tr>
+                  <td colSpan={5} style={{ textAlign: 'center', padding: '28px', color: 'var(--t2)' }}>
+                    No shots or liquor sales recorded in this period.
+                  </td>
+                </tr>
+              ) : (
+                shotsList.map((item, idx) => {
+                  const sharePct = totalShotsCount > 0 ? Math.round((item.quantity / totalShotsCount) * 100) : 0;
+                  return (
+                    <tr key={idx} style={{ borderBottom: '1px solid var(--b0)' }}>
+                      <td style={{ padding: '10px', fontWeight: 700, color: 'var(--t0)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <Flame size={13} style={{ color: '#F59E0B' }} />
+                          <span>{item.name}</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: '10px', textAlign: 'right', fontWeight: 600, color: 'var(--t1)' }}>
+                        ₹{(item.price || 0).toLocaleString('en-IN')}
+                      </td>
+                      <td style={{ padding: '10px', textAlign: 'right', fontWeight: 800, color: '#F59E0B' }}>
+                        {item.quantity} Shots
+                      </td>
+                      <td style={{ padding: '10px', textAlign: 'right', fontWeight: 800, color: '#10B981' }}>
+                        ₹{(item.revenue || 0).toLocaleString('en-IN')}
+                      </td>
+                      <td style={{ padding: '10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div style={{ flex: 1, background: 'var(--s2)', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
+                            <div style={{ width: `${sharePct}%`, background: '#F59E0B', height: '100%', borderRadius: '4px', transition: 'width 0.3s' }} />
+                          </div>
+                          <span style={{ fontSize: '11px', color: 'var(--t2)', width: '32px', textAlign: 'right', fontWeight: 600 }}>{sharePct}%</span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
