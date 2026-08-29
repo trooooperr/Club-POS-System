@@ -321,8 +321,8 @@ function TodayDiscountDropdown() {
           position: 'absolute',
           top: 'calc(100% + 8px)',
           right: 0,
-          width: '375px',
-          maxHeight: '450px',
+          width: '400px',
+          maxHeight: '460px',
           background: 'var(--s1)',
           border: '1.5px solid var(--b2)',
           borderRadius: '12px',
@@ -354,7 +354,7 @@ function TodayDiscountDropdown() {
           {/* List of Orders */}
           <div style={{
             overflowY: 'auto',
-            maxHeight: '360px',
+            maxHeight: '370px',
             display: 'flex',
             flexDirection: 'column',
             gap: '8px',
@@ -399,8 +399,30 @@ function TodayDiscountDropdown() {
                     <span style={{ color: 'var(--t2)' }}>{new Date(ord.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                   </div>
 
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--t2)', borderTop: '1px dashed var(--b2)', paddingTop: '6px', marginTop: '2px', fontWeight: 600 }}>
+                  {/* Complete Tax & Financial Breakdown Row */}
+                  <div style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    gap: '6px 12px',
+                    fontSize: '11px',
+                    color: 'var(--t2)',
+                    borderTop: '1px dashed var(--b2)',
+                    paddingTop: '6px',
+                    marginTop: '2px',
+                    fontWeight: 600
+                  }}>
                     <span>Subtotal: <strong style={{ color: 'var(--t1)' }}>₹{ord.subtotal.toLocaleString('en-IN')}</strong></span>
+                    <span>Discount: <strong style={{ color: '#EF4444' }}>-₹{ord.discount.toLocaleString('en-IN')}</strong></span>
+                    {ord.totalGst > 0 && (
+                      <span>GST: <strong style={{ color: 'var(--t1)' }}>+₹{ord.totalGst.toFixed(2)}</strong></span>
+                    )}
+                    {ord.serviceTax > 0 && (
+                      <span>Service Tax: <strong style={{ color: 'var(--a)' }}>+₹{ord.serviceTax.toFixed(2)}</strong></span>
+                    )}
+                    {ord.roundOff !== 0 && (
+                      <span>Round Off: <strong style={{ color: 'var(--t1)' }}>{ord.roundOff > 0 ? `+₹${ord.roundOff}` : `-₹${Math.abs(ord.roundOff)}`}</strong></span>
+                    )}
                     <span>Paid: <strong style={{ color: '#10B981', fontWeight: 800 }}>₹{ord.grandTotal.toLocaleString('en-IN')}</strong></span>
                     {ord.waiterName && <span>Staff: <span style={{ color: 'var(--t1)' }}>{ord.waiterName}</span></span>}
                   </div>

@@ -333,6 +333,11 @@ router.get('/today-discounts', requireRole(['admin', 'manager', 'staff']), async
       subtotal: o.subtotal || 0,
       discount: o.discount || 0,
       discountPercent: (o.subtotal || 0) > 0 ? Math.round((o.discount / o.subtotal) * 100) : 0,
+      sgst: o.sgst || 0,
+      cgst: o.cgst || 0,
+      totalGst: Number(((o.sgst || 0) + (o.cgst || 0)).toFixed(2)),
+      serviceTax: o.serviceTax || 0,
+      roundOff: o.roundOff || 0,
       grandTotal: o.grandTotal || 0,
       date: o.updatedAt || o.date,
       paymentMode: o.paymentMode || 'cash'
