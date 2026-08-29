@@ -1,29 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer
-} from 'recharts';
 import { apiUrl, authFetch } from '../lib/api';
 import { Tag, TrendingUp, CalendarDays, Search, Percent, CheckCircle2, User, Clock } from 'lucide-react';
-
-const CustomTip = ({ active, payload, label }) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="chart-tip">
-      <div className="tip-head">{label}</div>
-      {payload.map((p, i) => (
-        <div key={i} className="tip-row">
-          <span className="tip-dot" style={{ background: '#EF4444' }}></span>
-          <span className="tip-label" style={{ color: 'var(--t1)' }}>{p.name}:</span>
-          <span className="tip-val mono" style={{ color: 'var(--t0)' }}>
-            ₹{p.value?.toLocaleString('en-IN')}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-};
 
 function DateField({ value, onChange, inputRef, label }) {
   const triggerPicker = () => {
@@ -115,7 +93,6 @@ export default function DiscountsPage() {
     count: 0,
     avgDiscount: 0,
     maxDiscount: 0,
-    dailyData: [],
     orders: []
   });
   const [loading, setLoading] = useState(false);
@@ -201,7 +178,7 @@ export default function DiscountsPage() {
           <div style={{ display: 'flex', background: 'var(--s2)', border: '1px solid var(--b2)', borderRadius: '9px', padding: '3px' }}>
             {[
               { id: 'today', label: 'Today' },
-              { id: 'week', label: '7 Days' },
+              { id: 'week', label: 'Week' },
               { id: 'month', label: 'This Month' },
               { id: 'all', label: 'All Time' },
             ].map(tab => (
@@ -290,44 +267,6 @@ export default function DiscountsPage() {
           </div>
           <div style={{ fontSize: '11px', color: 'var(--t2)' }}>Highest discount on a single bill</div>
         </div>
-      </div>
-
-      {/* Chart Section */}
-      <div style={{ background: 'var(--s1)', border: '1px solid var(--b2)', borderRadius: '12px', padding: '18px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ fontSize: '14px', fontWeight: 800, color: 'var(--t0)', margin: 0 }}>
-            Discount Trend Over Time
-          </h3>
-          <span style={{ fontSize: '11.5px', color: 'var(--t2)' }}>Daily Aggregates</span>
-        </div>
-
-        {loading ? (
-          <div style={{ height: '220px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t2)', fontSize: '13px' }}>
-            Loading trend chart...
-          </div>
-        ) : (data.dailyData || []).length === 0 ? (
-          <div style={{ height: '220px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t2)', fontSize: '13px' }}>
-            No discount records found for the selected period.
-          </div>
-        ) : (
-          <div style={{ width: '100%', height: 220 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={data.dailyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="discountGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#EF4444" stopOpacity={0.35} />
-                    <stop offset="95%" stopColor="#EF4444" stopOpacity={0.0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--b0)" vertical={false} />
-                <XAxis dataKey="name" stroke="var(--t2)" fontSize={11} tickLine={false} axisLine={false} />
-                <YAxis stroke="var(--t2)" fontSize={11} tickLine={false} axisLine={false} />
-                <Tooltip content={<CustomTip />} />
-                <Area type="monotone" dataKey="discount" name="Discount" stroke="#EF4444" strokeWidth={2.5} fillOpacity={1} fill="url(#discountGrad)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        )}
       </div>
 
       {/* Breakdown Table Section */}
