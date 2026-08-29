@@ -368,15 +368,15 @@ export function AppProvider({ children }) {
     const isKitchen = printerLabel === 'KITCHEN';
     const paperWidth = 80;
     const bodyWidth = 70;
-    const fontSize = 12;
-    const headerFontSize = 14;
-    const subFontSize = 11;
-    const qtyWidth = 24;
+    const fontSize = 15;
+    const headerFontSize = 18;
+    const subFontSize = 14;
+    const qtyWidth = 28;
     const qtyAlign = 'left';
-    const noteFontSize = 10;
+    const noteFontSize = 13;
     
     const itemCount = items.length;
-    const pageHeight = Math.max(105, 70 + (itemCount * 9));
+    const pageHeight = Math.max(110, 75 + (itemCount * 12));
 
     return `
     <html>
@@ -385,19 +385,21 @@ export function AppProvider({ children }) {
         <style>
           @page { size: ${paperWidth}mm ${pageHeight}mm; margin: 0; }
           body { 
-            font-family: monospace; 
+            font-family: Arial, sans-serif, monospace; 
             width: ${bodyWidth}mm; 
             margin: 0; 
             padding: 0; 
             font-size: ${fontSize}px; 
-            font-weight: bold;
+            font-weight: 900;
+            -webkit-text-stroke: 0.35px #000;
+            letter-spacing: 0.2px;
           }
-          .header { text-align: center; font-weight: bold; margin-bottom: 6px; font-size: ${subFontSize}px; }
-          .sub { text-align: center; font-size: ${subFontSize}px; margin-bottom: 4px; }
-          .divider { border-top: 1px dashed #000; margin: 5px 0; }
-          .item { display: flex; justify-content: space-between; margin: 3px 0; }
-          .qty { font-weight: bold; min-width: ${qtyWidth}px; text-align: ${qtyAlign}; }
-          .note { font-size: ${noteFontSize}px; margin: 0 0 4px 8px; border-left: 2px solid #000; padding-left: 4px; }
+          .header { text-align: center; font-weight: 900; margin-bottom: 6px; font-size: ${subFontSize}px; }
+          .sub { text-align: center; font-size: ${subFontSize}px; margin-bottom: 4px; font-weight: 800; }
+          .divider { border-top: 2px dashed #000; margin: 6px 0; }
+          .item { display: flex; justify-content: space-between; margin: 4px 0; font-weight: 900; font-size: ${fontSize}px; }
+          .qty { font-weight: 900; min-width: ${qtyWidth}px; text-align: ${qtyAlign}; font-size: ${fontSize + 1}px; }
+          .note { font-size: ${noteFontSize}px; margin: 0 0 4px 8px; border-left: 2.5px solid #000; padding-left: 5px; font-weight: 800; }
         </style>
       </head>
       <body>

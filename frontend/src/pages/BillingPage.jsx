@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { ArrowLeft, Search, Trash2, Printer, UtensilsCrossed, X, Menu, Clock } from 'lucide-react';
+import { ArrowLeft, Search, Trash2, Printer, UtensilsCrossed, X, Menu, Clock, Tag, ChevronDown, ChevronUp } from 'lucide-react';
 import { apiUrl, authFetch } from '../lib/api';
 import LiveKOTModal from '../components/LiveKOTModal';
 
@@ -222,6 +222,198 @@ function MenuItem({ item, qty, add, rem, stock, minStock }) {
 
 // PayModal and settle UI removed — printing handled directly via doGen/printFinalBill
 
+function TodayDiscountDropdown() {
+  const { socket } = useApp();
+  const [data, setData] = useState({ totalDiscount: 0, count: 0, orders: [] });
+  const [isOpen, setIsOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const dropdownRef = useRef(null);
+
+  const fetchTodayDiscounts = async () => {
+    setLoading(true);
+    try {
+      const res = await authFetch(apiUrl('/api/reports/today-discounts'));
+      if (res.ok) {
+        const json = await res.json();
+        setData(json);
+      }
+    } catch (err) {
+      console.error('Failed to fetch today discounts:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTodayDiscounts();
+
+    if (socket) {
+      const handleSync = () => fetchTodayDiscounts();
+      socket.on('KOT_UPDATED', handleSync);
+      socket.on('order-completed', handleSync);
+      socket.on('bill-finalized', handleSync);
+      socket.on('table-session-updated', handleSync);
+
+      return () => {
+        socket.off('KOT_UPDATED', handleSync);
+        socket.off('order-completed', handleSync);
+        socket.off('bill-finalized', handleSync);
+        socket.off('table-session-updated', handleSync);
+      };
+    }
+  }, [socket]);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  const { totalDiscount = 0, count = 0, orders = [] } = data;
+
+  return (
+    <div ref={dropdownRef} style={{ position: 'relative' }}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          background: 'rgba(239, 68, 68, 0.14)',
+          border: '1px solid rgba(239, 68, 68, 0.35)',
+          color: '#EF4444',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          padding: '6px 12px',
+          borderRadius: '8px',
+          fontWeight: 700,
+          fontSize: '12px',
+          height: '36px',
+          transition: 'all 0.2s ease'
+        }}
+        title="Click to view all discount details for today"
+      >
+        <Tag size={14} />
+        <span>Discount Today: ₹{totalDiscount.toLocaleString('en-IN')}</span>
+        {count > 0 && (
+          <span style={{
+            background: '#EF4444',
+            color: '#fff',
+            borderRadius: '10px',
+            padding: '1px 6px',
+            fontSize: '10px',
+            fontWeight: 800
+          }}>
+            {count}
+          </span>
+        )}
+        {isOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+      </button>
+
+      {isOpen && (
+        <div style={{
+          position: 'absolute',
+          top: 'calc(100% + 8px)',
+          right: 0,
+          width: '375px',
+          maxHeight: '450px',
+          background: 'var(--s1)',
+          border: '1.5px solid var(--b2)',
+          borderRadius: '12px',
+          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.35)',
+          zIndex: 99999,
+          padding: '14px',
+          boxSizing: 'border-box',
+          display: 'flex',
+          flexDirection: 'column'
+        }}>
+          {/* Header */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            paddingBottom: '10px',
+            marginBottom: '10px',
+            borderBottom: '1px solid var(--b2)'
+          }}>
+            <div style={{ fontWeight: 800, fontSize: '13.5px', color: 'var(--t0)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Tag size={16} style={{ color: '#EF4444' }} />
+              <span>Today's Discounts Breakdown</span>
+            </div>
+            <span style={{ fontSize: '12px', fontWeight: 800, color: '#EF4444', background: 'rgba(239, 68, 68, 0.14)', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '3px 9px', borderRadius: '6px' }}>
+              Total: ₹{totalDiscount.toLocaleString('en-IN')}
+            </span>
+          </div>
+
+          {/* List of Orders */}
+          <div style={{
+            overflowY: 'auto',
+            maxHeight: '360px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+            paddingRight: '2px'
+          }}>
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: '20px', color: 'var(--t2)', fontSize: '12px', fontWeight: 600 }}>Loading discounts...</div>
+            ) : orders.length === 0 ? (
+              <div style={{
+                textAlign: 'center',
+                padding: '28px 12px',
+                color: 'var(--t2)',
+                fontSize: '12.5px',
+                fontWeight: 600
+              }}>
+                No discounts given today.
+              </div>
+            ) : (
+              orders.map((ord, idx) => (
+                <div key={ord._id || idx} style={{
+                  background: 'var(--s2)',
+                  border: '1px solid var(--b2)',
+                  borderRadius: '9px',
+                  padding: '10px 12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12.5px', fontWeight: 800 }}>
+                    <span style={{ color: 'var(--t0)' }}>
+                      {ord.billNo} <span style={{ color: 'var(--t2)', fontWeight: 600 }}>(Table {ord.tableNo})</span>
+                    </span>
+                    <span style={{ color: '#EF4444', fontWeight: 800, fontSize: '13px' }}>
+                      -₹{ord.discount.toLocaleString('en-IN')} {ord.discountPercent > 0 ? `(${ord.discountPercent}%)` : ''}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', color: 'var(--t1)', fontWeight: 600 }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      👤 {ord.customerName} {ord.customerPhone ? <span style={{ color: 'var(--t2)' }}>({ord.customerPhone})</span> : ''}
+                    </span>
+                    <span style={{ color: 'var(--t2)' }}>{new Date(ord.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--t2)', borderTop: '1px dashed var(--b2)', paddingTop: '6px', marginTop: '2px', fontWeight: 600 }}>
+                    <span>Subtotal: <strong style={{ color: 'var(--t1)' }}>₹{ord.subtotal.toLocaleString('en-IN')}</strong></span>
+                    <span>Paid: <strong style={{ color: '#10B981', fontWeight: 800 }}>₹{ord.grandTotal.toLocaleString('en-IN')}</strong></span>
+                    {ord.waiterName && <span>Staff: <span style={{ color: 'var(--t1)' }}>{ord.waiterName}</span></span>}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── BILLING NAV BAR ─────────────────────────────────────────── */
 function BillingNavBar({
   activeTableId, occupiedCount, totalTables,
@@ -279,6 +471,8 @@ function BillingNavBar({
 
       {/* RIGHT: Stats & Live KOTs Button */}
       <div className="bnav-stats" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <TodayDiscountDropdown />
+
         <button
           type="button"
           onClick={onOpenLiveQueue}
@@ -1297,29 +1491,39 @@ export default function BillingPage() {
                 </div>
 
                 <div style={{
-                  maxHeight: '130px',
+                  maxHeight: '240px',
                   overflowY: 'auto',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '4px'
+                  gap: '5px'
                 }}>
-                  {customerHistoryMap[activeTableId]?.orders?.map((ord, idx) => (
-                    <div key={idx} style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      fontSize: '11px',
-                      color: 'var(--t1)',
-                      padding: '4px 6px',
-                      borderRadius: '4px',
-                      background: 'var(--bg2)',
-                      fontWeight: '700'
-                    }}>
-                      <span>{new Date(ord.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                      <span style={{ fontWeight: '700', color: 'var(--t1)' }}>
-                        {ord.billNo ? `Bill: ${ord.billNo}` : 'Visit'} {ord.total ? `(₹${ord.total})` : ''}
-                      </span>
-                    </div>
-                  ))}
+                  {customerHistoryMap[activeTableId]?.orders?.map((ord, idx) => {
+                    const visitNum = (customerHistoryMap[activeTableId]?.totalOrders || customerHistoryMap[activeTableId]?.orders?.length || 0) - idx;
+                    return (
+                      <div key={idx} style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        fontSize: '11px',
+                        color: 'var(--t1)',
+                        padding: '5px 8px',
+                        borderRadius: '6px',
+                        background: 'var(--bg2)',
+                        fontWeight: '700',
+                        border: '1px solid var(--b2)'
+                      }}>
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                          <span style={{ background: 'var(--b2)', color: 'var(--a)', padding: '1px 5px', borderRadius: '4px', fontSize: '10px' }}>
+                            #{visitNum}
+                          </span>
+                          <span>{new Date(ord.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                        </div>
+                        <span style={{ fontWeight: '700', color: 'var(--t0)' }}>
+                          {ord.billNo ? `Bill: ${ord.billNo}` : 'Visit'} {ord.total ? `(₹${ord.total})` : ''}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

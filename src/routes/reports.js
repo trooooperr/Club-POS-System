@@ -313,6 +313,42 @@ router.get('/daily-summary', requireRole(['admin', 'manager']), async (req, res)
   }
 });
 
+router.get('/today-discounts', requireRole(['admin', 'manager', 'staff']), async (req, res) => {
+  try {
+    const businessDateStr = getBusinessDateString(new Date());
+    const ordersWithDiscount = await Order.find({
+      businessDate: businessDateStr,
+      discount: { $gt: 0 }
+    }).sort({ updatedAt: -1, date: -1 });
+
+    const totalDiscount = ordersWithDiscount.reduce((sum, o) => sum + (o.discount || 0), 0);
+
+    const details = ordersWithDiscount.map(o => ({
+      _id: o._id,
+      billNo: o.billNo || `HTB-T${o.tableNo}`,
+      tableNo: o.tableNo,
+      customerName: o.customerName || 'Walk-in Guest',
+      customerPhone: o.customerPhone || '',
+      waiterName: o.waiterName || '',
+      subtotal: o.subtotal || 0,
+      discount: o.discount || 0,
+      discountPercent: (o.subtotal || 0) > 0 ? Math.round((o.discount / o.subtotal) * 100) : 0,
+      grandTotal: o.grandTotal || 0,
+      date: o.updatedAt || o.date,
+      paymentMode: o.paymentMode || 'cash'
+    }));
+
+    res.json({
+      businessDate: businessDateStr,
+      totalDiscount,
+      count: details.length,
+      orders: details
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
@@ -324,9 +360,9 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
     // 1. Order Stats & Event Stats
     const statsResult = await Order.aggregate([
       { $match: orderMatch },
-      { $group: { _id: null, revenue: { $sum: "$grandTotal" }, count: { $sum: 1 } } }
+      { $group: { _id: null, revenue: { $sum: "$grandTotal" }, discount: { $sum: "$discount" }, count: { $sum: 1 } } }
     ]);
-    const orderStats = statsResult[0] || { revenue: 0, count: 0 };
+    const orderStats = statsResult[0] || { revenue: 0, discount: 0, count: 0 };
 
     const eventStatsResult = await Event.aggregate([
       { $match: eventMatch },
@@ -405,6 +441,7 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
       eventRevenue: eventStats.revenue || 0,
       eventExpenses: eventStats.expenses || 0,
       netEventRevenue: eventStats.net || 0,
+      totalDiscount: orderStats.discount || 0,
       count: (orderStats.count || 0) + (eventStats.count || 0),
       orderCount: orderStats.count || 0,
       eventCount: eventStats.count || 0,

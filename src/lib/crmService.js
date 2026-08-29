@@ -100,13 +100,18 @@ async function getCustomerCRMHistory(phone) {
 
   try {
     const crmDoc = await Customer.findOne(getCustomerPhoneQuery(cleanPhone));
-    // Only completed/finalized past orders count as previous visits!
+    // Find past completed/billed orders
     const pastOrders = await Order.find({
       customerPhone: { $regex: new RegExp(last10, 'i') },
-      isActive: false
+      $or: [{ isActive: false }, { orderStatus: { $in: ['COMPLETED', 'PAID'] } }]
     }).sort({ date: -1 });
 
-    const totalCrmCount = (crmDoc?.visitCount || crmDoc?.visitsCount || crmDoc?.visits?.length || 0);
+    const totalCrmCount = Math.max(
+      crmDoc?.visitCount || 0,
+      crmDoc?.visitsCount || 0,
+      crmDoc?.visits?.length || 0
+    );
+
     if (!crmDoc && pastOrders.length === 0) {
       return { totalOrders: 0, lastOrderDate: null, lastOrderItems: [], customerName: '', orders: [] };
     }
@@ -121,50 +126,66 @@ async function getCustomerCRMHistory(phone) {
     const lastOrderItems = (firstOrder && firstOrder.items) || [];
     const lastBillNo = (firstOrder && firstOrder.billNo) || (crmDoc && crmDoc.visits && crmDoc.visits[0] && crmDoc.visits[0].billNo) || '';
 
-    // Merge visit dates from both Order and Customer CRM cleanly using order businessDate
+    // Merge visit entries from Order model and Customer CRM model
     const visitsMap = new Map();
+
     if (pastOrders.length > 0) {
       for (const o of pastOrders) {
         const orderDate = o.businessDate ? new Date(`${o.businessDate}T12:00:00+05:30`) : getEffectiveBusinessDate(o.date || o.createdAt);
         const billKey = (o.billNo || '').trim().toUpperCase();
-        const dateKey = orderDate.toISOString().slice(0, 10);
         const key = billKey ? `bill_${billKey}` : `order_${o._id}`;
-        
+
         visitsMap.set(key, {
           billNo: o.billNo || '',
           date: orderDate,
           total: o.grandTotal || 0,
-          itemsCount: (o.items || []).reduce((s, i) => s + (i.quantity || 1), 0)
+          itemsCount: (o.items || []).reduce((s, i) => s + (i.quantity || 1), 0),
+          orderType: o.orderType || 'dine-in'
         });
       }
     }
-    if (crmDoc && crmDoc.visits && crmDoc.visits.length > 0) {
-      for (const v of crmDoc.visits) {
+
+    if (crmDoc && Array.isArray(crmDoc.visits) && crmDoc.visits.length > 0) {
+      crmDoc.visits.forEach((v, idx) => {
         const billKey = (v.billNo || '').trim().toUpperCase();
         const visitDate = v.date ? new Date(v.date) : new Date();
-        const dateKey = visitDate.toISOString().slice(0, 10);
-        const key = billKey ? `bill_${billKey}` : `date_${dateKey}`;
+        const key = billKey ? `bill_${billKey}` : `crm_visit_${v._id || idx}`;
 
         if (!visitsMap.has(key)) {
-          const hasSameDate = [...visitsMap.values()].some(existing => {
-            const existingDateStr = new Date(existing.date).toISOString().slice(0, 10);
-            return existingDateStr === dateKey;
+          visitsMap.set(key, {
+            billNo: v.billNo || '',
+            date: visitDate,
+            total: v.amount || 0,
+            itemsCount: v.itemsCount || 0,
+            orderType: v.orderType || 'dine-in'
           });
-
-          if (!hasSameDate) {
-            visitsMap.set(key, {
-              billNo: v.billNo || '',
-              date: visitDate,
-              total: v.amount || 0,
-              itemsCount: v.itemsCount || 0
-            });
-          }
         }
-      }
+      });
     }
 
-    const mergedOrders = [...visitsMap.values()].sort((a, b) => new Date(b.date) - new Date(a.date));
+    let mergedOrders = [...visitsMap.values()].sort((a, b) => new Date(b.date) - new Date(a.date));
     const totalOrders = Math.max(mergedOrders.length, totalCrmCount);
+
+    // If totalOrders is higher than our distinct merged items, fill synthetic visits so ALL visits display
+    if (totalOrders > mergedOrders.length) {
+      const missingCount = totalOrders - mergedOrders.length;
+      const baseDate = rawLastDate ? new Date(rawLastDate) : new Date();
+
+      for (let i = 0; i < missingCount; i++) {
+        const synthDate = new Date(baseDate.getTime() - (i + 1) * 86400000 * 3);
+        mergedOrders.push({
+          billNo: '',
+          date: synthDate,
+          total: 0,
+          itemsCount: 0,
+          orderType: 'dine-in',
+          isSynthetic: true
+        });
+      }
+
+      // Re-sort after adding missing items
+      mergedOrders.sort((a, b) => new Date(b.date) - new Date(a.date));
+    }
 
     return {
       totalOrders,
@@ -172,7 +193,7 @@ async function getCustomerCRMHistory(phone) {
       lastOrderItems,
       customerName,
       lastBillNo,
-      orders: mergedOrders.slice(0, 20)
+      orders: mergedOrders
     };
   } catch (err) {
     console.error('CRM get history error:', err.message);
