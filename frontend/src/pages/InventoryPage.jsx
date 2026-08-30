@@ -92,7 +92,7 @@ function StockModal({ item, onClose, onSave }) {
   // Sync stock from linked parent when parent changes
   useEffect(() => {
     if (form.linkInventoryId) {
-      const parent = inventory.find(inv => inv._id === form.linkInventoryId);
+      const parent = (inventory || []).find(inv => inv._id === form.linkInventoryId);
       if (parent) {
         set('stock', parent.stock);
       }
@@ -652,7 +652,7 @@ export default function InventoryPage() {
                       const effectiveStock = (() => {
                         if (i.linkInventoryId) {
                           const parentId = typeof i.linkInventoryId === 'object' ? i.linkInventoryId._id : i.linkInventoryId;
-                          const parent = inventory.find(p => p._id === parentId);
+                          const parent = (inventory || []).find(p => p._id === parentId);
                           return parent ? { ...i, stock: parent.stock } : i;
                         }
                         return i;
@@ -702,7 +702,7 @@ export default function InventoryPage() {
                                    <div className="invStock">{i.trackStock === false ? '—' : (() => {
                                      if (i.linkInventoryId) {
                                        const parentId = typeof i.linkInventoryId === 'object' ? i.linkInventoryId._id : i.linkInventoryId;
-                                       const parent = inventory.find(p => p._id === parentId);
+                                       const parent = (inventory || []).find(p => p._id === parentId);
                                        const parentStock = parent ? parent.stock : i.stock;
                                        return Number(parentStock).toFixed(2).replace(/\.0+$/, '');
                                      }
@@ -778,7 +778,7 @@ export default function InventoryPage() {
                           const effectiveStock = (() => {
                             if (i.linkInventoryId) {
                               const parentId = typeof i.linkInventoryId === 'object' ? i.linkInventoryId._id : i.linkInventoryId;
-                              const parent = inventory.find(p => p._id === parentId);
+                              const parent = (inventory || []).find(p => p._id === parentId);
                               return parent ? parent.stock : i.stock;
                             }
                             return i.stock;

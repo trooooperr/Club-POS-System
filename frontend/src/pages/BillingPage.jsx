@@ -609,7 +609,7 @@ export default function BillingPage() {
   }, [workers]);
 
   const selectedWaiterObj = useMemo(() => {
-    return waiterOptions.find(w => w._id === selectedWaiter) || null;
+    return (waiterOptions || []).find(w => w._id === selectedWaiter) || null;
   }, [waiterOptions, selectedWaiter]);
 
   // Group sent KOT items and pending items
@@ -780,7 +780,7 @@ export default function BillingPage() {
 
         // Update selectedWaiter and orderType from DB session
         if (session?.waiterName) {
-          const waiter = waiterOptions.find(w => w.name === session.waiterName || w.userId?.name === session.waiterName);
+          const waiter = (waiterOptions || []).find(w => w.name === session.waiterName || w.userId?.name === session.waiterName);
           setSelectedWaiterRaw(waiter ? waiter._id : '');
         } else {
           setSelectedWaiterRaw('');
@@ -943,8 +943,8 @@ export default function BillingPage() {
       setBusy(true);
       const tableNo = parseTableNum(activeTableId);
 
-      const itemsToSubmit = table.items.map(i => {
-        const master = allSellableItems.find(m => String(m._id) === String(i._id) || m.name === i.name);
+      const itemsToSubmit = (table?.items || []).map(i => {
+        const master = (allSellableItems || []).find(m => String(m._id) === String(i._id) || m.name === i.name);
         const isInv = i.isInventory || master?.isInventory || false;
         return {
           menuItemId: i._id,
@@ -1325,7 +1325,7 @@ export default function BillingPage() {
                     if (e.key === 'Enter') {
                       e.preventDefault();
                       if (filteredMenu.length > 0) {
-                        const firstAvailableItem = filteredMenu.find(item => item.available !== false);
+                        const firstAvailableItem = (filteredMenu || []).find(item => item.available !== false);
                         if (firstAvailableItem) {
                           updateTableItem(activeTableId, firstAvailableItem._id, 'increase');
                           setMenuSearch('');
@@ -1350,9 +1350,9 @@ export default function BillingPage() {
 
           <div className="items-grid-modern">
             {filteredMenu.map(item => {
-              const stockItem = inventory?.find(inv => inv.name.toLowerCase().trim() === item.name.toLowerCase().trim());
+              const stockItem = (inventory || []).find(inv => inv.name.toLowerCase().trim() === item.name.toLowerCase().trim());
               return (
-                <MenuItem key={item._id} item={item} qty={table.items.find(i => String(i._id) === String(item._id))?.quantity || 0}
+                <MenuItem key={item._id} item={item} qty={(table?.items || []).find(i => String(i._id) === String(item._id))?.quantity || 0}
                   stock={stockItem?.trackStock === false ? undefined : stockItem?.stock}
                   minStock={stockItem?.minStock}
                   add={(id, a) => updateTableItem(activeTableId, id, a)}

@@ -232,7 +232,7 @@ export function AppProvider({ children }) {
     setInventory(nextInventory);
     const invMap = new Map(nextInventory.map(i => [i._id?.toString(), i]));
     setMenuItems(prev => prev.map(item => {
-      const match = nextInventory.find(inv => inv.name?.toLowerCase().trim() === item.name?.toLowerCase().trim());
+      const match = (nextInventory || []).find(inv => inv.name?.toLowerCase().trim() === item.name?.toLowerCase().trim());
       if (!match) return item;
       let avail = match.isAvailable !== false && match.available !== false;
       if (avail && match.linkInventoryId) {
@@ -1061,7 +1061,7 @@ export function AppProvider({ children }) {
 
       const tableItems = [...current.items];
       const idx = tableItems.findIndex(i => String(i._id) === String(itemId));
-      const masterItem = allSellableItems.find(i => String(i._id) === String(itemId));
+      const masterItem = (allSellableItems || []).find(i => String(i._id) === String(itemId));
 
       if (action === 'increase') {
         if (idx >= 0) {
@@ -1125,7 +1125,7 @@ export function AppProvider({ children }) {
 
   const getTableStatus = useCallback((tableId) => {
     const tableNo = parseInt(tableId.substring(1));
-    const session = activeSessions.find(s => s.tableNo === tableNo);
+    const session = (activeSessions || []).find(s => s.tableNo === tableNo);
     const t = tableBills[tableId];
     
     let kotItemsCount = 0;
@@ -1167,7 +1167,7 @@ export function AppProvider({ children }) {
 
   const getTableInfo = useCallback((tableId) => {
     const tableNo = parseInt(tableId.substring(1));
-    const session = activeSessions.find(s => s.tableNo === tableNo);
+    const session = (activeSessions || []).find(s => s.tableNo === tableNo);
     const localBill = tableBills[tableId] || { items: [] };
 
     let kotItemsCount = 0;

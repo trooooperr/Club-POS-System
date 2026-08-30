@@ -301,7 +301,7 @@ export default function SalesPage() {
                   <Tooltip content={<PieTip />} />
                   <Legend
                     formatter={(value, entry) => {
-                      const item = pieData.find(d => d.name === value);
+                      const item = (pieData || []).find(d => d.name === value);
                       return <span style={{ color: 'var(--t0)', fontSize: 12, fontWeight: 600 }}>{value}: ₹{item ? item.value.toLocaleString('en-IN') : 0}</span>;
                     }}
                   />
