@@ -196,6 +196,7 @@ app.use('/api/events',    requireAuth, require('./src/routes/events'));
 app.use('/api/reports',   allowCronSecret, reportsRouter);
 app.use('/api/settings',  requireAuth, require('./src/routes/settings'));
 app.use('/api/inventory', requireAuth, require('./src/routes/inventory'));
+app.use('/api/expenses',  requireAuth, require('./src/routes/expenses'));
 app.use('/api/admin',     requireAuth, require('./src/routes/admin'));
 
 // ── Static files (frontend dist) ────────────────────────────────

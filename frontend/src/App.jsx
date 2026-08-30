@@ -15,6 +15,7 @@ import WorkersPage from './pages/WorkersPage';
 import InventoryPage from './pages/InventoryPage';
 import SettingsPage from './pages/SettingsPage';
 import KitchenDisplay from './pages/KitchenDisplay';
+import ExpensesPage from './pages/ExpensesPage';
 import { Menu } from 'lucide-react';
 import './index.css';
 import Toast from './components/Toast';
@@ -37,6 +38,7 @@ function Shell() {
     sales: 'Analytics',
     discounts: 'Discount Analytics',
     'due-payments': 'Due Payments',
+    expenses: 'Expense Tracker',
     events: 'Events Management',
     workers: 'Workers',
     settings: 'Settings',
@@ -99,6 +101,7 @@ function Shell() {
     sales:<SalesPage/>, 
     discounts:<DiscountsPage/>,
     'due-payments':<DuePaymentsPage/>,
+    expenses:<ExpensesPage/>,
     events:<EventsPage/>, 
     workers:<WorkersPage/>, 
     inventory:<InventoryPage/>, 

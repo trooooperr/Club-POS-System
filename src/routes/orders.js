@@ -665,6 +665,38 @@ router.patch('/:id/settle', async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
+// ── UPDATE PAYMENT STATUS / MARK AS DUE ─────────────────────────
+router.patch('/:id/payment-status', requireRole(['admin', 'manager', 'staff']), async (req, res) => {
+  try {
+    const { paymentMethod, paymentMode, dueAmount, customerName, customerPhone, notes } = req.body;
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ message: 'Order not found' });
+
+    if (paymentMethod) {
+      order.paymentMethod = paymentMethod;
+      order.paymentMode = paymentMode || paymentMethod;
+    }
+    if (dueAmount !== undefined) {
+      order.dueAmount = Math.max(0, parseFloat(dueAmount) || 0);
+      order.paidAmount = Math.max(0, order.grandTotal - order.dueAmount);
+    } else if (paymentMethod === 'due' || paymentMethod === 'pending') {
+      order.dueAmount = order.grandTotal;
+      order.paidAmount = 0;
+    }
+
+    if (customerName) order.customerName = customerName;
+    if (customerPhone) order.customerPhone = customerPhone;
+    if (notes !== undefined) order.notes = notes;
+
+    const saved = await order.save();
+    await deleteCache([ORDERS_CACHE_KEY, REPORT_SUMMARY_CACHE_KEY]);
+
+    res.json({ success: true, order: saved });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── UPDATE DISCOUNT FOR ORDER ───────────────────────────────────
 router.patch('/:id/discount', async (req, res) => {
   try {

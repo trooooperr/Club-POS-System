@@ -39,15 +39,18 @@ function DateField({ value, onChange, inputRef, label }) {
 
 /* Centered Payment Edit Modal (prevents overflow/clipping bugs) */
 function PaymentEditModal({ order, currency, onSave, onClose }) {
-  const [mode, setMode] = useState(order.paymentMode || 'cash');
+  const [mode, setMode] = useState(order.paymentMode || order.paymentMethod || 'cash');
   const [cashAmt, setCashAmt] = useState(order.cashAmount ? String(order.cashAmount) : '');
   const [upiAmt, setUpiAmt] = useState(order.upiAmount ? String(order.upiAmount) : '');
+  const [dueCustName, setDueCustName] = useState(order.customerName || '');
+  const [dueCustPhone, setDueCustPhone] = useState(order.customerPhone || '');
+  const [dueAmt, setDueAmt] = useState(order.dueAmount ? String(order.dueAmount) : String(order.grandTotal || 0));
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      let cash = 0, upi = 0;
+      let cash = 0, upi = 0, dAmt = 0;
       if (mode === 'cash') {
         cash = order.grandTotal;
         upi = 0;
@@ -57,14 +60,15 @@ function PaymentEditModal({ order, currency, onSave, onClose }) {
       } else if (mode === 'split') {
         cash = parseFloat(cashAmt) || 0;
         upi = parseFloat(upiAmt) || 0;
-        // Simple tolerance check to verify total sums up
         if (Math.abs(cash + upi - order.grandTotal) > 0.02) {
           alert(`Split amounts (₹${(cash + upi).toFixed(0)}) must equal the grand total (₹${order.grandTotal.toFixed(0)})`);
           setSaving(false);
           return;
         }
+      } else if (mode === 'due') {
+        dAmt = parseFloat(dueAmt) || order.grandTotal;
       }
-      await onSave(order._id, mode, cash, upi);
+      await onSave(order._id, mode, cash, upi, dAmt, dueCustName, dueCustPhone);
       onClose();
     } catch (err) {
       console.error(err);
@@ -75,7 +79,7 @@ function PaymentEditModal({ order, currency, onSave, onClose }) {
 
   return (
     <div className="moverlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.85)' }} onClick={onClose}>
-      <div className="mbox" style={{ maxWidth: '340px', width: '92%', padding: '20px', position: 'relative' }} onClick={e => e.stopPropagation()}>
+      <div className="mbox" style={{ maxWidth: '380px', width: '92%', padding: '20px', position: 'relative' }} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: 'var(--t0)' }}>
             HTB-{(order.billNo || '').split('-').pop()} Payment
@@ -89,20 +93,20 @@ function PaymentEditModal({ order, currency, onSave, onClose }) {
           Grand Total: <span style={{ fontWeight: 800, color: 'var(--a)' }}>{currency}{order.grandTotal.toFixed(0)}</span>
         </div>
 
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-          {['cash', 'upi', 'split'].map(m => (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginBottom: 16 }}>
+          {['cash', 'upi', 'split', 'due'].map(m => (
             <button
               key={m}
               onClick={() => { setMode(m); if (m !== 'split') { setCashAmt(''); setUpiAmt(''); } }}
               style={{
-                flex: 1, padding: '10px 0', borderRadius: 10, fontSize: 12, fontWeight: 700,
+                padding: '10px 0', borderRadius: 8, fontSize: 11, fontWeight: 700,
                 border: mode === m ? '2px solid var(--a)' : '1px solid var(--b2)',
                 background: mode === m ? 'rgba(245,158,11,0.12)' : 'var(--s2)',
                 color: mode === m ? 'var(--a)' : 'var(--t1)',
                 cursor: 'pointer', transition: 'all 0.15s'
               }}
             >
-              {m === 'split' ? 'SPLIT' : m.toUpperCase()}
+              {m === 'split' ? 'SPLIT' : m === 'due' ? 'PENDING' : m.toUpperCase()}
             </button>
           ))}
         </div>
@@ -138,6 +142,40 @@ function PaymentEditModal({ order, currency, onSave, onClose }) {
                   if (v !== '') setCashAmt(Math.max(0, order.grandTotal - (parseFloat(v) || 0)).toFixed(0));
                   else setCashAmt('');
                 }}
+                style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)', fontSize: 13, fontWeight: 700 }}
+              />
+            </div>
+          </div>
+        )}
+
+        {mode === 'due' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+            <div>
+              <label style={{ fontSize: 11, color: 'var(--t2)', fontWeight: 700, display: 'block', marginBottom: 4 }}>Customer Name</label>
+              <input
+                type="text"
+                placeholder="Customer name"
+                value={dueCustName}
+                onChange={e => setDueCustName(e.target.value)}
+                style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)', fontSize: 13, fontWeight: 700 }}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, color: 'var(--t2)', fontWeight: 700, display: 'block', marginBottom: 4 }}>Customer Phone (Optional)</label>
+              <input
+                type="text"
+                placeholder="Phone number"
+                value={dueCustPhone}
+                onChange={e => setDueCustPhone(e.target.value)}
+                style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)', fontSize: 13, fontWeight: 700 }}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, color: 'var(--t2)', fontWeight: 700, display: 'block', marginBottom: 4 }}>Pending Due Amount ({currency})</label>
+              <input
+                type="number"
+                value={dueAmt}
+                onChange={e => setDueAmt(e.target.value)}
                 style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)', fontSize: 13, fontWeight: 700 }}
               />
             </div>
@@ -429,12 +467,31 @@ export default function OrdersPage() {
     }
   };
 
-  const handlePaymentSave = async (orderId, paymentMode, cashAmount, upiAmount) => {
+  const handlePaymentSave = async (orderId, paymentMode, cashAmount, upiAmount, dueAmount, custName, custPhone) => {
     try {
+      if (paymentMode === 'due' || paymentMode === 'pending') {
+        const res = await authFetch(apiUrl(`/api/orders/${orderId}/payment-status`), {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            paymentMethod: 'due',
+            paymentMode: 'due',
+            dueAmount: dueAmount !== undefined ? dueAmount : undefined,
+            customerName: custName,
+            customerPhone: custPhone
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || data.error || 'Failed to update to pending');
+        showToast('Bill marked as Pending / Due', 'success');
+        fetchOrders();
+        return;
+      }
       const updated = await updateOrderPayment(orderId, paymentMode, cashAmount, upiAmount);
       if (updated && monthOrders) {
         setMonthOrders(prev => prev.map(o => o._id === orderId ? { ...o, paymentMode: updated.paymentMode, cashAmount: updated.cashAmount, upiAmount: updated.upiAmount } : o));
       }
+      fetchOrders();
       showToast('Payment mode updated', 'success');
     } catch (err) {
       showToast(err.message || 'Failed to update payment', 'error');

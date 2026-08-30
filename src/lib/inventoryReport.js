@@ -70,6 +70,71 @@ async function recordStockChange(inventoryId, quantityChange, type, dateOrBusine
  * @param {string} businessDate 
  * @returns {Promise<Array>}
  */
+async function computeSalesDeductionForRange(startDate, endDate) {
+  try {
+    const Order = require('../models/Order');
+    const KOT = require('../models/KOT');
+
+    const inventoryItems = await Inventory.find().lean();
+    const inventoryByName = new Map(inventoryItems.map(i => [(i.name || '').replace(/\s+/g, ' ').trim().toLowerCase(), i]));
+
+    const orders = await Order.find({
+      businessDate: { $gte: startDate, $lte: endDate },
+      grandTotal: { $gt: 0 }
+    }).lean();
+
+    const activeOrders = await Order.find({
+      businessDate: { $gte: startDate, $lte: endDate },
+      inventoryFinalized: { $ne: true }
+    }).lean();
+
+    const activeKots = await KOT.find({
+      orderId: { $in: activeOrders.map(o => o._id) },
+      inventoryDeducted: true
+    }).lean();
+
+    const soldQuantities = new Map();
+    const addItemsToMap = (items) => {
+      for (const item of items) {
+        const name = (item.name || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        const qty = Math.abs(Number(item.quantity) || 0);
+        if (!name || qty <= 0) continue;
+        soldQuantities.set(name, (soldQuantities.get(name) || 0) + qty);
+      }
+    };
+
+    orders.filter(o => o.inventoryFinalized).forEach(o => addItemsToMap(o.items || []));
+    activeKots.forEach(kot => addItemsToMap(kot.items || []));
+
+    const deductionMap = new Map();
+
+    for (const [name, quantity] of soldQuantities.entries()) {
+      const invItem = inventoryByName.get(name);
+      if (!invItem) continue;
+
+      if (invItem.trackStock !== false) {
+        const targetId = invItem.linkInventoryId ? invItem.linkInventoryId.toString() : invItem._id.toString();
+        const rawDedQty = Number(invItem.stockDeductionQty);
+        const dedQty = (rawDedQty > 0) ? rawDedQty : 1;
+        const totalDed = quantity * Math.min(dedQty, 1000);
+
+        deductionMap.set(targetId, (deductionMap.get(targetId) || 0) + totalDed);
+      }
+    }
+
+    return deductionMap;
+  } catch (err) {
+    console.error('Error computing sales deduction range:', err.message);
+    return new Map();
+  }
+}
+
+/**
+ * Gets the daily inventory report for a given business date.
+ * Automatically includes all standalone/parent inventory items with accurate stock deduction.
+ * @param {string} businessDate 
+ * @returns {Promise<Array>}
+ */
 async function getDailyInventoryReport(businessDate) {
   const items = await Inventory.find({
     $or: [
@@ -77,35 +142,53 @@ async function getDailyInventoryReport(businessDate) {
       { linkInventoryId: { $exists: false } }
     ]
   }).populate('linkInventoryId');
+
   const loggedReports = await InventoryDailyReport.find({ businessDate });
-  
   const reportMap = new Map(loggedReports.map(r => [r.inventoryId.toString(), r]));
-  
+  const computedDeductions = await computeSalesDeductionForRange(businessDate, businessDate);
+
   const fullReport = items.map(item => {
-    const logged = reportMap.get(item._id.toString());
-    
-    // Determine effective stock (handling child items linked to parents)
+    const itemIdStr = item._id.toString();
+    const logged = reportMap.get(itemIdStr);
+
     let currentStock = item.stock;
     if (item.linkInventoryId) {
       currentStock = typeof item.linkInventoryId === 'object' ? item.linkInventoryId.stock : item.stock;
     }
 
+    const computedSold = computedDeductions.get(itemIdStr) || 0;
+
     if (logged) {
-      // Sync closing stock to current stock just in case it got out of sync
-      logged.closingStock = currentStock;
-      return logged.toObject();
+      const soldStock = Math.max(logged.soldStock || 0, computedSold);
+      const addedStock = logged.addedStock || 0;
+      const closingStock = currentStock;
+      const openingStock = Math.max(0, closingStock + soldStock - addedStock);
+
+      return {
+        ...logged.toObject(),
+        openingStock,
+        addedStock,
+        soldStock,
+        closingStock
+      };
     } else {
+      const soldStock = computedSold;
+      const addedStock = 0;
+      const closingStock = currentStock;
+      const openingStock = Math.max(0, closingStock + soldStock - addedStock);
+
       return {
         businessDate,
         inventoryId: item._id,
         itemName: item.name,
         category: item.category,
         unit: item.unit,
-        openingStock: currentStock,
-        addedStock: 0,
-        soldStock: 0,
-        closingStock: currentStock,
-        isAlcoholic: !!(item.isAlcoholic || item.isAlcohol)
+        openingStock,
+        addedStock,
+        soldStock,
+        closingStock,
+        isAlcoholic: !!(item.isAlcoholic || item.isAlcohol),
+        minStock: item.minStock
       };
     }
   });
@@ -240,12 +323,10 @@ async function getDailyInventoryReportRange(startDate, endDate) {
     ]
   }).populate('linkInventoryId');
   
-  // Find all daily report logs in this date range
   const loggedReports = await InventoryDailyReport.find({
     businessDate: { $gte: startDate, $lte: endDate }
   });
 
-  // Group logged reports by inventoryId to aggregate them
   const reportMap = new Map();
   for (const r of loggedReports) {
     const key = r.inventoryId.toString();
@@ -255,30 +336,28 @@ async function getDailyInventoryReportRange(startDate, endDate) {
     reportMap.get(key).push(r);
   }
 
+  const computedDeductions = await computeSalesDeductionForRange(startDate, endDate);
+
   const fullReport = items.map(item => {
     const itemIdStr = item._id.toString();
     const logs = reportMap.get(itemIdStr) || [];
     
-    // Determine effective stock (handling child items linked to parents)
     let currentStock = item.stock;
     if (item.linkInventoryId) {
       currentStock = typeof item.linkInventoryId === 'object' ? item.linkInventoryId.stock : item.stock;
     }
 
+    const computedSold = computedDeductions.get(itemIdStr) || 0;
+
     if (logs.length > 0) {
-      // Sort logs by businessDate ascending to determine chronological order
       logs.sort((a, b) => a.businessDate.localeCompare(b.businessDate));
 
-      const openingStock = logs[0].openingStock;
-
-      let closingStock = logs[logs.length - 1].closingStock;
-      const todayStr = getBusinessDateString(new Date());
-      if (logs[logs.length - 1].businessDate === todayStr) {
-        closingStock = currentStock;
-      }
-
       const addedStock = logs.reduce((sum, r) => sum + (r.addedStock || 0), 0);
-      const soldStock = logs.reduce((sum, r) => sum + (r.soldStock || 0), 0);
+      const loggedSold = logs.reduce((sum, r) => sum + (r.soldStock || 0), 0);
+      const soldStock = Math.max(loggedSold, computedSold);
+
+      const closingStock = currentStock;
+      const openingStock = Math.max(0, closingStock + soldStock - addedStock);
 
       return {
         businessDate: `${startDate} to ${endDate}`,
@@ -294,16 +373,21 @@ async function getDailyInventoryReportRange(startDate, endDate) {
         minStock: item.minStock
       };
     } else {
+      const soldStock = computedSold;
+      const addedStock = 0;
+      const closingStock = currentStock;
+      const openingStock = Math.max(0, closingStock + soldStock - addedStock);
+
       return {
         businessDate: `${startDate} to ${endDate}`,
         inventoryId: item._id,
         itemName: item.name,
         category: item.category,
         unit: item.unit,
-        openingStock: currentStock,
-        addedStock: 0,
-        soldStock: 0,
-        closingStock: currentStock,
+        openingStock,
+        addedStock,
+        soldStock,
+        closingStock,
         isAlcoholic: !!(item.isAlcoholic || item.isAlcohol),
         minStock: item.minStock
       };
