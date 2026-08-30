@@ -3,6 +3,7 @@ const router  = express.Router();
 const Order   = require('../models/Order');
 const Event   = require('../models/Event');
 const Inventory = require('../models/Inventory');
+const MenuItem = require('../models/MenuItem');
 const Settings = require('../models/Settings');
 const nodemailer = require('nodemailer');
 const { getCache, setCache } = require('../lib/redis');
@@ -514,12 +515,42 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
       }
     });
 
-    // 4. Shots / Liquor Sales Analytics
-    const fullOrdersForShots = await Order.find(orderMatch).select('items businessDate date').lean();
-    const isShotItem = (name, category = '') => {
-      const combined = (name + ' ' + (category || '')).toUpperCase();
-      return combined.includes('SHOOTER') || combined.includes('SHOT');
+    // 4. Alcoholic Shots / Liquor Sales Analytics (Excludes Non-Alcoholic items like Fire Pencil/Platters)
+    const menuItemsForLookup = await MenuItem.find({}).select('name category isAlcoholic').lean();
+    const inventoryItemsForLookup = await Inventory.find({}).select('name category isAlcoholic').lean();
+
+    const shooterCategoryItems = new Set();
+    menuItemsForLookup.forEach(m => {
+      const cat = (m.category || '').toUpperCase().trim();
+      if (cat === 'SHOOTERS' || cat === 'SHOTS' || cat === 'SHOOTER' || cat === 'SHOT') {
+        if (m.name && !m.name.toUpperCase().includes('PENCIL') && !m.name.toUpperCase().includes('PLATTER')) {
+          shooterCategoryItems.add(m.name.trim().toLowerCase());
+        }
+      }
+    });
+    inventoryItemsForLookup.forEach(i => {
+      const cat = (i.category || '').toUpperCase().trim();
+      if (cat === 'SHOOTERS' || cat === 'SHOTS' || cat === 'SHOOTER' || cat === 'SHOT') {
+        if (i.name && !i.name.toUpperCase().includes('PENCIL') && !i.name.toUpperCase().includes('PLATTER')) {
+          shooterCategoryItems.add(i.name.trim().toLowerCase());
+        }
+      }
+    });
+
+    const isAlcoholicShooterItem = (itemName, itemCategory) => {
+      if (!itemName) return false;
+      const upperName = itemName.trim().toUpperCase();
+      // Exclude non-alcoholic items like sparklers/candles/food platters
+      if (upperName.includes('PENCIL') || upperName.includes('PLATTER') || upperName.includes('BOMBAY')) return false;
+
+      const cat = (itemCategory || '').toUpperCase().trim();
+      if (cat === 'SHOOTERS' || cat === 'SHOTS' || cat === 'SHOOTER' || cat === 'SHOT') return true;
+      if (upperName.includes('SHOT') || upperName.includes('SHOOTER') || upperName.includes('VODKA BOMB') || upperName.includes('JAGER BOMB')) return true;
+
+      return shooterCategoryItems.has(itemName.trim().toLowerCase());
     };
+
+    const fullOrdersForShots = await Order.find({ ...orderMatch, isActive: false }).select('items businessDate date').lean();
 
     const shotItemsMap = {};
     let totalShotsCount = 0;
@@ -527,17 +558,18 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
 
     fullOrdersForShots.forEach(o => {
       (o.items || []).forEach(item => {
-        if (item && item.name && isShotItem(item.name)) {
+        if (item && item.name && isAlcoholicShooterItem(item.name, item.category)) {
           const key = item.name.trim();
           const qty = item.quantity || 1;
-          const rev = (item.quantity || 1) * (item.price || 0);
+          const unitPrice = item.price || 0;
+          const rev = qty * unitPrice;
 
           if (!shotItemsMap[key]) {
             shotItemsMap[key] = {
               name: key,
               quantity: 0,
               revenue: 0,
-              price: item.price || 0
+              price: unitPrice
             };
           }
           shotItemsMap[key].quantity += qty;
@@ -580,12 +612,40 @@ router.get('/shots', requireRole(['admin', 'manager', 'staff']), async (req, res
     const { startDate, endDate } = req.query;
     if (!startDate || !endDate) return res.status(400).json({ message: 'startDate and endDate required' });
 
-    const orderMatch = { businessDate: { $gte: startDate, $lte: endDate }, grandTotal: { $gt: 0 } };
+    const orderMatch = { businessDate: { $gte: startDate, $lte: endDate }, grandTotal: { $gt: 0 }, isActive: false };
     const orders = await Order.find(orderMatch).select('items billNo tableNo customerName businessDate date').lean();
 
-    const isShotItem = (name, category = '') => {
-      const combined = (name + ' ' + (category || '')).toUpperCase();
-      return combined.includes('SHOOTER') || combined.includes('SHOT');
+    const menuItemsForLookup = await MenuItem.find({}).select('name category isAlcoholic').lean();
+    const inventoryItemsForLookup = await Inventory.find({}).select('name category isAlcoholic').lean();
+
+    const shooterCategoryItems = new Set();
+    menuItemsForLookup.forEach(m => {
+      const cat = (m.category || '').toUpperCase().trim();
+      if (cat === 'SHOOTERS' || cat === 'SHOTS' || cat === 'SHOOTER' || cat === 'SHOT') {
+        if (m.name && !m.name.toUpperCase().includes('PENCIL') && !m.name.toUpperCase().includes('PLATTER')) {
+          shooterCategoryItems.add(m.name.trim().toLowerCase());
+        }
+      }
+    });
+    inventoryItemsForLookup.forEach(i => {
+      const cat = (i.category || '').toUpperCase().trim();
+      if (cat === 'SHOOTERS' || cat === 'SHOTS' || cat === 'SHOOTER' || cat === 'SHOT') {
+        if (i.name && !i.name.toUpperCase().includes('PENCIL') && !i.name.toUpperCase().includes('PLATTER')) {
+          shooterCategoryItems.add(i.name.trim().toLowerCase());
+        }
+      }
+    });
+
+    const isAlcoholicShooterItem = (itemName, itemCategory) => {
+      if (!itemName) return false;
+      const upperName = itemName.trim().toUpperCase();
+      if (upperName.includes('PENCIL') || upperName.includes('PLATTER') || upperName.includes('BOMBAY')) return false;
+
+      const cat = (itemCategory || '').toUpperCase().trim();
+      if (cat === 'SHOOTERS' || cat === 'SHOTS' || cat === 'SHOOTER' || cat === 'SHOT') return true;
+      if (upperName.includes('SHOT') || upperName.includes('SHOOTER') || upperName.includes('VODKA BOMB') || upperName.includes('JAGER BOMB')) return true;
+
+      return shooterCategoryItems.has(itemName.trim().toLowerCase());
     };
 
     const shotItemsMap = {};
@@ -594,17 +654,18 @@ router.get('/shots', requireRole(['admin', 'manager', 'staff']), async (req, res
 
     orders.forEach(o => {
       (o.items || []).forEach(item => {
-        if (item && item.name && isShotItem(item.name)) {
+        if (item && item.name && isAlcoholicShooterItem(item.name, item.category)) {
           const key = item.name.trim();
           const qty = item.quantity || 1;
-          const rev = (item.quantity || 1) * (item.price || 0);
+          const unitPrice = item.price || 0;
+          const rev = qty * unitPrice;
 
           if (!shotItemsMap[key]) {
             shotItemsMap[key] = {
               name: key,
               quantity: 0,
               revenue: 0,
-              price: item.price || 0
+              price: unitPrice
             };
           }
           shotItemsMap[key].quantity += qty;
