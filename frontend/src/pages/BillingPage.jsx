@@ -748,10 +748,10 @@ export default function BillingPage() {
         return newOrderId;
       }
 
-      // Map database pending items or active order items to local table format
+      // Map database pending unprinted items to local draft cart format (KOT printed items stay in total order/KOT section)
       const rawItems = (session?.pendingItems && session.pendingItems.length > 0)
         ? session.pendingItems
-        : (session?.activeOrderId?.items || []);
+        : [];
 
       const dbPendingItems = rawItems.map(i => ({
         _id: i.menuItemId?._id || i.menuItemId || i._id,

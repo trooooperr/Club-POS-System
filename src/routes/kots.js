@@ -236,11 +236,11 @@ router.post('/', async (req, res) => {
       orderStatus: 'KOT_SENT'
     });
 
-    // Update or create table session
+    // Update or create table session (clear pendingItems since KOT is now created)
     await TableSession.findOneAndUpdate(
       { activeOrderId: orderId },
       {
-        $set: { status: 'KOT_SENT', lastActivityAt: new Date(), totalAmount: order.grandTotal },
+        $set: { status: 'KOT_SENT', pendingItems: [], lastActivityAt: new Date(), totalAmount: order.grandTotal },
         $push: { kotIds: saved._id }
       },
       { upsert: true, new: true }
