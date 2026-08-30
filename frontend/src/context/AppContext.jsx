@@ -487,9 +487,9 @@ export function AppProvider({ children }) {
       }
     }
 
-    const subtotal = typeof table.subtotal === 'number'
+    const subtotal = typeof table?.subtotal === 'number'
       ? table.subtotal
-      : table.items.reduce((s, i) => s + (i.price || 0) * (i.quantity || 0), 0);
+      : (table?.items || []).reduce((s, i) => s + (i.price || 0) * (i.quantity || 0), 0);
 
     const sgst = typeof table.sgst === 'number'
       ? table.sgst
@@ -1108,7 +1108,7 @@ export function AppProvider({ children }) {
   // ── Bill totals ──────────────────────────────────────────────────
   const billTotals = useMemo(() => {
     const table    = tableBills[activeTableId] || { items:[], discount:'' };
-    const subtotal = table.items.reduce((s,i) => s + i.price * i.quantity, 0);
+    const subtotal = (table?.items || []).reduce((s,i) => s + (i.price || 0) * (i.quantity || 0), 0);
     const sgst     = subtotal * (settings.sgstRate / 100);
     const cgst     = subtotal * (settings.cgstRate / 100);
     const serviceTax = settings.serviceTaxEnabled ? subtotal * ((settings.serviceTaxRate || 0) / 100) : 0;

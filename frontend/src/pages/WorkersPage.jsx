@@ -147,8 +147,8 @@ export default function WorkersPage() {
   const [historyWorker, setHistoryWorker] = useState(null);
   const [removeId, setRemoveId] = useState(null);
 
-  const totalPayroll = workers.reduce((s, w) => s + (parseFloat(w.salary) || 0), 0);
-  const totalPaid = workers.reduce((s, w) => s + (parseFloat(w.paidSalary) || 0), 0);
+  const totalPayroll = (workers || []).reduce((s, w) => s + (parseFloat(w.salary) || 0), 0);
+  const totalPaid = (workers || []).reduce((s, w) => s + (parseFloat(w.paidSalary) || 0), 0);
   const totalPending = totalPayroll - totalPaid;
   const { showToast, updateWorkerStatus } = useApp();
 

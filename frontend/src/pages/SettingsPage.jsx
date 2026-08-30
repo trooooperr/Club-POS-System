@@ -282,9 +282,9 @@ export default function SettingsPage() {
       return bizDate === currentBizDate;
     });
     return {
-      revenue: todayOrders.reduce((s, o) => s + o.grandTotal, 0),
-      ordersCount: todayOrders.length,
-      due: todayOrders.reduce((s, o) => s + (o.dueAmount || 0), 0)
+      revenue: (todayOrders || []).reduce((s, o) => s + (o.grandTotal || 0), 0),
+      ordersCount: (todayOrders || []).length,
+      due: (todayOrders || []).reduce((s, o) => s + (o.dueAmount || 0), 0)
     };
   }, [orderHistory]);
 

@@ -290,8 +290,8 @@ export default function KitchenDisplay({ department = 'kitchen' }) {
   }, [socket, soundEnabled]);
 
   // Group KOTs by table number, filtering items by the specified department
-  const kotsByTable = kots.reduce((acc, kot) => {
-    const deptItems = kot.items.filter(item => {
+  const kotsByTable = (kots || []).reduce((acc, kot) => {
+    const deptItems = (kot?.items || []).filter(item => {
       // Default to kitchen if department is missing
       const itemDept = item.department || 'kitchen';
       return itemDept === department;

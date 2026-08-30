@@ -209,7 +209,7 @@ export default function EventsPage() {
   }, [billingType, guestCount, pricePerPlate]);
 
   const calculatedTotalExpenses = useMemo(() => {
-    return expenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+    return (expenses || []).reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
   }, [expenses]);
 
   const calculatedGrandTotal = useMemo(() => {

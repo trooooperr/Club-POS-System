@@ -20,8 +20,8 @@ function KOTDetailsModal({ kot, currency = '₹', onClose, onDelete, canDelete =
 
   if (!kot) return null;
 
-  const items = kot.items || [];
-  const kotSubtotal = items.reduce((sum, i) => sum + (i.price || 0) * (i.quantity || 0), 0);
+  const items = kot?.items || [];
+  const kotSubtotal = (items || []).reduce((sum, i) => sum + (i.price || 0) * (i.quantity || 0), 0);
 
   return (
     <div 
@@ -648,7 +648,7 @@ export default function BillingPage() {
 
   // Combined totals
   const totals = useMemo(() => {
-    const subtotal = combinedItems.all.reduce((s, i) => s + (i.price || 0) * (i.quantity || 0), 0);
+    const subtotal = (combinedItems?.all || []).reduce((s, i) => s + (i.price || 0) * (i.quantity || 0), 0);
     const sgst = subtotal * (settings.sgstRate / 100);
     const cgst = subtotal * (settings.cgstRate / 100);
     const serviceTax = settings.serviceTaxEnabled ? subtotal * ((settings.serviceTaxRate || 0) / 100) : 0;
@@ -1379,7 +1379,7 @@ export default function BillingPage() {
             <div className="h-indicator" />
             {isMobile && (
               <div className="mobile-handle-summary">
-                <span className="summary-items">🛒 {combinedItems.all.reduce((s, i) => s + i.quantity, 0)} Items</span>
+                <span className="summary-items">🛒 {(combinedItems?.all || []).reduce((s, i) => s + (i.quantity || 0), 0)} Items</span>
                 <span className="summary-total">Total: {c}{grandTotal.toFixed(0)}</span>
               </div>
             )}
