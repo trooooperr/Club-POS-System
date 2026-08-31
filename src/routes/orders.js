@@ -130,13 +130,22 @@ router.get('/', async (req, res) => {
     let query = Order.find({
       billNo: { $exists: true, $ne: '', $regex: /^HTB-/ },
       grandTotal: { $gt: 0 },
-      isActive: false,
       isManualDue: { $ne: true },
-      $or: [
-        { businessDate: monthRegex },
-        { date: { $gte: startDate, $lt: endDate } }
+      $and: [
+        {
+          $or: [
+            { isActive: false },
+            { orderStatus: { $in: ['PAID', 'COMPLETED', 'BILLING'] } }
+          ]
+        },
+        {
+          $or: [
+            { businessDate: monthRegex },
+            { date: { $gte: startDate, $lt: endDate } }
+          ]
+        }
       ]
-    }).sort({ date: -1, createdAt: -1, billNo: -1 });
+    }).sort({ date: -1, createdAt: -1, _id: -1 });
 
     if (maxLimit > 0) {
       query = query.limit(maxLimit);
@@ -619,9 +628,12 @@ router.get('/history/all', async (req, res) => {
     const orders = await Order.find({
       billNo: { $exists: true, $ne: '', $regex: /^HTB-/ },
       grandTotal: { $gt: 0 },
-      isActive: false,
-      isManualDue: { $ne: true }
-    }).sort({ date: -1, createdAt: -1, billNo: -1 }).populate('kotIds');
+      isManualDue: { $ne: true },
+      $or: [
+        { isActive: false },
+        { orderStatus: { $in: ['PAID', 'COMPLETED', 'BILLING'] } }
+      ]
+    }).sort({ date: -1, createdAt: -1, _id: -1 }).populate('kotIds');
     res.json(orders);
   } catch (err) {
     res.status(500).json({ message: err.message });
