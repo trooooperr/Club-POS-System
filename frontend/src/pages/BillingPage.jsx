@@ -1668,63 +1668,6 @@ export default function BillingPage() {
                   />
                 </div>
                 <div className="s-row total-big"><span>Total</span><span>{c}{grandTotal.toFixed(0)}</span></div>
-
-                {/* Pay Later / Credit Payment Option */}
-                <div style={{ borderTop: '1px dashed var(--b2)', paddingTop: '8px', marginTop: '6px' }}>
-                  <button
-                    type="button"
-                    onClick={() => setTableField(activeTableId, 'isCreditPay', !table.isCreditPay)}
-                    style={{
-                      width: '100%',
-                      padding: '7px 10px',
-                      borderRadius: '8px',
-                      border: table.isCreditPay ? '1px solid #F59E0B' : '1px solid var(--b2)',
-                      background: table.isCreditPay ? 'rgba(245, 158, 11, 0.15)' : 'var(--s2)',
-                      color: table.isCreditPay ? '#F59E0B' : 'var(--t1)',
-                      fontSize: '11.5px',
-                      fontWeight: 800,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      transition: 'all 0.15s ease'
-                    }}
-                  >
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Wallet size={14} />
-                      <span>Pay Later / Partial (Credit)</span>
-                    </span>
-                    <span style={{
-                      fontSize: '10px',
-                      padding: '2px 8px',
-                      borderRadius: '6px',
-                      background: table.isCreditPay ? '#F59E0B' : 'var(--b2)',
-                      color: table.isCreditPay ? '#000000' : 'var(--t2)',
-                      fontWeight: 900
-                    }}>
-                      {table.isCreditPay ? 'ENABLED' : 'OFF'}
-                    </span>
-                  </button>
-
-                  {table.isCreditPay && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px', background: 'var(--s2)', padding: '8px 10px', borderRadius: '8px', border: '1px solid var(--b2)' }}>
-                      <div className="s-row">
-                        <span style={{ fontSize: '11.5px', fontWeight: 600 }}>Paid Now</span>
-                        <input
-                          className="mini-input"
-                          style={{ width: 80, textAlign: 'right', fontWeight: 700 }}
-                          value={table.paidAmount !== undefined ? table.paidAmount : ''}
-                          onChange={e => setTableField(activeTableId, 'paidAmount', e.target.value.replace(/[^0-9.]/g, ''))}
-                          placeholder="0"
-                        />
-                      </div>
-                      <div className="s-row" style={{ color: '#EF4444', fontWeight: 800, fontSize: '11.5px' }}>
-                        <span>Remaining Due</span>
-                        <span>{c}{Math.max(0, grandTotal - (parseFloat(table.paidAmount) || 0)).toFixed(0)}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
               </div>
 
               {activeOrder?.billNo && activeOrder?.billNo !== 'PENDING' && (

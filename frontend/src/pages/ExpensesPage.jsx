@@ -84,6 +84,7 @@ export default function ExpensesPage() {
   const [formAmount, setFormAmount] = useState('');
   const [formCategory, setFormCategory] = useState('Raw Material');
   const [formPaymentMethod, setFormPaymentMethod] = useState('cash');
+  const [formPersonName, setFormPersonName] = useState('');
   const [formDate, setFormDate] = useState(todayStr);
   const [formNotes, setFormNotes] = useState('');
   const [saving, setSaving] = useState(false);
@@ -160,6 +161,7 @@ export default function ExpensesPage() {
     setFormAmount('');
     setFormCategory('Raw Material');
     setFormPaymentMethod('cash');
+    setFormPersonName('');
     setFormDate(todayStr);
     setFormNotes('');
     setModalOpen(true);
@@ -171,6 +173,7 @@ export default function ExpensesPage() {
     setFormAmount(String(exp.amount || ''));
     setFormCategory(exp.category || 'Other');
     setFormPaymentMethod(exp.paymentMethod || 'cash');
+    setFormPersonName(exp.personName || '');
     setFormDate(exp.businessDate || todayStr);
     setFormNotes(exp.notes || '');
     setModalOpen(true);
@@ -195,6 +198,7 @@ export default function ExpensesPage() {
         amount: amt,
         category: formCategory,
         paymentMethod: formPaymentMethod,
+        personName: formPersonName.trim(),
         date: formDate,
         notes: formNotes.trim()
       };
@@ -241,32 +245,17 @@ export default function ExpensesPage() {
       return (
         (e.title || '').toLowerCase().includes(term) ||
         (e.category || '').toLowerCase().includes(term) ||
+        (e.personName || '').toLowerCase().includes(term) ||
         (e.notes || '').toLowerCase().includes(term) ||
         (e.createdBy || '').toLowerCase().includes(term)
       );
     });
   }, [expenses, searchTerm]);
 
-  const topCategory = useMemo(() => {
-    const catMap = {};
-    (expenses || []).forEach(e => {
-      catMap[e.category] = (catMap[e.category] || 0) + e.amount;
-    });
-    let top = 'None';
-    let max = 0;
-    Object.entries(catMap).forEach(([cat, val]) => {
-      if (val > max) {
-        max = val;
-        top = cat;
-      }
-    });
-    return top;
-  }, [expenses]);
-
   return (
-    <div className="fi sales-page">
-      <div className="sales-header-res">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+    <div className="fi sales-page" style={{ maxWidth: '1400px', margin: '0 auto', padding: '16px' }}>
+      <div className="sales-header-res" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           <div className="unified-pill-box filter-pills">
             {['today', 'week', 'month', 'all'].map(f => (
               <button key={f} className={`f-pill ${range === f ? 'active' : ''}`} onClick={() => setRange(f)}>
@@ -294,29 +283,19 @@ export default function ExpensesPage() {
         </button>
       </div>
 
-      {/* KPI Cards Row */}
-      <div className="kpi-row-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
-        <div className="kpi" style={{ color: 'var(--t0)' }}>
-          <div className="kpi-label">Total Expenses</div>
-          <div className="kpi-value mono" style={{ color: '#EF4444' }}>
+      {/* Single Total Expense KPI Card */}
+      <div style={{ marginBottom: 16 }}>
+        <div className="kpi" style={{ color: 'var(--t0)', maxWidth: '320px', padding: '18px 24px', borderRadius: '16px', background: 'var(--s2)', border: '1px solid var(--b2)' }}>
+          <div className="kpi-label" style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--t2)' }}>Total Expenses</div>
+          <div className="kpi-value mono" style={{ color: '#EF4444', fontSize: 28, fontWeight: 900, marginTop: 4 }}>
             {loading ? '...' : `${c}${totalAmount.toLocaleString('en-IN')}`}
           </div>
-        </div>
-
-        <div className="kpi" style={{ color: 'var(--t0)' }}>
-          <div className="kpi-label">Expense Transactions</div>
-          <div className="kpi-value mono">{loading ? '...' : (expenses || []).length}</div>
-        </div>
-
-        <div className="kpi" style={{ color: 'var(--t0)' }}>
-          <div className="kpi-label">Top Expense Category</div>
-          <div className="kpi-value" style={{ fontSize: 18, textTransform: 'capitalize' }}>{loading ? '...' : topCategory}</div>
         </div>
       </div>
 
       {/* Category Filter Pills & Search */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
-        <div className="unified-pill-box filter-pills" style={{ overflowX: 'auto', padding: 4 }}>
+        <div className="unified-pill-box filter-pills" style={{ overflowX: 'auto', padding: 4, maxWidth: '100%' }}>
           <button className={`f-pill ${categoryFilter === 'all' ? 'active' : ''}`} onClick={() => setCategoryFilter('all')}>
             ALL CATEGORIES
           </button>
@@ -327,7 +306,7 @@ export default function ExpensesPage() {
           ))}
         </div>
 
-        <div className="sales-search-box" style={{ width: 240 }}>
+        <div className="sales-search-box" style={{ width: 240, maxWidth: '100%' }}>
           <Search size={14} className="sales-search-icon" />
           <input
             type="text"
@@ -340,13 +319,14 @@ export default function ExpensesPage() {
       </div>
 
       {/* Expense Table Card */}
-      <div className="settings-card" style={{ padding: 0, overflow: 'hidden' }}>
+      <div className="settings-card" style={{ padding: 0, overflow: 'hidden', border: '1px solid var(--b2)', borderRadius: '12px' }}>
         <div style={{ overflowX: 'auto' }}>
           <table className="invTable" style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: 'var(--s2)', borderBottom: '1px solid var(--b1)', color: 'var(--t2)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 <th style={{ padding: '14px 16px', textAlign: 'left' }}>Date</th>
                 <th style={{ padding: '14px 16px', textAlign: 'left' }}>Expense Title</th>
+                <th style={{ padding: '14px 16px', textAlign: 'left' }}>Person Name</th>
                 <th style={{ padding: '14px 16px', textAlign: 'left' }}>Category</th>
                 <th style={{ padding: '14px 16px', textAlign: 'left' }}>Payment Method</th>
                 <th style={{ padding: '14px 16px', textAlign: 'right' }}>Amount ({c})</th>
@@ -356,7 +336,7 @@ export default function ExpensesPage() {
             <tbody>
               {filteredExpenses.length === 0 ? (
                 <tr>
-                  <td colSpan="6" style={{ padding: 32, textAlign: 'center', color: 'var(--t2)', fontSize: 14 }}>
+                  <td colSpan="7" style={{ padding: 32, textAlign: 'center', color: 'var(--t2)', fontSize: 14 }}>
                     No expense records found for this period.
                   </td>
                 </tr>
@@ -369,6 +349,15 @@ export default function ExpensesPage() {
                     <td style={{ padding: '14px 16px', color: 'var(--t0)', fontWeight: 700 }}>
                       {exp.title}
                       {exp.notes && <div style={{ fontSize: 11, color: 'var(--t2)', fontWeight: 400, marginTop: 2 }}>{exp.notes}</div>}
+                    </td>
+                    <td style={{ padding: '14px 16px', color: 'var(--t0)', fontWeight: 600 }}>
+                      {exp.personName ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--t0)' }}>
+                          👤 {exp.personName}
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--t2)', fontSize: 12 }}>—</span>
+                      )}
                     </td>
                     <td style={{ padding: '14px 16px' }}>
                       <span style={{
@@ -433,6 +422,17 @@ export default function ExpensesPage() {
                   onChange={e => setFormTitle(e.target.value)}
                   style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)', fontSize: 13 }}
                   required
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--t2)', display: 'block', marginBottom: 4 }}>Person Name (Given To / Vendor)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Ramesh Kumar / Vendor Name"
+                  value={formPersonName}
+                  onChange={e => setFormPersonName(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)', fontSize: 13 }}
                 />
               </div>
 

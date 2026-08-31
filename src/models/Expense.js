@@ -34,6 +34,11 @@ const expenseSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  personName: {
+    type: String,
+    trim: true,
+    default: ''
+  },
   createdBy: {
     type: String,
     default: 'system'
