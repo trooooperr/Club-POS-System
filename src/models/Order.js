@@ -35,6 +35,7 @@ const orderSchema = new mongoose.Schema({
   inventoryFinalizedAt: { type: Date },
   paymentStatus: { type: String, enum: ['paid', 'partial', 'pending'], default: 'paid', index: true },
   isCredit:      { type: Boolean, default: false, index: true },
+  isManualDue:   { type: Boolean, default: false, index: true },
   settlementHistory: [{
     amount: { type: Number, required: true },
     paymentMode: { type: String, default: 'cash' },

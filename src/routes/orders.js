@@ -131,6 +131,7 @@ router.get('/', async (req, res) => {
       billNo: { $exists: true, $ne: '', $regex: /^HTB-/ },
       grandTotal: { $gt: 0 },
       isActive: false,
+      isManualDue: { $ne: true },
       $or: [
         { businessDate: monthRegex },
         { date: { $gte: startDate, $lt: endDate } }
@@ -618,7 +619,8 @@ router.get('/history/all', async (req, res) => {
     const orders = await Order.find({
       billNo: { $exists: true, $ne: '', $regex: /^HTB-/ },
       grandTotal: { $gt: 0 },
-      isActive: false
+      isActive: false,
+      isManualDue: { $ne: true }
     }).sort({ date: -1, createdAt: -1, billNo: -1 }).populate('kotIds');
     res.json(orders);
   } catch (err) {
@@ -718,6 +720,7 @@ router.post('/due', requireRole(['admin', 'manager', 'staff']), async (req, res)
       paymentMethod: 'due',
       paymentStatus: 'pending',
       isCredit: true,
+      isManualDue: true,
       notes: notes ? notes.trim() : 'Manual Due Record Entry',
       items: [
         {

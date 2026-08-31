@@ -71,16 +71,21 @@ async function createTransport(emailConfig) {
 
 // ── Build the HTML email report ──────────────────────────────────
 function buildReportHTML({ date, orders, settings, inventory, dailyReport = [] }) {
-  const total   = orders.reduce((s,o)=>s+o.grandTotal,0);
-  const paid    = orders.reduce((s,o)=>s+(o.paidAmount||o.grandTotal),0);
-  const due     = orders.reduce((s,o)=>s+(o.dueAmount||0),0);
+  const ordersToCount = orders.filter(o => !o.isManualDue);
+  const total   = ordersToCount.reduce((s,o)=>s+(o.paidAmount !== undefined ? o.paidAmount : (o.dueAmount > 0 ? Math.max(0, o.grandTotal - o.dueAmount) : o.grandTotal)),0);
+  const paid    = total;
+  const due     = ordersToCount.reduce((s,o)=>s+(o.dueAmount||0),0);
   const pmMap   = {};
-  orders.forEach(o=>{
-    if (o.paymentMode === 'split') {
-      pmMap['cash'] = (pmMap['cash'] || 0) + (o.cashAmount || 0);
-      pmMap['upi']  = (pmMap['upi']  || 0) + (o.upiAmount  || 0);
-    } else {
-      pmMap[o.paymentMode] = (pmMap[o.paymentMode] || 0) + o.grandTotal;
+  ordersToCount.forEach(o=>{
+    const actualPaid = o.paidAmount !== undefined ? o.paidAmount : (o.dueAmount > 0 ? Math.max(0, o.grandTotal - o.dueAmount) : o.grandTotal);
+    if (actualPaid > 0) {
+      if (o.paymentMode === 'split') {
+        pmMap['cash'] = (pmMap['cash'] || 0) + (o.cashAmount || 0);
+        pmMap['upi']  = (pmMap['upi']  || 0) + (o.upiAmount  || 0);
+      } else {
+        const mode = (o.paymentMode === 'due' || !o.paymentMode) ? 'cash' : o.paymentMode;
+        pmMap[mode] = (pmMap[mode] || 0) + actualPaid;
+      }
     }
   });
   const itemMap = {};
@@ -205,7 +210,7 @@ async function sendDailyReportInternal(options = {}) {
   };
 
   const businessDateStr = getBusinessDateString(new Date());
-  const orders = await Order.find({ businessDate: businessDateStr, grandTotal: { $gt: 0 } });
+  const orders = await Order.find({ businessDate: businessDateStr, grandTotal: { $gt: 0 }, isManualDue: { $ne: true } });
   const inventory = await Inventory.find();
   const inventoryCategories = resolvedSettings.inventoryCategories || [];
   inventory.sort((a, b) => {
@@ -270,7 +275,7 @@ router.get('/daily-html', async (req, res) => {
     };
 
     const businessDateStr = getBusinessDateString(new Date());
-    const orders = await Order.find({ businessDate: businessDateStr, grandTotal: { $gt: 0 } });
+    const orders = await Order.find({ businessDate: businessDateStr, grandTotal: { $gt: 0 }, isManualDue: { $ne: true } });
     const inventory = await Inventory.find();
     const inventoryCategories = resolvedSettings.inventoryCategories || [];
     inventory.sort((a, b) => {
@@ -301,11 +306,17 @@ router.get('/daily-summary', requireRole(['admin', 'manager']), async (req, res)
     if (cached) return res.json(cached);
 
     const businessDateStr = getBusinessDateString(new Date());
-    const orders = await Order.find({ businessDate: businessDateStr, grandTotal: { $gt: 0 } });
-    const total    = orders.reduce((s,o)=>s+o.grandTotal,0);
+    const orders = await Order.find({ businessDate: businessDateStr, grandTotal: { $gt: 0 }, isManualDue: { $ne: true } });
+    const total    = orders.reduce((s,o)=>s+(o.paidAmount !== undefined ? o.paidAmount : (o.dueAmount > 0 ? Math.max(0, o.grandTotal - o.dueAmount) : o.grandTotal)),0);
     const due      = orders.reduce((s,o)=>s+(o.dueAmount||0),0);
     const pmMap    = {};
-    orders.forEach(o=>{ pmMap[o.paymentMode]=(pmMap[o.paymentMode]||0)+o.grandTotal; });
+    orders.forEach(o=>{
+      const actualPaid = o.paidAmount !== undefined ? o.paidAmount : (o.dueAmount > 0 ? Math.max(0, o.grandTotal - o.dueAmount) : o.grandTotal);
+      if (actualPaid > 0) {
+        const mode = (o.paymentMode === 'due' || !o.paymentMode) ? 'cash' : o.paymentMode;
+        pmMap[mode] = (pmMap[mode] || 0) + actualPaid;
+      }
+    });
     const summary = { ordersCount:orders.length, revenue:total, due, paymentBreakdown:pmMap, date:new Date(businessDateStr) };
     await setCache(REPORT_SUMMARY_CACHE_KEY, summary, 120);
     res.json(summary);
@@ -436,13 +447,13 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
     const { startDate, endDate } = req.query;
     if (!startDate || !endDate) return res.status(400).json({ message: 'startDate and endDate required' });
 
-    const orderMatch = { businessDate: { $gte: startDate, $lte: endDate }, grandTotal: { $gt: 0 } };
+    const orderMatch = { businessDate: { $gte: startDate, $lte: endDate }, grandTotal: { $gt: 0 }, isManualDue: { $ne: true } };
     const eventMatch = { date: { $gte: startDate, $lte: endDate } };
 
     // 1. Order Stats & Event Stats
     const statsResult = await Order.aggregate([
       { $match: orderMatch },
-      { $group: { _id: null, revenue: { $sum: "$grandTotal" }, discount: { $sum: "$discount" }, count: { $sum: 1 } } }
+      { $group: { _id: null, revenue: { $sum: { $ifNull: ["$paidAmount", 0] } }, discount: { $sum: "$discount" }, count: { $sum: 1 } } }
     ]);
     const orderStats = statsResult[0] || { revenue: 0, discount: 0, count: 0 };
 
@@ -461,7 +472,7 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
     // 2. Daily Data Merged (Orders + Events)
     const dailyOrderResult = await Order.aggregate([
       { $match: orderMatch },
-      { $group: { _id: "$businessDate", sales: { $sum: "$grandTotal" } } },
+      { $group: { _id: "$businessDate", sales: { $sum: { $ifNull: ["$paidAmount", 0] } } } },
       { $sort: { _id: 1 } }
     ]);
 
