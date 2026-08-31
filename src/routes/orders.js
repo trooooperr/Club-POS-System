@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const Order = require('../models/Order');
 const { getCache, setCache, deleteCache } = require('../lib/redis');
 const { requireRole } = require('../middleware/auth');
