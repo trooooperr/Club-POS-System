@@ -152,29 +152,27 @@ router.get('/due-payments', requireRole(['admin', 'manager', 'staff']), async (r
       $or: [
         { isCredit: true },
         { dueAmount: { $gt: 0 } },
-        { paymentStatus: { $in: ['pending', 'partial'] } },
-        { grandTotal: 1 },
-        { paidAmount: 1 },
-        { grandTotal: { $lte: 1 } }
+        { paymentStatus: { $in: ['pending', 'partial'] } }
       ]
-    }).sort({ updatedAt: -1, date: -1 });
+    })
+      .select('billNo tableNo date businessDate customerName customerPhone grandTotal paidAmount dueAmount isCredit paymentStatus notes createdAt')
+      .sort({ updatedAt: -1, date: -1 })
+      .lean();
 
-    const processedOrders = dueOrders.map(o => {
-      const isRs1Bill = o.grandTotal === 1 || o.paidAmount === 1 || (o.grandTotal <= 1 && (o.subtotal || 0) > 0);
-      const realTotal = (isRs1Bill && (o.subtotal || 0) > 1) ? o.subtotal : o.grandTotal;
-      const paid = isRs1Bill ? 0 : (o.paidAmount !== undefined && o.paidAmount > 0 && o.paidAmount !== 1 ? o.paidAmount : (o.paymentStatus === 'paid' ? realTotal : 0));
-      const due = isRs1Bill ? realTotal : (o.dueAmount > 0 ? o.dueAmount : Math.max(0, realTotal - paid));
-      const status = due === 0 ? 'paid' : (paid === 0 ? 'pending' : 'partial');
-
-      return {
-        ...o.toObject(),
-        grandTotal: realTotal,
-        paidAmount: paid,
-        dueAmount: due,
-        paymentStatus: status,
-        isCredit: due > 0
-      };
-    }).filter(o => o.grandTotal > 0 && o.dueAmount > 0);
+    const processedOrders = dueOrders.filter(o => {
+      if (!o.isCredit && (o.dueAmount || 0) === 0 && o.paymentStatus === 'paid') {
+        return false;
+      }
+      const due = o.dueAmount !== undefined ? o.dueAmount : Math.max(0, o.grandTotal - (o.paidAmount || 0));
+      return o.grandTotal > 0 && due > 0;
+    }).map(o => ({
+      ...o,
+      grandTotal: o.grandTotal,
+      paidAmount: o.paidAmount || 0,
+      dueAmount: o.dueAmount,
+      paymentStatus: o.paymentStatus || 'pending',
+      isCredit: true
+    }));
 
     const totalDue = processedOrders.reduce((sum, o) => sum + (o.dueAmount || 0), 0);
 
@@ -184,7 +182,7 @@ router.get('/due-payments', requireRole(['admin', 'manager', 'staff']), async (r
       orders: processedOrders
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -747,7 +745,13 @@ router.post('/due', requireRole(['admin', 'manager', 'staff']), async (req, res)
 router.patch('/:id/payment-status', requireRole(['admin', 'manager', 'staff']), async (req, res) => {
   try {
     const { paymentMethod, paymentMode, dueAmount, customerName, customerPhone, notes } = req.body;
-    const order = await Order.findById(req.params.id);
+    let order = null;
+    if (mongoose.Types.ObjectId.isValid(req.params.id)) {
+      order = await Order.findById(req.params.id);
+    }
+    if (!order) {
+      order = await Order.findOne({ billNo: req.params.id });
+    }
     if (!order) return res.status(404).json({ message: 'Order not found' });
 
     const mode = paymentMethod || paymentMode;
@@ -759,24 +763,39 @@ router.patch('/:id/payment-status', requireRole(['admin', 'manager', 'staff']), 
     if (dueAmount !== undefined) {
       const newDue = Math.max(0, parseFloat(dueAmount) || 0);
       order.dueAmount = newDue;
-      // Adjust grandTotal if paid is 0 or if newDue exceeds old grandTotal
-      if ((order.paidAmount || 0) === 0 || newDue > order.grandTotal) {
-        order.grandTotal = (order.paidAmount || 0) + newDue;
+
+      if (newDue === 0) {
+        // Clearing Due Payment: grandTotal remains 100% untouched!
+        order.dueAmount = 0;
+        order.paidAmount = order.grandTotal;
+        order.isCredit = false;
+        order.paymentStatus = 'paid';
+        if (!order.paymentMode || order.paymentMode === 'due') {
+          order.paymentMode = 'cash';
+          order.paymentMethod = 'cash';
+        }
       } else {
-        order.paidAmount = Math.max(0, order.grandTotal - newDue);
+        order.isCredit = true;
+        order.paymentStatus = (order.paidAmount || 0) > 0 ? 'partial' : 'pending';
+        if (newDue > order.grandTotal || (order.paidAmount || 0) === 0) {
+          order.grandTotal = (order.paidAmount || 0) + newDue;
+        } else {
+          order.paidAmount = Math.max(0, order.grandTotal - newDue);
+        }
       }
     }
 
-    if (mode === 'due' || mode === 'pending' || order.dueAmount > 0) {
-      order.isCredit = true;
-      order.paymentStatus = 'pending';
-      if (!order.dueAmount || order.dueAmount <= 0) {
-        order.dueAmount = order.grandTotal;
-        order.paidAmount = 0;
+    if (mode === 'due' || mode === 'pending') {
+      if (order.dueAmount > 0) {
+        order.isCredit = true;
+        order.paymentStatus = (order.paidAmount || 0) > 0 ? 'partial' : 'pending';
       }
-    } else {
-      order.isCredit = false;
-      order.paymentStatus = 'paid';
+    } else if (mode === 'cash' || mode === 'upi' || mode === 'card' || mode === 'paid') {
+      if (order.dueAmount === 0) {
+        order.isCredit = false;
+        order.paymentStatus = 'paid';
+        order.paidAmount = order.grandTotal;
+      }
     }
 
     if (customerName !== undefined) order.customerName = customerName;

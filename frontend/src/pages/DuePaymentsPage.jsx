@@ -175,8 +175,15 @@ export default function DuePaymentsPage() {
 
   const handleRemoveFromDue = async (orderId, billNo) => {
     const displayBill = billNo || 'this due record';
-    if (window.confirm(`Are you sure you want to remove ${displayBill} from Due Payments? The bill will remain intact in Order History.`)) {
+    if (window.confirm(`Are you sure you want to clear ${displayBill} from Due Payments? The bill will remain intact in Order History.`)) {
       try {
+        // Optimistically remove from local state immediately
+        setData(prev => ({
+          ...prev,
+          count: Math.max(0, (prev.count || 1) - 1),
+          orders: (prev.orders || []).filter(o => o._id !== orderId && o.billNo !== billNo)
+        }));
+
         const res = await authFetch(apiUrl(`/api/orders/${orderId}/payment-status`), {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -188,14 +195,15 @@ export default function DuePaymentsPage() {
         });
         if (!res.ok) {
           const errData = await res.json();
-          throw new Error(errData.message || errData.error || 'Failed to remove from due payments');
+          throw new Error(errData.message || errData.error || 'Failed to clear due payment');
         }
 
-        showToast(`Removed ${displayBill} from Due Payments`, 'success');
+        showToast(`Cleared ${displayBill} from Due Payments`, 'success');
         fetchDuePayments();
         if (loadData) loadData();
       } catch (err) {
-        showToast(err.message || 'Failed to remove from due payments', 'error');
+        showToast(err.message || 'Failed to clear due payment', 'error');
+        fetchDuePayments();
       }
     }
   };
@@ -377,12 +385,44 @@ export default function DuePaymentsPage() {
                       {currency}{(ord.dueAmount || 0).toLocaleString('en-IN')}
                     </td>
                     <td style={{ padding: '10px', textAlign: 'center' }}>
-                      <div style={{ display: 'flex', justifyContent: 'center', gap: 6 }}>
-                        <button onClick={() => openEditModal(ord)} style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--b2)', background: 'var(--s2)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700 }}>
-                          <Edit3 size={12} /> Edit
+                      <div style={{ display: 'flex', justifyContent: 'center', gap: 8 }}>
+                        <button
+                          onClick={() => openEditModal(ord)}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: '7px',
+                            border: '1px solid rgba(245, 158, 11, 0.4)',
+                            background: 'rgba(245, 158, 11, 0.15)',
+                            color: '#F59E0B',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 5,
+                            fontSize: '12px',
+                            fontWeight: 800
+                          }}
+                          title="Edit Customer Name, Phone & Due Amount"
+                        >
+                          <Edit3 size={13} /> Edit
                         </button>
-                        <button onClick={() => handleRemoveFromDue(ord._id, ord.billNo)} style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid rgba(239, 68, 68, 0.2)', background: 'rgba(239, 68, 68, 0.05)', color: '#EF4444', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700 }}>
-                          <Trash2 size={12} /> Clear
+                        <button
+                          onClick={() => handleRemoveFromDue(ord._id, ord.billNo)}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: '7px',
+                            border: '1px solid rgba(239, 68, 68, 0.4)',
+                            background: 'rgba(239, 68, 68, 0.15)',
+                            color: '#EF4444',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 5,
+                            fontSize: '12px',
+                            fontWeight: 800
+                          }}
+                          title="Clear Due Balance (Removes from Due Payments, Bill remains in Order History)"
+                        >
+                          <Trash2 size={13} /> Clear
                         </button>
                       </div>
                     </td>
