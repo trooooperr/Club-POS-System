@@ -74,11 +74,13 @@ async function generateNextBillNo(businessDateStr) {
 
 // Ensures an order has a unique, non-conflicting bill number for its businessDate
 async function ensureUniqueBillNo(order) {
-  const targetBusinessDate = getBusinessDateString(order.date || order.createdAt || new Date());
+  // Stamp current exact timestamp when finalizing bill
+  order.date = order.date || new Date();
+  const targetBusinessDate = getBusinessDateString(new Date());
   
   // If billNo is missing, PENDING, or businessDate changed, generate fresh billNo for target business date
   if (!order.billNo || order.billNo === 'PENDING' || (order.businessDate && order.businessDate !== targetBusinessDate)) {
-    order.date = order.date || new Date();
+    order.date = new Date();
     order.businessDate = targetBusinessDate;
     order.billNo = await generateNextBillNo(targetBusinessDate);
     return;
