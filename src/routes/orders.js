@@ -690,6 +690,59 @@ router.patch('/:id/settle', async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
+// ── CREATE NEW DUE / CREDIT PAYMENT RECORD ─────────────────────────────
+router.post('/due', requireRole(['admin', 'manager', 'staff']), async (req, res) => {
+  try {
+    const { customerName, customerPhone, dueAmount, notes, tableNo, businessDate } = req.body;
+    const amount = parseFloat(dueAmount);
+    if (!customerName || !customerName.trim()) {
+      return res.status(400).json({ message: 'Customer name is required' });
+    }
+    if (isNaN(amount) || amount <= 0) {
+      return res.status(400).json({ message: 'Valid due amount is required' });
+    }
+
+    const bDate = businessDate || getBusinessDateString(new Date());
+    const billNo = await generateNextBillNo(bDate);
+
+    const newDueOrder = new Order({
+      billNo,
+      date: new Date(),
+      businessDate: bDate,
+      tableNo: parseInt(tableNo, 10) || 0,
+      customerName: customerName.trim(),
+      customerPhone: customerPhone ? customerPhone.trim() : '',
+      grandTotal: amount,
+      paidAmount: 0,
+      dueAmount: amount,
+      paymentMode: 'due',
+      paymentMethod: 'due',
+      paymentStatus: 'pending',
+      isCredit: true,
+      notes: notes ? notes.trim() : 'Manual Due Record Entry',
+      items: [
+        {
+          name: notes ? notes.trim() : 'Manual Due Credit Entry',
+          quantity: 1,
+          price: amount
+        }
+      ],
+      subtotal: amount,
+      sgst: 0,
+      cgst: 0,
+      orderStatus: 'COMPLETED',
+      isActive: false
+    });
+
+    const saved = await newDueOrder.save();
+    await deleteCache([ORDERS_CACHE_KEY, REPORT_SUMMARY_CACHE_KEY]);
+
+    res.status(201).json({ success: true, order: saved });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── UPDATE PAYMENT STATUS / MARK AS DUE / EDIT DUE DETAILS ──────
 router.patch('/:id/payment-status', requireRole(['admin', 'manager', 'staff']), async (req, res) => {
   try {
@@ -703,21 +756,27 @@ router.patch('/:id/payment-status', requireRole(['admin', 'manager', 'staff']), 
       order.paymentMode = mode;
     }
 
-    if (mode === 'due' || mode === 'pending') {
+    if (dueAmount !== undefined) {
+      const newDue = Math.max(0, parseFloat(dueAmount) || 0);
+      order.dueAmount = newDue;
+      // Adjust grandTotal if paid is 0 or if newDue exceeds old grandTotal
+      if ((order.paidAmount || 0) === 0 || newDue > order.grandTotal) {
+        order.grandTotal = (order.paidAmount || 0) + newDue;
+      } else {
+        order.paidAmount = Math.max(0, order.grandTotal - newDue);
+      }
+    }
+
+    if (mode === 'due' || mode === 'pending' || order.dueAmount > 0) {
       order.isCredit = true;
       order.paymentStatus = 'pending';
-      if (dueAmount !== undefined) {
-        order.dueAmount = Math.max(0, parseFloat(dueAmount) || 0);
-        order.paidAmount = Math.max(0, order.grandTotal - order.dueAmount);
-      } else if (!order.dueAmount || order.dueAmount <= 0) {
+      if (!order.dueAmount || order.dueAmount <= 0) {
         order.dueAmount = order.grandTotal;
         order.paidAmount = 0;
       }
-    } else if (dueAmount !== undefined) {
-      order.dueAmount = Math.max(0, parseFloat(dueAmount) || 0);
-      order.paidAmount = Math.max(0, order.grandTotal - order.dueAmount);
-      order.isCredit = order.dueAmount > 0;
-      order.paymentStatus = order.dueAmount <= 0 ? 'paid' : (order.paidAmount > 0 ? 'partial' : 'pending');
+    } else {
+      order.isCredit = false;
+      order.paymentStatus = 'paid';
     }
 
     if (customerName !== undefined) order.customerName = customerName;
