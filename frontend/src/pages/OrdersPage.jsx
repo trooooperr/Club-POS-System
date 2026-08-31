@@ -210,15 +210,21 @@ function PaymentEditModal({ order, currency, onSave, onClose }) {
   );
 }
 
-function DiscountEditModal({ order, currency, onSave, onClose }) {
+function OrderEditModal({ order, currency, onSaveDiscount, onSavePayment, onClose }) {
+  const [activeTab, setActiveTab] = useState('discount'); // 'discount' | 'due'
   const [discountVal, setDiscountVal] = useState(order.discount ? String(order.discount) : '');
+
+  const [custName, setCustName] = useState(order.customerName || '');
+  const [custPhone, setCustPhone] = useState(order.customerPhone || '');
+  const [dueAmt, setDueAmt] = useState(order.dueAmount ? String(order.dueAmount) : String(order.grandTotal || 0));
+
   const [saving, setSaving] = useState(false);
 
   const serviceTaxVal = order.serviceTax || 0;
   const subtotalAndTax = order.subtotal + order.sgst + order.cgst + serviceTaxVal;
   const newGrandTotal = Math.round(Math.max(0, subtotalAndTax - (parseFloat(discountVal) || 0)));
 
-  const handleSave = async () => {
+  const handleSaveDiscount = async () => {
     const val = parseFloat(discountVal) || 0;
     if (val < 0 || val > subtotalAndTax) {
       alert(`Discount must be between 0 and ${subtotalAndTax.toFixed(0)}`);
@@ -227,7 +233,7 @@ function DiscountEditModal({ order, currency, onSave, onClose }) {
 
     setSaving(true);
     try {
-      await onSave(order._id, val);
+      await onSaveDiscount(order._id, val);
       onClose();
     } catch (err) {
       console.error(err);
@@ -237,65 +243,157 @@ function DiscountEditModal({ order, currency, onSave, onClose }) {
     }
   };
 
+  const handleMarkAsDue = async () => {
+    const dAmt = parseFloat(dueAmt);
+    if (isNaN(dAmt) || dAmt < 0) {
+      alert('Please enter a valid due amount');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await onSavePayment(order._id, 'due', 0, 0, dAmt, custName, custPhone);
+      onClose();
+    } catch (err) {
+      console.error(err);
+      alert(err.message || 'Failed to mark bill as due');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="moverlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.85)' }} onClick={onClose}>
-      <div className="mbox" style={{ maxWidth: '340px', width: '92%', padding: '20px', position: 'relative' }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+      <div className="mbox" style={{ maxWidth: '400px', width: '92%', padding: '20px', position: 'relative' }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: 'var(--t0)' }}>
-            Edit Discount (HTB-{(order.billNo || '').split('-').pop()})
+            Edit Order (HTB-{(order.billNo || '').split('-').pop()})
           </h3>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--t2)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 4 }}>
             <X size={18} />
           </button>
         </div>
 
-        <div style={{ fontSize: '13px', color: 'var(--t1)', marginBottom: 8 }}>
-          Subtotal + Tax: <span style={{ fontWeight: 700, color: 'var(--t0)' }}>{currency}{subtotalAndTax.toFixed(2)}</span>
-        </div>
-        <div style={{ fontSize: '13px', color: 'var(--t1)', marginBottom: 16 }}>
-          New Grand Total: <span style={{ fontWeight: 800, color: 'var(--a)' }}>{currency}{newGrandTotal.toFixed(0)}</span>
-        </div>
-
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ fontSize: 11, color: 'var(--t2)', fontWeight: 700, display: 'block', marginBottom: 6, textTransform: 'uppercase' }}>
-            Discount Amount ({currency})
-          </label>
-          <textarea
-            placeholder="Enter discount amount"
-            rows="2"
-            value={discountVal}
-            onChange={e => setDiscountVal(e.target.value.replace(/[^0-9.]/g, ''))}
-            style={{
-              width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--b1)',
-              background: 'var(--s2)', color: 'var(--t0)', fontSize: 14, fontWeight: 700,
-              resize: 'none', fontFamily: 'inherit'
-            }}
-          />
-        </div>
-
-        <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+        {/* Tabs: Discount vs Mark as Due */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
           <button
-            onClick={onClose}
+            onClick={() => setActiveTab('discount')}
             style={{
-              flex: 1, padding: '10px 0', borderRadius: 8, border: '1px solid var(--b2)',
-              background: 'var(--s2)', color: 'var(--t1)', fontSize: 13, fontWeight: 700,
+              flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 12, fontWeight: 700,
+              border: activeTab === 'discount' ? '2px solid var(--a)' : '1px solid var(--b2)',
+              background: activeTab === 'discount' ? 'rgba(245,158,11,0.12)' : 'var(--s2)',
+              color: activeTab === 'discount' ? 'var(--a)' : 'var(--t1)',
               cursor: 'pointer'
             }}
           >
-            Cancel
+            EDIT DISCOUNT
           </button>
           <button
-            onClick={handleSave}
-            disabled={saving}
+            onClick={() => setActiveTab('due')}
             style={{
-              flex: 1, padding: '10px 0', borderRadius: 8, border: 'none',
-              background: 'var(--a)', color: '#000', fontSize: 13, fontWeight: 800,
-              cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.7 : 1
+              flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 12, fontWeight: 700,
+              border: activeTab === 'due' ? '2px solid #EF4444' : '1px solid var(--b2)',
+              background: activeTab === 'due' ? 'rgba(239,68,68,0.12)' : 'var(--s2)',
+              color: activeTab === 'due' ? '#EF4444' : 'var(--t1)',
+              cursor: 'pointer'
             }}
           >
-            {saving ? 'Saving...' : 'Save'}
+            MARK AS DUE / PENDING
           </button>
         </div>
+
+        {activeTab === 'discount' ? (
+          <div>
+            <div style={{ fontSize: '13px', color: 'var(--t1)', marginBottom: 6 }}>
+              Subtotal + Tax: <span style={{ fontWeight: 700, color: 'var(--t0)' }}>{currency}{subtotalAndTax.toFixed(2)}</span>
+            </div>
+            <div style={{ fontSize: '13px', color: 'var(--t1)', marginBottom: 16 }}>
+              New Grand Total: <span style={{ fontWeight: 800, color: 'var(--a)' }}>{currency}{newGrandTotal.toFixed(0)}</span>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 11, color: 'var(--t2)', fontWeight: 700, display: 'block', marginBottom: 6, textTransform: 'uppercase' }}>
+                Discount Amount ({currency})
+              </label>
+              <input
+                type="number"
+                placeholder="Enter discount amount"
+                value={discountVal}
+                onChange={e => setDiscountVal(e.target.value.replace(/[^0-9.]/g, ''))}
+                style={{
+                  width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--b1)',
+                  background: 'var(--s2)', color: 'var(--t0)', fontSize: 14, fontWeight: 700
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+              <button
+                onClick={onClose}
+                style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px solid var(--b2)', background: 'var(--s2)', color: 'var(--t1)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveDiscount}
+                disabled={saving}
+                style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', background: 'var(--a)', color: '#000', fontSize: 13, fontWeight: 800, cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.7 : 1 }}
+              >
+                {saving ? 'Saving...' : 'Save Discount'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div>
+              <label style={{ fontSize: 11, color: 'var(--t2)', fontWeight: 700, display: 'block', marginBottom: 4 }}>Customer Name</label>
+              <input
+                type="text"
+                placeholder="Customer name"
+                value={custName}
+                onChange={e => setCustName(e.target.value)}
+                style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)', fontSize: 13, fontWeight: 700 }}
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: 11, color: 'var(--t2)', fontWeight: 700, display: 'block', marginBottom: 4 }}>Customer Phone (Optional)</label>
+              <input
+                type="text"
+                placeholder="Phone number"
+                value={custPhone}
+                onChange={e => setCustPhone(e.target.value)}
+                style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)', fontSize: 13, fontWeight: 700 }}
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: 11, color: 'var(--t2)', fontWeight: 700, display: 'block', marginBottom: 4 }}>Pending Due Amount ({currency})</label>
+              <input
+                type="number"
+                value={dueAmt}
+                onChange={e => setDueAmt(e.target.value)}
+                style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid var(--b1)', background: 'var(--s2)', fontSize: 13, fontWeight: 800, color: '#EF4444' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+              <button
+                onClick={onClose}
+                style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px solid var(--b2)', background: 'var(--s2)', color: 'var(--t1)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleMarkAsDue}
+                disabled={saving}
+                style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', background: '#EF4444', color: '#FFF', fontSize: 13, fontWeight: 800, cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.7 : 1 }}
+              >
+                {saving ? 'Marking...' : 'Mark Bill as Due'}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -543,12 +641,36 @@ export default function OrdersPage() {
   }, [activeOrdersList, search, startDate, endDate]);
 
   const payBadge = (mode, order) => {
+    const isDue = mode === 'due' || mode === 'pending' || order?.paymentMethod === 'due' || order?.isCredit || (order?.dueAmount > 0 && order?.paidAmount === 0);
     const cls = { cash: 'badge-cash', card: 'badge-card', upi: 'badge-upi', split: 'badge-split' };
 
     const handleBadgeClick = (e) => {
       e.stopPropagation();
       setEditingPaymentOrder(order);
     };
+
+    if (isDue) {
+      return (
+        <span
+          className="badge"
+          style={{
+            cursor: 'pointer',
+            background: 'rgba(239, 68, 68, 0.18)',
+            color: '#EF4444',
+            border: '1px solid rgba(239, 68, 68, 0.4)',
+            padding: '3px 8px',
+            borderRadius: '6px',
+            fontWeight: 800,
+            fontSize: '11px',
+            display: 'inline-block'
+          }}
+          onClick={handleBadgeClick}
+          title={`Due: ${c}${(order?.dueAmount || order?.grandTotal || 0).toFixed(0)}`}
+        >
+          DUE
+        </span>
+      );
+    }
 
     if (mode === 'split' && order) {
       return (
@@ -795,12 +917,13 @@ export default function OrdersPage() {
         />
       )}
 
-      {/* Discount Edit Modal Overlay */}
+      {/* Order Edit Modal Overlay (Discount & Mark as Due) */}
       {editingDiscountOrder && (
-        <DiscountEditModal
+        <OrderEditModal
           order={editingDiscountOrder}
           currency={c}
-          onSave={handleDiscountSave}
+          onSaveDiscount={handleDiscountSave}
+          onSavePayment={handlePaymentSave}
           onClose={() => setEditingDiscountOrder(null)}
         />
       )}

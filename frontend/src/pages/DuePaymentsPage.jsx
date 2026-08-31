@@ -1,21 +1,23 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { apiUrl, authFetch } from '../lib/api';
-import { Clock, Search, Wallet, User, Phone, CheckCircle2, AlertCircle, DollarSign, X } from 'lucide-react';
+import { Search, Wallet, User, Phone, Edit3, Trash2, X } from 'lucide-react';
 
 export default function DuePaymentsPage() {
-  const { settings, showToast, loadData, currency = '₹' } = useApp();
+  const { showToast, loadData, currency = '₹' } = useApp();
 
   const [data, setData] = useState({ totalDue: 0, count: 0, orders: [] });
   const [loading, setLoading] = useState(false);
   const [filterTab, setFilterTab] = useState('all'); // 'all', 'pending', 'partial'
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Settlement Modal State
-  const [settleOrder, setSettleOrder] = useState(null);
-  const [settleAmount, setSettleAmount] = useState('');
-  const [paymentMode, setPaymentMode] = useState('cash');
-  const [settling, setSettling] = useState(false);
+  // Edit Due Record Modal State
+  const [editOrder, setEditOrder] = useState(null);
+  const [custName, setCustName] = useState('');
+  const [custPhone, setCustPhone] = useState('');
+  const [dueAmount, setDueAmount] = useState('');
+  const [notes, setNotes] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const fetchDuePayments = () => {
     setLoading(true);
@@ -52,65 +54,98 @@ export default function DuePaymentsPage() {
         (o.customerName && o.customerName.toLowerCase().includes(term)) ||
         (o.customerPhone && o.customerPhone.toLowerCase().includes(term)) ||
         (o.billNo && o.billNo.toLowerCase().includes(term)) ||
-        (o.tableNo && String(o.tableNo).includes(term))
+        (o.tableNo && String(o.tableNo).includes(term)) ||
+        (o.notes && o.notes.toLowerCase().includes(term))
       );
     }
 
     return list;
   }, [data.orders, filterTab, searchTerm]);
 
-  const openSettleModal = (order) => {
-    setSettleOrder(order);
-    setSettleAmount(String(order.dueAmount || 0));
-    setPaymentMode('cash');
+  const openEditModal = (order) => {
+    setEditOrder(order);
+    setCustName(order.customerName || '');
+    setCustPhone(order.customerPhone || '');
+    setDueAmount(String(order.dueAmount || order.grandTotal || 0));
+    setNotes(order.notes || '');
   };
 
-  const handleSettleSubmit = async (e) => {
+  const handleEditSubmit = async (e) => {
     e.preventDefault();
-    if (!settleOrder) return;
-    const amt = parseFloat(settleAmount) || 0;
-    if (amt <= 0) {
-      showToast('Please enter a valid settlement amount', 'amber');
-      return;
-    }
-    if (amt > (settleOrder.dueAmount || 0)) {
-      showToast(`Amount cannot exceed due balance of ${currency}${settleOrder.dueAmount}`, 'amber');
+    if (!editOrder) return;
+
+    const amt = parseFloat(dueAmount);
+    if (isNaN(amt) || amt < 0) {
+      showToast('Please enter a valid due amount', 'error');
       return;
     }
 
-    setSettling(true);
+    setSaving(true);
     try {
-      const res = await authFetch(apiUrl(`/api/orders/${settleOrder._id}/settle-due`), {
-        method: 'POST',
+      const res = await authFetch(apiUrl(`/api/orders/${editOrder._id}/payment-status`), {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: amt, paymentMode })
+        body: JSON.stringify({
+          paymentMethod: 'due',
+          paymentMode: 'due',
+          dueAmount: amt,
+          customerName: custName.trim(),
+          customerPhone: custPhone.trim(),
+          notes: notes.trim()
+        })
       });
+
       if (!res.ok) {
         const errData = await res.json();
-        showToast(errData.message || 'Failed to settle payment', 'amber');
-        setSettling(false);
-        return;
+        throw new Error(errData.message || errData.error || 'Failed to update due details');
       }
 
-      showToast(`Settled ${currency}${amt} for Bill ${settleOrder.billNo}!`, 'green');
-      setSettleOrder(null);
-      setSettling(false);
+      showToast(`Updated due record for Bill ${editOrder.billNo || 'HTB-T' + editOrder.tableNo}!`, 'success');
+      setEditOrder(null);
       fetchDuePayments();
       if (loadData) loadData();
     } catch (err) {
-      console.error('Error settling payment:', err);
-      showToast('Failed to settle payment', 'amber');
-      setSettling(false);
+      console.error('Error updating due record:', err);
+      showToast(err.message || 'Failed to update due record', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRemoveFromDue = async (orderId, billNo) => {
+    const displayBill = billNo || 'this due record';
+    if (window.confirm(`Are you sure you want to remove ${displayBill} from Due Payments? The bill will remain intact in Order History.`)) {
+      try {
+        const res = await authFetch(apiUrl(`/api/orders/${orderId}/payment-status`), {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            paymentMethod: 'cash',
+            paymentMode: 'cash',
+            dueAmount: 0
+          })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.message || errData.error || 'Failed to remove from due payments');
+        }
+
+        showToast(`Removed ${displayBill} from Due Payments`, 'success');
+        fetchDuePayments();
+        if (loadData) loadData();
+      } catch (err) {
+        showToast(err.message || 'Failed to remove from due payments', 'error');
+      }
     }
   };
 
   return (
     <div style={{ padding: '20px', maxWidth: '1400px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      {/* Filters & Header Bar */}
+      {/* Header & Filter Pills */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
         <div>
           <p style={{ fontSize: '12.5px', color: 'var(--t2)', margin: 0 }}>
-            Track and settle customer pay-later & credit balances.
+            Manage customer pay-later & credit due balances.
           </p>
         </div>
 
@@ -172,7 +207,7 @@ export default function DuePaymentsPage() {
           <div style={{ fontSize: '24px', fontWeight: 900, color: '#EF4444' }}>
             {currency}{data.totalDue.toLocaleString('en-IN')}
           </div>
-          <div style={{ fontSize: '11px', color: 'var(--t2)' }}>Outstanding balance to be collected</div>
+          <div style={{ fontSize: '11px', color: 'var(--t2)' }}>Outstanding pay-later credit balance</div>
         </div>
 
         <div style={{ background: 'var(--s1)', border: '1px solid var(--b2)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -189,14 +224,14 @@ export default function DuePaymentsPage() {
         </div>
       </div>
 
-      {/* Main Table / List Section */}
+      {/* Main Table Section */}
       <div style={{ background: 'var(--s1)', border: '1px solid var(--b2)', borderRadius: '12px', padding: '18px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
           <div>
             <h3 style={{ fontSize: '14px', fontWeight: 800, color: 'var(--t0)', margin: 0 }}>
               Due Payment Records ({filteredOrders.length})
             </h3>
-            <span style={{ fontSize: '11.5px', color: 'var(--t2)' }}>Click "Settle Balance" on any customer bill to log payment</span>
+            <span style={{ fontSize: '11.5px', color: 'var(--t2)' }}>Edit details or delete due records using the action buttons</span>
           </div>
 
           <div style={{ position: 'relative', width: '280px' }}>
@@ -232,7 +267,7 @@ export default function DuePaymentsPage() {
                 <th style={{ padding: '8px 10px', textAlign: 'right' }}>Total Bill</th>
                 <th style={{ padding: '8px 10px', textAlign: 'right' }}>Paid</th>
                 <th style={{ padding: '8px 10px', textAlign: 'right' }}>Remaining Due</th>
-                <th style={{ padding: '8px 10px', textAlign: 'center' }}>Action</th>
+                <th style={{ padding: '8px 10px', textAlign: 'center' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -249,6 +284,7 @@ export default function DuePaymentsPage() {
                   <tr key={ord._id || idx} style={{ borderBottom: '1px solid var(--b0)' }}>
                     <td style={{ padding: '10px', fontWeight: 800, color: 'var(--t0)' }}>
                       👤 {ord.customerName || 'Walk-in Guest'}
+                      {ord.notes && <div style={{ fontSize: 11, color: 'var(--t2)', fontWeight: 400, marginTop: 2 }}>{ord.notes}</div>}
                     </td>
                     <td style={{ padding: '10px', color: 'var(--t1)', fontWeight: 600 }}>
                       {ord.customerPhone ? (
@@ -276,22 +312,46 @@ export default function DuePaymentsPage() {
                       {currency}{(ord.dueAmount || 0).toLocaleString('en-IN')}
                     </td>
                     <td style={{ padding: '10px', textAlign: 'center' }}>
-                      <button
-                        onClick={() => openSettleModal(ord)}
-                        style={{
-                          background: 'var(--a)',
-                          color: '#000000',
-                          border: 'none',
-                          borderRadius: '6px',
-                          padding: '5px 12px',
-                          fontSize: '11.5px',
-                          fontWeight: 800,
-                          cursor: 'pointer',
-                          transition: 'all 0.15s ease'
-                        }}
-                      >
-                        Settle Balance
-                      </button>
+                      <div style={{ display: 'flex', justifyContent: 'center', gap: 8 }}>
+                        <button
+                          onClick={() => openEditModal(ord)}
+                          style={{
+                            background: 'var(--s2)',
+                            color: 'var(--a)',
+                            border: '1px solid var(--b2)',
+                            borderRadius: '6px',
+                            padding: '5px 10px',
+                            fontSize: '11.5px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4
+                          }}
+                          title="Edit Customer Name, Phone & Due Amount"
+                        >
+                          <Edit3 size={13} /> Edit
+                        </button>
+                        <button
+                          onClick={() => handleRemoveFromDue(ord._id, ord.billNo)}
+                          style={{
+                            background: 'rgba(239, 68, 68, 0.12)',
+                            color: '#EF4444',
+                            border: '1px solid rgba(239, 68, 68, 0.25)',
+                            borderRadius: '6px',
+                            padding: '5px 10px',
+                            fontSize: '11.5px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4
+                          }}
+                          title="Remove from Due Payments (Bill remains in Order History)"
+                        >
+                          <Trash2 size={13} /> Remove Due
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -301,105 +361,80 @@ export default function DuePaymentsPage() {
         </div>
       </div>
 
-      {/* Settle Balance Modal */}
-      {settleOrder && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(6px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: '16px'
-        }}>
-          <div style={{
-            background: 'var(--s1)', border: '1.5px solid var(--b2)', borderRadius: '14px',
-            width: '100%', maxWidth: '420px', padding: '18px', display: 'flex', flexDirection: 'column', gap: '14px'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--b2)', paddingBottom: '10px' }}>
-              <div style={{ fontSize: '14px', fontWeight: 800, color: 'var(--t0)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Wallet size={16} style={{ color: 'var(--a)' }} />
-                <span>Settle Due Balance</span>
-              </div>
-              <button onClick={() => setSettleOrder(null)} style={{ background: 'none', border: 'none', color: 'var(--t2)', cursor: 'pointer' }}>
-                <X size={16} />
+      {/* Edit Due Record Modal */}
+      {editOrder && (
+        <div className="moverlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.85)' }} onClick={() => setEditOrder(null)}>
+          <div className="mbox" style={{ maxWidth: '420px', width: '92%', padding: '24px', position: 'relative' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: 'var(--t0)' }}>
+                Edit Due Record ({editOrder.billNo || 'HTB-T' + editOrder.tableNo})
+              </h3>
+              <button onClick={() => setEditOrder(null)} style={{ background: 'none', border: 'none', color: 'var(--t2)', cursor: 'pointer' }}>
+                <X size={18} />
               </button>
             </div>
 
-            <div style={{ fontSize: '12px', color: 'var(--t1)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <div><strong>Customer:</strong> {settleOrder.customerName || 'Walk-in Guest'} {settleOrder.customerPhone ? `(${settleOrder.customerPhone})` : ''}</div>
-              <div><strong>Bill No:</strong> {settleOrder.billNo} (Table {settleOrder.tableNo})</div>
-              <div><strong>Total Bill:</strong> {currency}{settleOrder.grandTotal} | <strong>Already Paid:</strong> {currency}{settleOrder.paidAmount || 0}</div>
-              <div style={{ color: '#EF4444', fontWeight: 800, fontSize: '13px', marginTop: '2px' }}>
-                Outstanding Due: {currency}{settleOrder.dueAmount}
-              </div>
-            </div>
-
-            <form onSubmit={handleSettleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <form onSubmit={handleEditSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
-                <label style={{ fontSize: '11.5px', color: 'var(--t2)', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
-                  Settlement Amount ({currency})
-                </label>
+                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--t2)', display: 'block', marginBottom: 4 }}>Customer Name</label>
+                <input
+                  type="text"
+                  placeholder="Enter customer name"
+                  value={custName}
+                  onChange={e => setCustName(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)', fontSize: 13, fontWeight: 700 }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--t2)', display: 'block', marginBottom: 4 }}>Customer Phone</label>
+                <input
+                  type="text"
+                  placeholder="Enter phone number"
+                  value={custPhone}
+                  onChange={e => setCustPhone(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)', fontSize: 13, fontWeight: 700 }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--t2)', display: 'block', marginBottom: 4 }}>Due Amount ({currency})</label>
                 <input
                   type="number"
-                  min="1"
-                  max={settleOrder.dueAmount}
-                  step="any"
-                  value={settleAmount}
-                  onChange={e => setSettleAmount(e.target.value)}
-                  style={{
-                    width: '100%', background: 'var(--s2)', border: '1px solid var(--b2)',
-                    borderRadius: '8px', padding: '8px 10px', fontSize: '14px', fontWeight: 800, color: 'var(--t0)'
-                  }}
+                  step="0.01"
+                  min="0"
+                  value={dueAmount}
+                  onChange={e => setDueAmount(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--b1)', background: 'var(--s2)', fontSize: 13, fontWeight: 800, color: '#EF4444' }}
                   required
                 />
               </div>
 
               <div>
-                <label style={{ fontSize: '11.5px', color: 'var(--t2)', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
-                  Payment Mode
-                </label>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  {['cash', 'upi', 'card'].map(mode => (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => setPaymentMode(mode)}
-                      style={{
-                        flex: 1,
-                        background: paymentMode === mode ? 'var(--a)' : 'var(--s2)',
-                        color: paymentMode === mode ? '#000000' : 'var(--t1)',
-                        border: '1px solid var(--b2)',
-                        borderRadius: '7px',
-                        padding: '6px',
-                        fontSize: '11.5px',
-                        fontWeight: 800,
-                        cursor: 'pointer',
-                        textTransform: 'uppercase'
-                      }}
-                    >
-                      {mode}
-                    </button>
-                  ))}
-                </div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--t2)', display: 'block', marginBottom: 4 }}>Notes / Remarks (Optional)</label>
+                <textarea
+                  rows="2"
+                  placeholder="Additional notes about this due payment..."
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)', fontSize: 13, resize: 'vertical' }}
+                />
               </div>
 
-              <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+              <div style={{ display: 'flex', gap: 12, marginTop: 10 }}>
                 <button
                   type="button"
-                  onClick={() => setSettleOrder(null)}
-                  style={{
-                    flex: 1, background: 'var(--s2)', border: '1px solid var(--b2)',
-                    borderRadius: '8px', padding: '9px', fontSize: '12px', fontWeight: 700, color: 'var(--t0)', cursor: 'pointer'
-                  }}
+                  onClick={() => setEditOrder(null)}
+                  style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px solid var(--b2)', background: 'var(--s2)', color: 'var(--t1)', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={settling}
-                  style={{
-                    flex: 1.5, background: 'var(--a)', border: 'none',
-                    borderRadius: '8px', padding: '9px', fontSize: '12px', fontWeight: 800, color: '#000000', cursor: settling ? 'wait' : 'pointer'
-                  }}
+                  disabled={saving}
+                  style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', background: 'var(--a)', color: '#000', fontWeight: 800, fontSize: 13, cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.7 : 1 }}
                 >
-                  {settling ? 'Processing...' : 'Confirm Settlement'}
+                  {saving ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
             </form>

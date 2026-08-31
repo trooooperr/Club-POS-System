@@ -18,7 +18,6 @@ const {
 
 // Generate new Bill No based on businessDateStr (e.g. "2026-07-04")
 async function generateNextBillNo(businessDateStr) {
-  // Try to find the counter first
   let counter = await BillCounter.findOne({ businessDate: businessDateStr });
   
   if (!counter) {
@@ -28,14 +27,13 @@ async function generateNextBillNo(businessDateStr) {
       billNo: { $regex: /^HTB-\d+$/ }
     }).select('billNo');
     
-
     let maxNum = 0;
     if (todayOrders.length > 0) {
       const numbers = todayOrders.map(o => {
         const match = o.billNo.match(/HTB-(\d+)/);
         return match ? parseInt(match[1], 10) : 0;
       });
-      maxNum = Math.max(...numbers);
+      maxNum = Math.max(...numbers, 0);
     }
     
     try {
@@ -45,7 +43,6 @@ async function generateNextBillNo(businessDateStr) {
         { upsert: true, new: true }
       );
     } catch (err) {
-      // Fetch in case of concurrent inserts
       counter = await BillCounter.findOne({ businessDate: businessDateStr });
     }
   }
@@ -57,7 +54,47 @@ async function generateNextBillNo(businessDateStr) {
     { new: true }
   );
 
-  return `HTB-${counter.seq.toString().padStart(3, '0')}`;
+  let candidateBillNo = `HTB-${counter.seq.toString().padStart(3, '0')}`;
+
+  // Strict Uniqueness Safeguard: verify no other order already claims this billNo on businessDateStr
+  let conflict = await Order.exists({ businessDate: businessDateStr, billNo: candidateBillNo });
+  while (conflict) {
+    counter = await BillCounter.findOneAndUpdate(
+      { businessDate: businessDateStr },
+      { $inc: { seq: 1 } },
+      { new: true }
+    );
+    candidateBillNo = `HTB-${counter.seq.toString().padStart(3, '0')}`;
+    conflict = await Order.exists({ businessDate: businessDateStr, billNo: candidateBillNo });
+  }
+
+  return candidateBillNo;
+}
+
+// Ensures an order has a unique, non-conflicting bill number for its businessDate
+async function ensureUniqueBillNo(order) {
+  const targetBusinessDate = getBusinessDateString(order.date || order.createdAt || new Date());
+  
+  // If billNo is missing, PENDING, or businessDate changed, generate fresh billNo for target business date
+  if (!order.billNo || order.billNo === 'PENDING' || (order.businessDate && order.businessDate !== targetBusinessDate)) {
+    order.date = order.date || new Date();
+    order.businessDate = targetBusinessDate;
+    order.billNo = await generateNextBillNo(targetBusinessDate);
+    return;
+  }
+
+  order.businessDate = targetBusinessDate;
+
+  // Check if billNo collides with another existing order on this businessDate
+  const conflict = await Order.exists({
+    _id: { $ne: order._id },
+    businessDate: order.businessDate,
+    billNo: order.billNo
+  });
+
+  if (conflict) {
+    order.billNo = await generateNextBillNo(order.businessDate);
+  }
 }
 
 // ── GET CUSTOMER QR / CHECKIN ORDER HISTORY BY PHONE (Public CRM) ──
@@ -502,14 +539,8 @@ router.patch('/:id/finalize-bill', async (req, res) => {
     order.paymentStatus = calculatedStatus;
     order.isCredit = isCredit || calculatedDue > 0 || grandTotal === 1;
 
-    // Preserve existing sequential bill number if already generated (e.g. re-opening printed bill)
-    if (!order.billNo || order.billNo === 'PENDING') {
-      order.date = new Date();
-      order.businessDate = getBusinessDateString(order.date);
-      order.billNo = await generateNextBillNo(order.businessDate);
-    } else if (!order.businessDate) {
-      order.businessDate = getBusinessDateString(order.date || order.createdAt);
-    }
+    // Ensure order has a unique, non-conflicting bill number for current businessDate
+    await ensureUniqueBillNo(order);
 
     const saved = await order.save();
 
@@ -623,13 +654,7 @@ router.patch('/:id/settle', async (req, res) => {
     if (order.dueAmount <= 0) {
       order.orderStatus = 'PAID';
       order.isActive = false;
-      if (wasActive || !order.billNo || order.billNo === 'PENDING') {
-        order.date = new Date();
-        order.businessDate = getBusinessDateString(order.date);
-        order.billNo = await generateNextBillNo(order.businessDate);
-      } else if (!order.businessDate) {
-        order.businessDate = getBusinessDateString(order.date || order.createdAt);
-      }
+      await ensureUniqueBillNo(order);
     }
 
     const saved = await order.save();
@@ -665,27 +690,38 @@ router.patch('/:id/settle', async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// ── UPDATE PAYMENT STATUS / MARK AS DUE ─────────────────────────
+// ── UPDATE PAYMENT STATUS / MARK AS DUE / EDIT DUE DETAILS ──────
 router.patch('/:id/payment-status', requireRole(['admin', 'manager', 'staff']), async (req, res) => {
   try {
     const { paymentMethod, paymentMode, dueAmount, customerName, customerPhone, notes } = req.body;
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ message: 'Order not found' });
 
-    if (paymentMethod) {
-      order.paymentMethod = paymentMethod;
-      order.paymentMode = paymentMode || paymentMethod;
-    }
-    if (dueAmount !== undefined) {
-      order.dueAmount = Math.max(0, parseFloat(dueAmount) || 0);
-      order.paidAmount = Math.max(0, order.grandTotal - order.dueAmount);
-    } else if (paymentMethod === 'due' || paymentMethod === 'pending') {
-      order.dueAmount = order.grandTotal;
-      order.paidAmount = 0;
+    const mode = paymentMethod || paymentMode;
+    if (mode) {
+      order.paymentMethod = mode;
+      order.paymentMode = mode;
     }
 
-    if (customerName) order.customerName = customerName;
-    if (customerPhone) order.customerPhone = customerPhone;
+    if (mode === 'due' || mode === 'pending') {
+      order.isCredit = true;
+      order.paymentStatus = 'pending';
+      if (dueAmount !== undefined) {
+        order.dueAmount = Math.max(0, parseFloat(dueAmount) || 0);
+        order.paidAmount = Math.max(0, order.grandTotal - order.dueAmount);
+      } else if (!order.dueAmount || order.dueAmount <= 0) {
+        order.dueAmount = order.grandTotal;
+        order.paidAmount = 0;
+      }
+    } else if (dueAmount !== undefined) {
+      order.dueAmount = Math.max(0, parseFloat(dueAmount) || 0);
+      order.paidAmount = Math.max(0, order.grandTotal - order.dueAmount);
+      order.isCredit = order.dueAmount > 0;
+      order.paymentStatus = order.dueAmount <= 0 ? 'paid' : (order.paidAmount > 0 ? 'partial' : 'pending');
+    }
+
+    if (customerName !== undefined) order.customerName = customerName;
+    if (customerPhone !== undefined) order.customerPhone = customerPhone;
     if (notes !== undefined) order.notes = notes;
 
     const saved = await order.save();
@@ -780,13 +816,7 @@ router.patch('/:id/complete', async (req, res) => {
     // Mark order as completed
     order.orderStatus = 'COMPLETED';
     order.isActive = false;
-    if (wasActive || !order.billNo || order.billNo === 'PENDING') {
-      order.date = new Date();
-      order.businessDate = getBusinessDateString(order.date);
-      order.billNo = await generateNextBillNo(order.businessDate);
-    } else if (!order.businessDate) {
-      order.businessDate = getBusinessDateString(order.date || order.createdAt);
-    }
+    await ensureUniqueBillNo(order);
     const saved = await order.save();
 
     // Record customer visit in CRM if completed

@@ -489,18 +489,30 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
     });
 
     // 3. Payment Breakdown (Cash vs UPI, with split allocation for Orders & Events)
-    const orders = await Order.find(orderMatch).select('paymentMode grandTotal cashAmount upiAmount').lean();
+    const orders = await Order.find(orderMatch).select('paymentMode paymentMethod paymentStatus isCredit grandTotal paidAmount dueAmount cashAmount upiAmount').lean();
     const events = await Event.find(eventMatch).select('paymentMode grandTotal cashAmount upiAmount').lean();
 
-    let cashTotal = 0, upiTotal = 0;
+    let cashTotal = 0, upiTotal = 0, dueTotal = 0;
     orders.forEach(o => {
+      const isDueOrder = o.paymentMode === 'due' || o.paymentMethod === 'due' || o.paymentStatus === 'pending' || o.isCredit;
+      const due = o.dueAmount > 0 ? o.dueAmount : (isDueOrder ? o.grandTotal - (o.paidAmount || 0) : 0);
+      dueTotal += Math.max(0, due);
+
       if (o.paymentMode === 'split') {
         cashTotal += (o.cashAmount || 0);
         upiTotal  += (o.upiAmount  || 0);
+      } else if (isDueOrder) {
+        if (o.cashAmount > 0) cashTotal += o.cashAmount;
+        if (o.upiAmount > 0) upiTotal += o.upiAmount;
+        if (!o.cashAmount && !o.upiAmount && (o.paidAmount || 0) > 0) {
+          cashTotal += o.paidAmount;
+        }
       } else if (o.paymentMode === 'upi') {
-        upiTotal += o.grandTotal;
+        const actualPaid = o.paidAmount !== undefined ? o.paidAmount : (o.dueAmount > 0 ? Math.max(0, o.grandTotal - o.dueAmount) : o.grandTotal);
+        upiTotal += actualPaid;
       } else {
-        cashTotal += o.grandTotal;
+        const actualPaid = o.paidAmount !== undefined ? o.paidAmount : (o.dueAmount > 0 ? Math.max(0, o.grandTotal - o.dueAmount) : o.grandTotal);
+        cashTotal += actualPaid;
       }
     });
 
@@ -595,7 +607,7 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
       orderCount: orderStats.count || 0,
       eventCount: eventStats.count || 0,
       dailyData,
-      paymentBreakdown: { cash: cashTotal, upi: upiTotal },
+      paymentBreakdown: { cash: cashTotal, upi: upiTotal, due: dueTotal },
       shotsStats: {
         totalShots: totalShotsCount,
         totalRevenue: totalShotsRevenue,
