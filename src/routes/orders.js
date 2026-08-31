@@ -764,7 +764,15 @@ router.patch('/:id/payment-status', requireRole(['admin', 'manager', 'staff']), 
       order.paymentMode = mode;
     }
 
-    if (dueAmount !== undefined) {
+    if (mode === 'due' || mode === 'pending') {
+      const newDue = dueAmount !== undefined ? Math.max(0, parseFloat(dueAmount) || 0) : (order.dueAmount > 0 ? order.dueAmount : order.grandTotal);
+      order.dueAmount = newDue;
+      order.paidAmount = Math.max(0, order.grandTotal - newDue);
+      order.cashAmount = 0;
+      order.upiAmount = 0;
+      order.isCredit = true;
+      order.paymentStatus = order.paidAmount > 0 ? 'partial' : 'pending';
+    } else if (dueAmount !== undefined) {
       const newDue = Math.max(0, parseFloat(dueAmount) || 0);
       order.dueAmount = newDue;
 
@@ -780,22 +788,12 @@ router.patch('/:id/payment-status', requireRole(['admin', 'manager', 'staff']), 
         }
       } else {
         order.isCredit = true;
-        order.paymentStatus = (order.paidAmount || 0) > 0 ? 'partial' : 'pending';
-        if (newDue > order.grandTotal || (order.paidAmount || 0) === 0) {
-          order.grandTotal = (order.paidAmount || 0) + newDue;
-        } else {
-          order.paidAmount = Math.max(0, order.grandTotal - newDue);
-        }
-      }
-    }
-
-    if (mode === 'due' || mode === 'pending') {
-      if (order.dueAmount > 0) {
-        order.isCredit = true;
-        order.paymentStatus = (order.paidAmount || 0) > 0 ? 'partial' : 'pending';
+        order.paidAmount = Math.max(0, order.grandTotal - newDue);
+        order.paymentStatus = order.paidAmount > 0 ? 'partial' : 'pending';
       }
     } else if (mode === 'cash' || mode === 'upi' || mode === 'card' || mode === 'paid') {
-      if (order.dueAmount === 0) {
+      if (order.dueAmount === 0 || mode === 'paid') {
+        order.dueAmount = 0;
         order.isCredit = false;
         order.paymentStatus = 'paid';
         order.paidAmount = order.grandTotal;
