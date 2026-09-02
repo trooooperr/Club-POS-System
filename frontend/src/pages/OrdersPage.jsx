@@ -620,10 +620,11 @@ export default function OrdersPage() {
     });
 
     return list.sort((a, b) => {
-      const aTime = new Date(a.date || a.createdAt || 0).getTime();
-      const bTime = new Date(b.date || b.createdAt || 0).getTime();
-      if (aTime !== bTime) {
-        return bTime - aTime;
+      const aBiz = a.businessDate || getLocalDateString(a.date || a.createdAt);
+      const bBiz = b.businessDate || getLocalDateString(b.date || b.createdAt);
+
+      if (aBiz !== bBiz) {
+        return bBiz.localeCompare(aBiz);
       }
 
       const aNo = a.billNo || '';
@@ -632,7 +633,14 @@ export default function OrdersPage() {
       const bMatch = bNo.match(/HTB-(\d+)/);
       const aNum = aMatch ? parseInt(aMatch[1], 10) : 0;
       const bNum = bMatch ? parseInt(bMatch[1], 10) : 0;
-      return bNum - aNum;
+
+      if (aNum !== bNum) {
+        return bNum - aNum;
+      }
+
+      const aTime = new Date(a.date || a.createdAt || 0).getTime();
+      const bTime = new Date(b.date || b.createdAt || 0).getTime();
+      return bTime - aTime;
     });
   }, [activeOrdersList, search, startDate, endDate]);
 
