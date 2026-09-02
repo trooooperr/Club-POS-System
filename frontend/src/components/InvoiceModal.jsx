@@ -76,34 +76,34 @@ export default function InvoiceModal() {
     }
   };
 
-const sendBill = () => {
-  if (!phone || phone.length < 10) return;
+  const stRate = o.serviceTaxRate || (s.serviceTaxRate > 0 ? s.serviceTaxRate : ((o.subtotal || 0) > 0 && (o.serviceTax || 0) > 0 ? parseFloat(((o.serviceTax / o.subtotal) * 100).toFixed(1)) : 5));
 
-  const itemsText = o.items
-    .map(
-      (item) =>
-        `• ${item.name}  x${item.quantity}  = ${s.currency}${(
-          item.price * item.quantity
-        ).toFixed(0)}`
-    )
-    .join("\n");
+  const sendBill = () => {
+    if (!phone || phone.length < 10) return;
 
-  const message = `
-*${s.restaurantName}*
-${s.address}
-GSTIN: ${s.gstin}
+    const itemsText = o.items
+      .map(
+        (item) =>
+          `• ${item.name}  x${item.quantity}  = ${s.currency}${(
+            item.price * item.quantity
+          ).toFixed(0)}`
+      )
+      .join("\n");
 
+    const message = `
+*${s.restaurantName.toUpperCase()}*
+${s.address ? s.address + '\n' : ''}${s.phone ? 'Ph: ' + s.phone + '\n' : ''}${s.gstin ? 'GSTIN: ' + s.gstin + '\n' : ''}
 ━━━━━━━━━━━━━━━━━━━━
-*BILL: HTB-${(o.billNo || '').split('-').pop()}*
-Table: ${o.tableNo}
-${new Date(o.createdAt || o.date).toLocaleString("en-IN")}
-━━━━━━━━━━━━━━━━━━━━
+*BILL NO:* HTB-${(o.billNo || '').split('-').pop()}
+*TABLE:* ${o.tableNo}
+*DATE:* ${new Date(o.date).toLocaleString()}
+${o.waiterName ? '*WAITER:* ' + o.waiterName.toUpperCase() + '\n' : ''}━━━━━━━━━━━━━━━━━━━━
 
 ${itemsText}
 
 ━━━━━━━━━━━━━━━━━━━━
 Subtotal: ${s.currency}${o.subtotal.toFixed(2)}
-${o.cgst > 0 ? `CGST (${s.cgstRate || 2.5}%): ${s.currency}${o.cgst.toFixed(2)}\n` : ''}${o.sgst > 0 ? `SGST (${s.sgstRate || 2.5}%): ${s.currency}${o.sgst.toFixed(2)}\n` : ''}${(o.serviceTax || 0) > 0 ? `Service Tax (${s.serviceTaxRate || 0}%): ${s.currency}${o.serviceTax.toFixed(2)}\n` : ''}${
+${o.cgst > 0 ? `CGST (${s.cgstRate || 2.5}%): ${s.currency}${o.cgst.toFixed(2)}\n` : ''}${o.sgst > 0 ? `SGST (${s.sgstRate || 2.5}%): ${s.currency}${o.sgst.toFixed(2)}\n` : ''}${(o.serviceTax || 0) > 0 ? `Service Tax (${stRate}%): ${s.currency}${o.serviceTax.toFixed(2)}\n` : ''}${
   o.discount > 0
     ? `Discount: -${s.currency}${o.discount.toFixed(2)}\n`
     : ""
@@ -116,15 +116,13 @@ Paid via: ${o.paymentMode?.toUpperCase()}
 ${s.thankYouMsg}
 `;
 
-  const encoded = encodeURIComponent(message);
+    const encoded = encodeURIComponent(message);
 
-  window.open(`https://wa.me/91${phone}?text=${encoded}`, "_blank");
+    window.open(`https://wa.me/91${phone}?text=${encoded}`, "_blank");
 
-  setSent(true);
-  setTimeout(() => setSent(false), 1000);
-};
-
-
+    setSent(true);
+    setTimeout(() => setSent(false), 1000);
+  };
 
   return (
     <div className="moverlay">
@@ -185,7 +183,7 @@ ${s.thankYouMsg}
                 <div className="sum-row"><span>Subtotal</span><span>{s.currency}{o.subtotal.toFixed(2)}</span></div>
                 {o.cgst > 0 && <div className="sum-row"><span>CGST ({s.cgstRate || 2.5}%)</span><span>{s.currency}{o.cgst.toFixed(2)}</span></div>}
                 {o.sgst > 0 && <div className="sum-row"><span>SGST ({s.sgstRate || 2.5}%)</span><span>{s.currency}{o.sgst.toFixed(2)}</span></div>}
-                {(o.serviceTax || 0) > 0 && <div className="sum-row"><span>Service Tax ({s.serviceTaxRate || 0}%)</span><span>{s.currency}{o.serviceTax.toFixed(2)}</span></div>}
+                {(o.serviceTax || 0) > 0 && <div className="sum-row"><span>Service Tax ({stRate}%)</span><span>{s.currency}{o.serviceTax.toFixed(2)}</span></div>}
                 {o.discount > 0 && <div className="sum-row discount"><span>Discount</span><span>-{s.currency}{o.discount.toFixed(2)}</span></div>}
                 {(o.roundOff || 0) !== 0 && <div className="sum-row"> <span>Round-Off</span><span>{o.roundOff > 0 ? '+' : ''}{o.roundOff.toFixed(2)}</span></div>}
                 <div className="grand-total-box">

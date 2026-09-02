@@ -582,12 +582,19 @@ export function AppProvider({ children }) {
 
           <div class="dash-line"></div>
 
-          <div class="row"><span>Subtotal</span><span>${subtotal.toFixed(2)}</span></div>
-          ${cgst > 0 ? `<div class="row"><span>CGST (${settings.cgstRate || 0}%)</span><span>${cgst.toFixed(2)}</span></div>` : ''}
-          ${sgst > 0 ? `<div class="row"><span>SGST (${settings.sgstRate || 0}%)</span><span>${sgst.toFixed(2)}</span></div>` : ''}
-          ${serviceTax > 0 ? `<div class="row"><span>Service Tax (${settings.serviceTaxRate || 0}%)</span><span>${serviceTax.toFixed(2)}</span></div>` : ''}
-          ${discountAmount > 0 ? `<div class="row"><span>Discount</span><span>-${discountAmount.toFixed(2)}</span></div>` : ''}
-          ${roundOff !== 0 ? `<div class="row"><span>Round Off</span><span>${roundOff > 0 ? '+' : ''}${roundOff.toFixed(2)}</span></div>` : ''}
+          ${(() => {
+            const stRate = typeof table?.serviceTaxRate === 'number' && table.serviceTaxRate > 0
+              ? table.serviceTaxRate
+              : (settings.serviceTaxRate > 0 ? settings.serviceTaxRate : (subtotal > 0 && serviceTax > 0 ? parseFloat(((serviceTax / subtotal) * 100).toFixed(1)) : 5));
+            return `
+              <div class="row"><span>Subtotal</span><span>${subtotal.toFixed(2)}</span></div>
+              ${cgst > 0 ? `<div class="row"><span>CGST (${settings.cgstRate || 2.5}%)</span><span>${cgst.toFixed(2)}</span></div>` : ''}
+              ${sgst > 0 ? `<div class="row"><span>SGST (${settings.sgstRate || 2.5}%)</span><span>${sgst.toFixed(2)}</span></div>` : ''}
+              ${serviceTax > 0 ? `<div class="row"><span>Service Tax (${stRate}%)</span><span>${serviceTax.toFixed(2)}</span></div>` : ''}
+              ${discountAmount > 0 ? `<div class="row"><span>Discount</span><span>-${discountAmount.toFixed(2)}</span></div>` : ''}
+              ${roundOff !== 0 ? `<div class="row"><span>Round Off</span><span>${roundOff > 0 ? '+' : ''}${roundOff.toFixed(2)}</span></div>` : ''}
+            `;
+          })()}
 
           <div class="thick-line"></div>
           

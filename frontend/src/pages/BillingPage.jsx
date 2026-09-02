@@ -1640,7 +1640,14 @@ export default function BillingPage() {
                 <div className="s-row"><span>Subtotal</span><span>{c}{subtotal.toFixed(0)}</span></div>
                 {cgst > 0 && <div className="s-row"><span>CGST ({settings.cgstRate || 0}%)</span><span>{c}{cgst.toFixed(2)}</span></div>}
                 {sgst > 0 && <div className="s-row"><span>SGST ({settings.sgstRate || 0}%)</span><span>{c}{sgst.toFixed(2)}</span></div>}
-                {serviceTax > 0 && <div className="s-row"><span>Service Tax ({settings.serviceTaxRate || 0}%)</span><span>{c}{serviceTax.toFixed(2)}</span></div>}
+                {serviceTax > 0 && (
+                  <div className="s-row">
+                    <span>
+                      Service Tax ({settings.serviceTaxRate > 0 ? settings.serviceTaxRate : (subtotal > 0 && serviceTax > 0 ? parseFloat(((serviceTax / subtotal) * 100).toFixed(1)) : 5)}%)
+                    </span>
+                    <span>{c}{serviceTax.toFixed(2)}</span>
+                  </div>
+                )}
                 {roundOff !== 0 && (
                   <div className="s-row" style={{ color: 'var(--t3)', fontSize: '12px', fontStyle: 'italic' }}>
                     <span>Round Off</span>
