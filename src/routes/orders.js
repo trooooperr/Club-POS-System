@@ -121,21 +121,12 @@ router.get('/', async (req, res) => {
       billNo: { $exists: true, $ne: '', $regex: /^HTB-/ },
       grandTotal: { $gt: 0 },
       isManualDue: { $ne: true },
-      $and: [
-        {
-          $or: [
-            { isActive: false },
-            { orderStatus: { $in: ['PAID', 'COMPLETED', 'BILLING'] } }
-          ]
-        },
-        {
-          $or: [
-            { businessDate: monthRegex },
-            { date: { $gte: startDate, $lt: endDate } }
-          ]
-        }
-      ]
-    }).sort({ date: -1, createdAt: -1, _id: -1 });
+      $or: [
+        { isActive: false },
+        { orderStatus: { $in: ['PAID', 'COMPLETED', 'BILLING'] } }
+      ],
+      businessDate: monthRegex
+    }).sort({ businessDate: -1, billNo: -1 });
 
     if (maxLimit > 0) {
       query = query.limit(maxLimit);
