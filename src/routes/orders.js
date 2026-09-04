@@ -19,9 +19,10 @@ const {
 
 // Generate new Bill No based on businessDateStr (e.g. "2026-09-04")
 async function generateNextBillNo(businessDateStr) {
-  // 1. Find the highest existing bill number for this business date in Order History
+  // 1. Find the highest existing bill number for this business date in Order History (excluding manual due records)
   const existingOrders = await Order.find({
     businessDate: businessDateStr,
+    isManualDue: { $ne: true },
     billNo: { $regex: /^HTB-\d+$/ }
   }).select('billNo').lean();
 
@@ -57,8 +58,12 @@ async function generateNextBillNo(businessDateStr) {
 
   let candidateBillNo = `HTB-${counter.seq.toString().padStart(3, '0')}`;
 
-  // 3. Strict Uniqueness Safeguard: verify no other order already claims this billNo on businessDateStr
-  let conflict = await Order.exists({ businessDate: businessDateStr, billNo: candidateBillNo });
+  // 3. Strict Uniqueness Safeguard: verify no other dining order claims this billNo on businessDateStr
+  let conflict = await Order.exists({
+    businessDate: businessDateStr,
+    isManualDue: { $ne: true },
+    billNo: candidateBillNo
+  });
   while (conflict) {
     counter = await BillCounter.findOneAndUpdate(
       { businessDate: businessDateStr },
@@ -695,7 +700,8 @@ router.post('/due', requireRole(['admin', 'manager', 'staff']), async (req, res)
     }
 
     const bDate = businessDate || getBusinessDateString(new Date());
-    const billNo = await generateNextBillNo(bDate);
+    const dueCount = await Order.countDocuments({ businessDate: bDate, isManualDue: true });
+    const billNo = `HTB-D${(dueCount + 1).toString().padStart(2, '0')}`;
 
     const newDueOrder = new Order({
       billNo,
