@@ -45,4 +45,6 @@ const orderSchema = new mongoose.Schema({
   }],
 }, { timestamps: true });
 
+orderSchema.index({ businessDate: 1, billNo: 1 });
+
 module.exports = mongoose.model('Order', orderSchema);

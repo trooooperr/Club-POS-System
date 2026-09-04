@@ -1621,12 +1621,8 @@ export function AppProvider({ children }) {
 
       setOrderHistory(prev => {
         const historyArray = Array.isArray(prev) ? prev : [];
-        const exists = historyArray.some(o => o._id === orderId);
-        if (exists) {
-          return historyArray.map(o => o._id === orderId ? order : o);
-        } else {
-          return [order, ...historyArray];
-        }
+        const filtered = historyArray.filter(o => o._id !== orderId);
+        return [order, ...filtered];
       });
       setActiveSessions(prev => prev.filter(session => {
         const sessionOrderId = session.activeOrderId?._id || session.activeOrderId;

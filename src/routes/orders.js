@@ -17,52 +17,52 @@ const {
   deductInventoryForItems,
 } = require('../lib/inventoryStock');
 
-// Generate new Bill No based on businessDateStr (e.g. "2026-07-04")
+// Generate new Bill No based on businessDateStr (e.g. "2026-09-04")
 async function generateNextBillNo(businessDateStr) {
-  let counter = await BillCounter.findOne({ businessDate: businessDateStr });
-  
-  if (!counter) {
-    // If counter document does not exist yet, initialize it based on the maximum existing bill number in DB
-    const todayOrders = await Order.find({
-      businessDate: businessDateStr,
-      billNo: { $regex: /^HTB-\d+$/ }
-    }).select('billNo');
-    
-    let maxNum = 0;
-    if (todayOrders.length > 0) {
-      const numbers = todayOrders.map(o => {
-        const match = o.billNo.match(/HTB-(\d+)/);
-        return match ? parseInt(match[1], 10) : 0;
-      });
-      maxNum = Math.max(...numbers, 0);
-    }
-    
-    try {
-      counter = await BillCounter.findOneAndUpdate(
-        { businessDate: businessDateStr },
-        { $setOnInsert: { seq: maxNum } },
-        { upsert: true, new: true }
-      );
-    } catch (err) {
-      counter = await BillCounter.findOne({ businessDate: businessDateStr });
+  // 1. Find the highest existing bill number for this business date in Order History
+  const existingOrders = await Order.find({
+    businessDate: businessDateStr,
+    billNo: { $regex: /^HTB-\d+$/ }
+  }).select('billNo').lean();
+
+  let maxOrderNum = 0;
+  for (const o of existingOrders) {
+    const match = (o.billNo || '').match(/HTB-(\d+)/);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (!isNaN(num) && num > maxOrderNum) {
+        maxOrderNum = num;
+      }
     }
   }
 
-  // Atomically increment counter and retrieve updated value
-  counter = await BillCounter.findOneAndUpdate(
+  // 2. Atomically update counter, guaranteeing seq is >= maxOrderNum + 1
+  let counter = await BillCounter.findOneAndUpdate(
     { businessDate: businessDateStr },
-    { $inc: { seq: 1 } },
-    { new: true }
+    [
+      {
+        $set: {
+          seq: {
+            $add: [
+              { $max: [{ $ifNull: ['$seq', 0] }, maxOrderNum] },
+              1
+            ]
+          },
+          updatedAt: new Date()
+        }
+      }
+    ],
+    { upsert: true, new: true }
   );
 
   let candidateBillNo = `HTB-${counter.seq.toString().padStart(3, '0')}`;
 
-  // Strict Uniqueness Safeguard: verify no other order already claims this billNo on businessDateStr
+  // 3. Strict Uniqueness Safeguard: verify no other order already claims this billNo on businessDateStr
   let conflict = await Order.exists({ businessDate: businessDateStr, billNo: candidateBillNo });
   while (conflict) {
     counter = await BillCounter.findOneAndUpdate(
       { businessDate: businessDateStr },
-      { $inc: { seq: 1 } },
+      { $inc: { seq: 1 }, $set: { updatedAt: new Date() } },
       { new: true }
     );
     candidateBillNo = `HTB-${counter.seq.toString().padStart(3, '0')}`;
@@ -74,18 +74,16 @@ async function generateNextBillNo(businessDateStr) {
 
 // Ensures an order has a unique, non-conflicting bill number for its businessDate
 async function ensureUniqueBillNo(order) {
-  // If order already has a finalized bill number and businessDate, NEVER overwrite date or businessDate on edit!
+  // If order already has a finalized bill number and businessDate, NEVER overwrite date, businessDate, or billNo on edit!
   if (order.billNo && order.billNo !== 'PENDING' && /^HTB-\d+$/.test(order.billNo) && order.businessDate) {
     return;
   }
 
-  const targetBusinessDate = order.businessDate || getBusinessDateString(order.date || new Date());
-  order.date = order.date || new Date();
-  order.businessDate = targetBusinessDate;
-
-  if (!order.billNo || order.billNo === 'PENDING') {
-    order.billNo = await generateNextBillNo(targetBusinessDate);
-  }
+  // Stamp current exact bill printing timestamp and businessDate
+  const currentBusinessDate = getBusinessDateString(new Date());
+  order.date = new Date();
+  order.businessDate = currentBusinessDate;
+  order.billNo = await generateNextBillNo(currentBusinessDate);
 }
 
 // ── GET CUSTOMER QR / CHECKIN ORDER HISTORY BY PHONE (Public CRM) ──
@@ -614,7 +612,7 @@ router.get('/history/all', async (req, res) => {
         { isActive: false },
         { orderStatus: { $in: ['PAID', 'COMPLETED', 'BILLING'] } }
       ]
-    }).sort({ date: -1, createdAt: -1, _id: -1 }).populate('kotIds');
+    }).sort({ businessDate: -1, billNo: -1, date: -1, createdAt: -1 }).populate('kotIds');
     res.json(orders);
   } catch (err) {
     res.status(500).json({ message: err.message });
