@@ -173,6 +173,7 @@ router.put('/reorder', requireRole(['admin', 'manager']), async (req, res) => {
     }
     await deleteCache(INVENTORY_CACHE_KEY);
     if (req.app.locals.io) {
+      req.app.locals.io.emit('REFRESH_MENU');
       const allInvRaw = await Inventory.find().populate('linkInventoryId');
       const allInv = await sortInventoryItems(allInvRaw);
       req.app.locals.io.emit('INVENTORY_UPDATED', { inventory: allInv, timestamp: new Date() });
