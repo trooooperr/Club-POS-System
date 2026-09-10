@@ -525,12 +525,19 @@ export default function SettingsPage() {
           </div>
           <div className="settings-fields">
             <div className="settings-field">
-              <label>SGST Rate %</label>
-              <input type="number" min="0" step="0.01" value={form.sgstRate ?? 0} onChange={e => set('sgstRate', parseFloat(e.target.value) || 0)} />
-            </div>
-            <div className="settings-field">
-              <label>CGST Rate %</label>
-              <input type="number" min="0" step="0.01" value={form.cgstRate ?? 0} onChange={e => set('cgstRate', parseFloat(e.target.value) || 0)} />
+              <label>GST Rate %</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.gstRate ?? Number(((form.cgstRate || 0) + (form.sgstRate || 0)).toFixed(2))}
+                onChange={e => {
+                  const val = parseFloat(e.target.value) || 0;
+                  set('gstRate', val);
+                  set('cgstRate', Number((val / 2).toFixed(2)));
+                  set('sgstRate', Number((val / 2).toFixed(2)));
+                }}
+              />
             </div>
             <label className="settings-toggle settings-wide">
               <input type="checkbox" checked={!!form.serviceTaxEnabled} onChange={e => set('serviceTaxEnabled', e.target.checked)} />

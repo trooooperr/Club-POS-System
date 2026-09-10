@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { X, Printer, Phone, Send, Check, Download, Share2 } from 'lucide-react';
 import { apiUrl, authFetch } from '../lib/api';
+import { formatBillDateTime } from '../lib/formatDate';
 import QRCode from 'qrcode';
 const qz = typeof window !== 'undefined' ? window.qz : null;
 
@@ -47,6 +48,14 @@ export default function InvoiceModal() {
     generateQRs();
   }, [o, s, waiterObj]);
 
+  const billDate = o.date || o.createdAt || new Date();
+  const formattedDate = formatBillDateTime(billDate);
+  const gstRate = s.gstRate !== undefined ? s.gstRate : Number(((s.cgstRate || 0) + (s.sgstRate || 0)).toFixed(2));
+  const gst = typeof o.gst === 'number' ? o.gst : Number(((o.cgst || 0) + (o.sgst || 0)).toFixed(2));
+  const totalBeforeDiscount = Number(((o.subtotal || 0) + gst + (o.serviceTax || 0)).toFixed(2));
+  const discountVal = typeof o.discount === 'number' ? o.discount : (parseFloat(o.discount) || 0);
+  const discountPercent = (o.subtotal || 0) > 0 && discountVal > 0 ? parseFloat(((discountVal / o.subtotal) * 100).toFixed(1)) : 0;
+
   const handlePrint = async () => {
     try {
       await printBillDocument(
@@ -54,12 +63,16 @@ export default function InvoiceModal() {
         {
           items: o.items,
           subtotal: o.subtotal,
+          gst,
+          gstRate,
           sgst: o.sgst,
           cgst: o.cgst,
           serviceTax: o.serviceTax || 0,
-          discountAmount: o.discount || 0,
+          discountAmount: discountVal,
+          discountPercent,
           roundOff: o.roundOff || 0,
-          grandTotal: o.grandTotal
+          grandTotal: o.grandTotal,
+          date: billDate
         },
         o.grandTotal,
         o.waiterName || '',
@@ -68,7 +81,7 @@ export default function InvoiceModal() {
         o.paymentMode || 'cash',
         o.cashAmount || 0,
         o.upiAmount || 0,
-        o.createdAt || o.date
+        billDate
       );
     } catch (err) {
       console.error(err);
@@ -96,18 +109,19 @@ ${s.address ? s.address + '\n' : ''}${s.phone ? 'Ph: ' + s.phone + '\n' : ''}${s
 ━━━━━━━━━━━━━━━━━━━━
 *BILL NO:* HTB-${(o.billNo || '').split('-').pop()}
 *TABLE:* ${o.tableNo}
-*DATE:* ${new Date(o.date).toLocaleString()}
+*DATE:* ${formattedDate}
 ${o.waiterName ? '*WAITER:* ' + o.waiterName.toUpperCase() + '\n' : ''}━━━━━━━━━━━━━━━━━━━━
 
 ${itemsText}
 
 ━━━━━━━━━━━━━━━━━━━━
 Subtotal: ${s.currency}${o.subtotal.toFixed(2)}
-${o.cgst > 0 ? `CGST (${s.cgstRate || 2.5}%): ${s.currency}${o.cgst.toFixed(2)}\n` : ''}${o.sgst > 0 ? `SGST (${s.sgstRate || 2.5}%): ${s.currency}${o.sgst.toFixed(2)}\n` : ''}${(o.serviceTax || 0) > 0 ? `Service Tax (${stRate}%): ${s.currency}${o.serviceTax.toFixed(2)}\n` : ''}${
-  o.discount > 0
-    ? `Discount: -${s.currency}${o.discount.toFixed(2)}\n`
+${gst > 0 ? `GST (${gstRate}%): ${s.currency}${gst.toFixed(2)}\n` : ''}${(o.serviceTax || 0) > 0 ? `Service Tax (${stRate}%): ${s.currency}${o.serviceTax.toFixed(2)}\n` : ''}Total (Before Disc): ${s.currency}${totalBeforeDiscount.toFixed(2)}
+${
+  discountVal > 0
+    ? `Discount (${discountPercent}%): -${s.currency}${discountVal.toFixed(2)}\n`
     : ""
-} ${(o.roundOff || 0) !== 0 ? `Round Off: ${(o.roundOff > 0 ? '+' : '')}${o.roundOff.toFixed(2)}\n` : ""}
+}${(o.roundOff || 0) !== 0 ? `Round Off: ${(o.roundOff > 0 ? '+' : '')}${o.roundOff.toFixed(2)}\n` : ""}
 
 *TOTAL: ${s.currency}${Math.round(o.grandTotal)}*
 ━━━━━━━━━━━━━━━━━━━━
@@ -152,7 +166,7 @@ ${s.thankYouMsg}
               <div className="bill-meta-grid">
                 <div className="meta-item"><span>BILL NO</span><strong>HTB-{(o.billNo || '').split('-').pop()}</strong></div>
                 <div className="meta-item" style={{textAlign:'right'}}><span>TABLE</span><strong>{o.tableNo}</strong></div>
-                <div className="meta-item full-row"><span>DATE</span><strong>{new Date(o.date).toLocaleString()}</strong></div>
+                <div className="meta-item full-row"><span>DATE</span><strong>{formattedDate}</strong></div>
                 {o.waiterName && <div className="meta-item full-row"><span>WAITER</span><strong>{o.waiterName.toUpperCase()}</strong></div>}
               </div>
 
@@ -181,10 +195,12 @@ ${s.thankYouMsg}
 
               <div className="bill-summary-stack">
                 <div className="sum-row"><span>Subtotal</span><span>{s.currency}{o.subtotal.toFixed(2)}</span></div>
-                {o.cgst > 0 && <div className="sum-row"><span>CGST ({s.cgstRate || 2.5}%)</span><span>{s.currency}{o.cgst.toFixed(2)}</span></div>}
-                {o.sgst > 0 && <div className="sum-row"><span>SGST ({s.sgstRate || 2.5}%)</span><span>{s.currency}{o.sgst.toFixed(2)}</span></div>}
+                {gst > 0 && <div className="sum-row"><span>GST ({gstRate}%)</span><span>{s.currency}{gst.toFixed(2)}</span></div>}
                 {(o.serviceTax || 0) > 0 && <div className="sum-row"><span>Service Tax ({stRate}%)</span><span>{s.currency}{o.serviceTax.toFixed(2)}</span></div>}
-                {o.discount > 0 && <div className="sum-row discount"><span>Discount</span><span>-{s.currency}{o.discount.toFixed(2)}</span></div>}
+                <div className="sum-row" style={{ borderTop: '1px dashed #cbd5e1', paddingTop: '4px', marginTop: '2px', fontWeight: 'bold' }}>
+                  <span>Total (Before Disc)</span><span>{s.currency}{totalBeforeDiscount.toFixed(2)}</span>
+                </div>
+                {discountVal > 0 && <div className="sum-row discount"><span>Discount ({discountPercent}%)</span><span>-{s.currency}{discountVal.toFixed(2)}</span></div>}
                 {(o.roundOff || 0) !== 0 && <div className="sum-row"> <span>Round-Off</span><span>{o.roundOff > 0 ? '+' : ''}{o.roundOff.toFixed(2)}</span></div>}
                 <div className="grand-total-box">
                   <div className="grand-label">AMOUNT PAYABLE</div>

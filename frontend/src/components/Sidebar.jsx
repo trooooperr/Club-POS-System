@@ -1,6 +1,6 @@
 import React from 'react';
 import { useApp, ROLE_HIERARCHY } from '../context/AppContext';
-import { LayoutDashboard, UtensilsCrossed, ClipboardList, BarChart3, Users, Package, Settings, Sun, Moon, LogOut, X, Menu, Clock, Calendar, PartyPopper, Tag, Wallet, DollarSign } from 'lucide-react';
+import { LayoutDashboard, UtensilsCrossed, ClipboardList, BarChart3, Users, Package, Settings, Sun, Moon, LogOut, X, Menu, Clock, Calendar, CalendarCheck, PartyPopper, Tag, Wallet, DollarSign } from 'lucide-react';
 
 const NAV = [
   { id:'billing',   label:'Billing',         icon:LayoutDashboard, perm:'billing'   },
@@ -13,6 +13,7 @@ const NAV = [
   { id:'expenses',  label:'Expenses',        icon:DollarSign,      perm:'sales'     },
   { id:'events',    label:'Events',          icon:Calendar,        perm:'events'    },
   { id:'workers',   label:'Staff',           icon:Users,           perm:'workers'   },
+  { id:'attendance', label:'Attendance',      icon:CalendarCheck,   perm:'attendance'},
   { id:'settings',  label:'Settings',        icon:Settings,        perm:'settings'  },
   { id:'kitchen',   label:'Kitchen Display', icon:UtensilsCrossed, perm:'kitchen'   },
   { id:'bar',       label:'Bar Display',     icon:UtensilsCrossed, perm:'kitchen'   },

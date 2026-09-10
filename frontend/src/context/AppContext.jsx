@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { API_BASE, apiUrl, authFetch } from '../lib/api';
+import { formatBillDateTime } from '../lib/formatDate';
 import io from 'socket.io-client';
 import QRCode from 'qrcode';
 
@@ -46,13 +47,13 @@ export const ROLE_HIERARCHY = {
     label: 'Admin',
     level: 3,
     color: '#FF8C00',
-    permissions: ['billing','menu','orders','sales','events','workers','inventory','settings','kitchen']
+    permissions: ['billing','menu','orders','sales','events','workers','attendance','inventory','settings','kitchen']
   },
   manager: {
     label: 'Manager',
     level: 2,
     color: '#B8860B',
-    permissions: ['billing','menu','orders','sales','events','inventory','settings','kitchen']
+    permissions: ['billing','menu','orders','sales','events','workers','attendance','inventory','settings','kitchen']
   },
   staff: {
     label: 'Staff',
@@ -74,6 +75,7 @@ const DEFAULT_SETTINGS = {
   address:         'Rajendra Nagar, Gorakhpur',
   gstin:           '09AXFPG9491D1Z8',
   phone:           '',
+  gstRate:         5,
   sgstRate:        2.5,
   cgstRate:        2.5,
   serviceTaxEnabled: false,
@@ -491,31 +493,41 @@ export function AppProvider({ children }) {
       ? table.subtotal
       : (table?.items || []).reduce((s, i) => s + (i.price || 0) * (i.quantity || 0), 0);
 
-    const sgst = typeof table.sgst === 'number'
-      ? table.sgst
-      : subtotal * (settings.sgstRate / 100);
+    const gstRate = typeof table?.gstRate === 'number'
+      ? table.gstRate
+      : (settings.gstRate !== undefined ? settings.gstRate : Number(((settings.cgstRate || 0) + (settings.sgstRate || 0)).toFixed(2)));
 
-    const cgst = typeof table.cgst === 'number'
-      ? table.cgst
-      : subtotal * (settings.cgstRate / 100);
+    const gst = typeof table.gst === 'number'
+      ? table.gst
+      : (typeof table.sgst === 'number' && typeof table.cgst === 'number'
+          ? table.sgst + table.cgst
+          : subtotal * (gstRate / 100));
 
     const serviceTax = typeof table.serviceTax === 'number'
       ? table.serviceTax
       : (settings.serviceTaxEnabled ? subtotal * ((settings.serviceTaxRate || 0) / 100) : 0);
 
     let discountAmount = 0;
-    if (typeof table.discountAmount === 'number') {
-      discountAmount = table.discountAmount;
-    } else if (typeof table.discount === 'number') {
-      discountAmount = table.discount;
+    let discountPercent = 0;
+    if (typeof table.discountPercent === 'number' && table.discountPercent > 0) {
+      discountPercent = table.discountPercent;
+      discountAmount = typeof table.discountAmount === 'number' ? table.discountAmount : Math.round(subtotal * (discountPercent / 100));
     } else {
-      const dv = typeof table.discount === 'string' ? table.discount.trim() : '';
-      discountAmount = Math.round(dv.endsWith('%')
-        ? subtotal * (parseFloat(dv) / 100) || 0
-        : parseFloat(dv) || 0);
+      const dv = typeof table.discount === 'string' ? table.discount.trim() : (typeof table.discount === 'number' ? String(table.discount) : '');
+      if (dv.endsWith('%')) {
+        discountPercent = parseFloat(dv) || 0;
+        discountAmount = Math.round(subtotal * (discountPercent / 100));
+      } else if (parseFloat(dv) > 0) {
+        discountPercent = parseFloat(dv);
+        discountAmount = typeof table.discountAmount === 'number' ? table.discountAmount : Math.round(subtotal * (discountPercent / 100));
+      } else if (typeof table.discountAmount === 'number' && table.discountAmount > 0) {
+        discountAmount = table.discountAmount;
+        discountPercent = subtotal > 0 ? parseFloat(((discountAmount / subtotal) * 100).toFixed(1)) : 0;
+      }
     }
 
-    const rawTotal = subtotal + sgst + cgst + serviceTax - discountAmount;
+    const totalBeforeDiscount = subtotal + gst + serviceTax;
+    const rawTotal = totalBeforeDiscount - discountAmount;
     const grandTotal = Math.max(0, Math.round(rawTotal));
     const roundOff = typeof table.roundOff === 'number'
       ? table.roundOff
@@ -524,9 +536,11 @@ export function AppProvider({ children }) {
     const itemCount = table.items.length;
     const hasQr = grandTotal > 0 && settings.upiId;
     const hasTipQr = !!waiterTipQrUrl;
-    const pageHeight = 120 + (itemCount * 9) + (hasQr ? 55 : 0) + (hasTipQr ? 45 : 0);
+    const pageHeight = 125 + (itemCount * 9) + (hasQr ? 55 : 0) + (hasTipQr ? 45 : 0);
 
     const restName = (settings.restaurantName || 'HUMTUM').trim();
+
+    const formattedBillDate = formatBillDateTime(dateOverride || table?.date || table?.createdAt || Date.now());
 
     const html = `
       <html>
@@ -561,7 +575,7 @@ export function AppProvider({ children }) {
           <div class="dash-line"></div>
 
           <div class="row"><span>BILL: ${tempBillNo}</span><span>TABLE: ${tableNo}</span></div>
-          <div class="row">DATE: ${new Date(dateOverride || Date.now()).toLocaleString('en-IN')}</div>
+          <div class="row">DATE: ${formattedBillDate}</div>
           ${waiterName ? `<div class="row">WAITER: ${waiterName.toUpperCase()}</div>` : ''}
 
           <div class="dash-line"></div>
@@ -588,10 +602,10 @@ export function AppProvider({ children }) {
               : (settings.serviceTaxRate > 0 ? settings.serviceTaxRate : (subtotal > 0 && serviceTax > 0 ? parseFloat(((serviceTax / subtotal) * 100).toFixed(1)) : 5));
             return `
               <div class="row"><span>Subtotal</span><span>${subtotal.toFixed(2)}</span></div>
-              ${cgst > 0 ? `<div class="row"><span>CGST (${settings.cgstRate || 2.5}%)</span><span>${cgst.toFixed(2)}</span></div>` : ''}
-              ${sgst > 0 ? `<div class="row"><span>SGST (${settings.sgstRate || 2.5}%)</span><span>${sgst.toFixed(2)}</span></div>` : ''}
+              ${gst > 0 ? `<div class="row"><span>GST (${gstRate}%)</span><span>${gst.toFixed(2)}</span></div>` : ''}
               ${serviceTax > 0 ? `<div class="row"><span>Service Tax (${stRate}%)</span><span>${serviceTax.toFixed(2)}</span></div>` : ''}
-              ${discountAmount > 0 ? `<div class="row"><span>Discount</span><span>-${discountAmount.toFixed(2)}</span></div>` : ''}
+              <div class="row" style="border-top: 1px dashed #000; padding-top: 2px; margin-top: 2px;"><span>Total (Before Disc)</span><span>${totalBeforeDiscount.toFixed(2)}</span></div>
+              ${discountAmount > 0 ? `<div class="row"><span>Discount (${discountPercent}%)</span><span>-${discountAmount.toFixed(2)}</span></div>` : ''}
               ${roundOff !== 0 ? `<div class="row"><span>Round Off</span><span>${roundOff > 0 ? '+' : ''}${roundOff.toFixed(2)}</span></div>` : ''}
             `;
           })()}

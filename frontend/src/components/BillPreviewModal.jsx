@@ -1,5 +1,6 @@
-              import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { X, Share2, MessageCircle, Download, Printer } from 'lucide-react';
+import { formatBillDateTime } from '../lib/formatDate';
 
 export default function BillPreviewModal({ bill, table, tableNo, settings, onClose, onPrint }) {
   const [customerPhone, setCustomerPhone] = useState(table?.customerPhone || '');
@@ -29,6 +30,16 @@ export default function BillPreviewModal({ bill, table, tableNo, settings, onClo
     const message = `Thank you for visiting ${settings.restaurantName || 'HumTum'}! Bill: ₹${bill?.totalAmount?.toFixed(0)}. Feedback: ${window.location.origin}/feedback?table=T${tableNo}`;
     window.location.href = `sms:${customerPhone}?body=${encodeURIComponent(message)}`;
   };
+
+  const billDate = bill?.date || bill?.createdAt || table?.date || table?.createdAt || new Date();
+  const formattedDate = formatBillDateTime(billDate);
+  const gstRate = settings?.gstRate !== undefined ? settings.gstRate : Number(((settings?.cgstRate || 0) + (settings?.sgstRate || 0)).toFixed(2));
+  const gst = typeof bill?.gst === 'number' ? bill.gst : Number(((bill?.tax1 || 0) + (bill?.tax2 || 0) + (bill?.cgst || 0) + (bill?.sgst || 0)).toFixed(2));
+  const serviceTax = bill?.serviceTax || 0;
+  const subtotal = bill?.subtotal || 0;
+  const totalBeforeDiscount = Number((subtotal + gst + serviceTax).toFixed(2));
+  const discountVal = typeof bill?.discount === 'number' ? bill.discount : (parseFloat(bill?.discount) || 0);
+  const discountPercent = subtotal > 0 && discountVal > 0 ? parseFloat(((discountVal / subtotal) * 100).toFixed(1)) : 0;
 
   return (
     <div className="moverlay" style={{ background: 'rgba(0,0,0,0.7)', zIndex: 1000 }}>
@@ -78,7 +89,7 @@ export default function BillPreviewModal({ bill, table, tableNo, settings, onClo
           <div style={{ fontSize: 12, color: '#666', marginBottom: 12 }}>
             <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' }}>DATE</div>
             <div style={{ fontSize: 13, fontWeight: 600, color: '#000' }}>
-              {new Date().toLocaleDateString()}, {new Date().toLocaleTimeString()}
+              {formattedDate}
             </div>
           </div>
 
@@ -108,18 +119,28 @@ export default function BillPreviewModal({ bill, table, tableNo, settings, onClo
           <div style={{ fontSize: 12, marginBottom: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, color: '#666' }}>
               <span>Subtotal</span>
-              <span>₹{bill?.subtotal?.toFixed(2) || '0.00'}</span>
+              <span>₹{subtotal.toFixed(2)}</span>
             </div>
-            {bill?.tax1 > 0 && (
+            {gst > 0 && (
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, color: '#666' }}>
-                <span>SGST (2.5%)</span>
-                <span>₹{bill?.tax1?.toFixed(2) || '0.00'}</span>
+                <span>GST ({gstRate}%)</span>
+                <span>₹{gst.toFixed(2)}</span>
               </div>
             )}
-            {bill?.tax2 > 0 && (
+            {serviceTax > 0 && (
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, color: '#666' }}>
-                <span>CGST (2.5%)</span>
-                <span>₹{bill?.tax2?.toFixed(2) || '0.00'}</span>
+                <span>Service Tax</span>
+                <span>₹{serviceTax.toFixed(2)}</span>
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, color: '#000', fontWeight: 600, borderTop: '1px dashed #ccc', paddingTop: 4 }}>
+              <span>Total (Before Disc)</span>
+              <span>₹{totalBeforeDiscount.toFixed(2)}</span>
+            </div>
+            {discountVal > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, color: '#ef4444' }}>
+                <span>Discount ({discountPercent}%)</span>
+                <span>-₹{discountVal.toFixed(2)}</span>
               </div>
             )}
             {bill?.roundOff !== 0 && (

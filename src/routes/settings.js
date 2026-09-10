@@ -62,6 +62,7 @@ function normalizeSettings(data) {
     address: data.address || '',
     gstin: data.gstin || '',
     phone: data.phone || '',
+    gstRate: data.gstRate !== undefined ? Number(data.gstRate) : ((Number(data.sgstRate) || 0) + (Number(data.cgstRate) || 0)),
     sgstRate: Number(data.sgstRate) || 0,
     cgstRate: Number(data.cgstRate) || 0,
     serviceTaxEnabled: !!data.serviceTaxEnabled,
@@ -212,8 +213,15 @@ router.put('/', requireRole(['admin', 'manager']), async (req, res) => {
   if (req.body.address !== undefined) settings.address = cleanString(req.body.address);
   if (req.body.gstin !== undefined) settings.gstin = cleanString(req.body.gstin).toUpperCase();
   if (req.body.phone !== undefined) settings.phone = cleanString(req.body.phone);
-  if (req.body.sgstRate !== undefined) settings.sgstRate = cleanNumber(req.body.sgstRate, settings.sgstRate);
-  if (req.body.cgstRate !== undefined) settings.cgstRate = cleanNumber(req.body.cgstRate, settings.cgstRate);
+  if (req.body.gstRate !== undefined) {
+    settings.gstRate = cleanNumber(req.body.gstRate, settings.gstRate ?? 5);
+    settings.cgstRate = Number((settings.gstRate / 2).toFixed(2));
+    settings.sgstRate = Number((settings.gstRate / 2).toFixed(2));
+  } else {
+    if (req.body.sgstRate !== undefined) settings.sgstRate = cleanNumber(req.body.sgstRate, settings.sgstRate);
+    if (req.body.cgstRate !== undefined) settings.cgstRate = cleanNumber(req.body.cgstRate, settings.cgstRate);
+    settings.gstRate = Number(((settings.sgstRate || 0) + (settings.cgstRate || 0)).toFixed(2));
+  }
   if (req.body.serviceTaxEnabled !== undefined) settings.serviceTaxEnabled = !!req.body.serviceTaxEnabled;
   if (req.body.serviceTaxRate !== undefined) settings.serviceTaxRate = cleanNumber(req.body.serviceTaxRate, settings.serviceTaxRate);
   if (req.body.currency !== undefined) settings.currency = cleanString(req.body.currency, '₹').slice(0, 4) || '₹';

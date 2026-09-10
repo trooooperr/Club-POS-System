@@ -649,18 +649,21 @@ export default function BillingPage() {
   // Combined totals
   const totals = useMemo(() => {
     const subtotal = (combinedItems?.all || []).reduce((s, i) => s + (i.price || 0) * (i.quantity || 0), 0);
-    const sgst = subtotal * (settings.sgstRate / 100);
-    const cgst = subtotal * (settings.cgstRate / 100);
+    const gstRate = settings.gstRate !== undefined ? settings.gstRate : Number(((settings.cgstRate || 0) + (settings.sgstRate || 0)).toFixed(2));
+    const gst = subtotal * (gstRate / 100);
+    const sgst = subtotal * ((gstRate / 2) / 100);
+    const cgst = subtotal * ((gstRate / 2) / 100);
     const serviceTax = settings.serviceTaxEnabled ? subtotal * ((settings.serviceTaxRate || 0) / 100) : 0;
+    const totalBeforeDiscount = subtotal + gst + serviceTax;
     const discountVal = parseFloat((table.discount || '').replace(/[^0-9.]/g, '')) || 0;
     const discountAmount = Math.round(subtotal * (discountVal / 100));
-    const rawTotal = subtotal + sgst + cgst + serviceTax - discountAmount;
+    const rawTotal = totalBeforeDiscount - discountAmount;
     const grandTotal = Math.max(0, Math.round(rawTotal));
     const roundOff = grandTotal - rawTotal;
-    return { subtotal, sgst, cgst, serviceTax, discountAmount, grandTotal, roundOff };
+    return { subtotal, gst, gstRate, sgst, cgst, serviceTax, totalBeforeDiscount, discountVal, discountAmount, grandTotal, roundOff };
   }, [combinedItems.all, table.discount, settings]);
 
-  const { subtotal, sgst, cgst, serviceTax, discountAmount, grandTotal, roundOff } = totals;
+  const { subtotal, gst, gstRate, sgst, cgst, serviceTax, totalBeforeDiscount, discountVal, discountAmount, grandTotal, roundOff } = totals;
 
   const tableList = Array.from({ length: NUM_TABLES }, (_, i) => {
     const id = `t${i + 1}`;
@@ -1065,17 +1068,22 @@ export default function BillingPage() {
       );
 
       // Print bill
+      const finalizedDate = finalizedOrder?.date || finalizedOrder?.createdAt || new Date();
       await printBillDocument(
         tableNo,
         {
           items: combinedItems.all,
           subtotal,
+          gst,
+          gstRate,
           sgst,
           cgst,
           serviceTax,
           discountAmount,
+          discountPercent: discountVal,
           roundOff,
-          grandTotal
+          grandTotal,
+          date: finalizedDate
         },
         grandTotal,
         selectedWaiterObj?.name || '',
@@ -1083,7 +1091,8 @@ export default function BillingPage() {
         selectedWaiterObj,
         pm,
         pm === 'cash' ? grandTotal : 0,
-        pm === 'upi' ? grandTotal : 0
+        pm === 'upi' ? grandTotal : 0,
+        finalizedDate
       );
 
       // Auto-send WhatsApp review message — DISABLED
@@ -1638,8 +1647,7 @@ export default function BillingPage() {
             <div className="bill-footer">
               <div className="bill-summary-card">
                 <div className="s-row"><span>Subtotal</span><span>{c}{subtotal.toFixed(0)}</span></div>
-                {cgst > 0 && <div className="s-row"><span>CGST ({settings.cgstRate || 0}%)</span><span>{c}{cgst.toFixed(2)}</span></div>}
-                {sgst > 0 && <div className="s-row"><span>SGST ({settings.sgstRate || 0}%)</span><span>{c}{sgst.toFixed(2)}</span></div>}
+                {gst > 0 && <div className="s-row"><span>GST ({gstRate}%)</span><span>{c}{gst.toFixed(2)}</span></div>}
                 {serviceTax > 0 && (
                   <div className="s-row">
                     <span>
@@ -1648,12 +1656,9 @@ export default function BillingPage() {
                     <span>{c}{serviceTax.toFixed(2)}</span>
                   </div>
                 )}
-                {roundOff !== 0 && (
-                  <div className="s-row" style={{ color: 'var(--t3)', fontSize: '12px', fontStyle: 'italic' }}>
-                    <span>Round Off</span>
-                    <span>{roundOff > 0 ? '+' : ''}{roundOff.toFixed(2)}</span>
-                  </div>
-                )}
+                <div className="s-row" style={{ borderTop: '1px dashed var(--b1)', paddingTop: 4, fontWeight: 'bold' }}>
+                  <span>Total (Before Disc)</span><span>{c}{totalBeforeDiscount.toFixed(2)}</span>
+                </div>
                 <div className="s-row">
                   <span>Discount (%)</span>
                   <input
@@ -1674,6 +1679,18 @@ export default function BillingPage() {
                     placeholder="0"
                   />
                 </div>
+                {discountAmount > 0 && (
+                  <div className="s-row" style={{ color: '#ef4444' }}>
+                    <span>Discount Amount ({discountVal}%)</span>
+                    <span>-{c}{discountAmount.toFixed(2)}</span>
+                  </div>
+                )}
+                {roundOff !== 0 && (
+                  <div className="s-row" style={{ color: 'var(--t3)', fontSize: '12px', fontStyle: 'italic' }}>
+                    <span>Round Off</span>
+                    <span>{roundOff > 0 ? '+' : ''}{roundOff.toFixed(2)}</span>
+                  </div>
+                )}
                 <div className="s-row total-big"><span>Total</span><span>{c}{grandTotal.toFixed(0)}</span></div>
               </div>
 

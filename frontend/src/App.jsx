@@ -12,6 +12,7 @@ import DiscountsPage from './pages/DiscountsPage';
 import DuePaymentsPage from './pages/DuePaymentsPage';
 import EventsPage from './pages/EventsPage';
 import WorkersPage from './pages/WorkersPage';
+import AttendancePage from './pages/AttendancePage';
 import InventoryPage from './pages/InventoryPage';
 import SettingsPage from './pages/SettingsPage';
 import KitchenDisplay from './pages/KitchenDisplay';
@@ -40,7 +41,8 @@ function Shell() {
     'due-payments': 'Due Payments',
     expenses: 'Expense Tracker',
     events: 'Events Management',
-    workers: 'Workers',
+    workers: 'Staff',
+    attendance: 'Staff Attendance',
     settings: 'Settings',
     kitchen: 'Kitchen Display',
     bar: 'Bar Display',
@@ -104,6 +106,7 @@ function Shell() {
     expenses:<ExpensesPage/>,
     events:<EventsPage/>, 
     workers:<WorkersPage/>, 
+    attendance:<AttendancePage/>,
     inventory:<InventoryPage/>, 
     settings:<SettingsPage/>, 
     kitchen:<KitchenDisplay department="kitchen" />, 
