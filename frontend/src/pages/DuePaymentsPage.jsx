@@ -226,39 +226,9 @@ export default function DuePaymentsPage() {
   };
 
   return (
-    <div style={{ padding: 'clamp(12px, 3vw, 20px)', maxWidth: '1400px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <div style={{ padding: 'clamp(10px, 2vw, 16px)', maxWidth: '1400px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '14px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <button
-            className="btn btn-ghost"
-            onClick={() => setActiveSection ? setActiveSection('billing') : null}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '6px 12px',
-              borderRadius: 8,
-              border: '1px solid var(--b2)',
-              background: 'var(--s2)',
-              color: 'var(--t0)',
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: 'pointer'
-            }}
-            title="Back to Billing"
-          >
-            <ArrowLeft size={16} />
-            <span>Back</span>
-          </button>
-          <div>
-            <h2 style={{ fontSize: '18px', fontWeight: 900, color: 'var(--t0)', margin: 0 }}>Due Payments</h2>
-            <p style={{ fontSize: '12px', color: 'var(--t2)', margin: 0 }}>
-              Manage customer pay-later & credit due balances.
-            </p>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', width: '100%', justifyContent: 'space-between' }}>
           <button
             onClick={openAddModal}
             style={{

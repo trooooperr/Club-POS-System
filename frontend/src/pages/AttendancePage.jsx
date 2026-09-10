@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { 
   Calendar, 
@@ -24,6 +24,7 @@ import { apiUrl, authFetch } from '../lib/api';
 export default function AttendancePage() {
   const { showToast, role, setActiveSection } = useApp();
   const [activeTab, setActiveTab] = useState('daily'); // 'daily' | 'monthly'
+  const dateInputRef = useRef(null);
 
   // Daily view state
   const getTodayStr = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
@@ -229,50 +230,18 @@ export default function AttendancePage() {
   }, [selectedDate]);
 
   return (
-    <div className="attendance-page-container" style={{ padding: '20px', maxWidth: '1300px', margin: '0 auto' }}>
+    <div className="attendance-page-container" style={{ padding: '8px 12px', maxWidth: '1300px', margin: '0 auto' }}>
       
-      {/* HEADER & TAB SWITCHER */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16, marginBottom: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button
-            className="btn btn-ghost"
-            onClick={() => setActiveSection ? setActiveSection('billing') : null}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '6px 12px',
-              borderRadius: 8,
-              border: '1px solid var(--b2)',
-              background: 'var(--s2)',
-              color: 'var(--t0)',
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: 'pointer'
-            }}
-            title="Back to Billing"
-          >
-            <ArrowLeft size={16} />
-            <span>Back</span>
-          </button>
-          <div>
-            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 900, color: 'var(--t0)', letterSpacing: '0.5px' }}>
-              Staff Attendance
-            </h1>
-            <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--t2)' }}>
-              All active staff are counted Present by default. Mark absent when needed and track monthly records.
-            </p>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', background: 'var(--s2)', padding: 4, borderRadius: 10, border: '1px solid var(--b1)' }}>
+      {/* TAB SWITCHER */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 12 }}>
+        <div style={{ display: 'inline-flex', background: 'var(--s2)', padding: 3, borderRadius: 10, border: '1px solid var(--b1)' }}>
           <button
             onClick={() => setActiveTab('daily')}
             style={{
-              padding: '8px 18px',
+              padding: '6px 16px',
               borderRadius: 8,
               border: 'none',
-              fontSize: 13,
+              fontSize: 12,
               fontWeight: 700,
               cursor: 'pointer',
               display: 'flex',
@@ -283,15 +252,15 @@ export default function AttendancePage() {
               transition: 'all 0.2s ease'
             }}
           >
-            <Calendar size={15} /> Daily Attendance
+            <Calendar size={14} /> Daily Attendance
           </button>
           <button
             onClick={() => setActiveTab('monthly')}
             style={{
-              padding: '8px 18px',
+              padding: '6px 16px',
               borderRadius: 8,
               border: 'none',
-              fontSize: 13,
+              fontSize: 12,
               fontWeight: 700,
               cursor: 'pointer',
               display: 'flex',
@@ -302,7 +271,7 @@ export default function AttendancePage() {
               transition: 'all 0.2s ease'
             }}
           >
-            <CalendarDays size={15} /> Monthly Report
+            <CalendarDays size={14} /> Monthly Report
           </button>
         </div>
       </div>
@@ -313,12 +282,75 @@ export default function AttendancePage() {
       {activeTab === 'daily' && (
         <>
           {/* DATE CONTROL & KPI SUMMARY */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 20 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginBottom: 14 }}>
             {/* Date selector card with Calendar Picker */}
-            <div style={{ background: 'var(--s1)', padding: '14px 18px', borderRadius: 12, border: '1px solid var(--b1)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <div style={{ background: 'var(--s1)', padding: '12px 14px', borderRadius: 12, border: '1px solid var(--b1)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                 <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase' }}>Selected Date</span>
+                {selectedDate !== getTodayStr() && (
+                  <button 
+                    onClick={() => setSelectedDate(getTodayStr())}
+                    className="btn btn-xs"
+                    style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: 'rgba(245,158,11,0.15)', color: 'var(--a)', border: '1px solid var(--a)', fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    Today
+                  </button>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                {/* Left arrow: Previous Day */}
+                <button 
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDateChange(-1);
+                  }}
+                  className="btn btn-ghost" 
+                  style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid var(--b2)', background: 'var(--s2)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                  title="Previous Day"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+
+                {/* Date Display Text */}
+                <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--t0)', textAlign: 'center', flex: 1, userSelect: 'none' }}>
+                  {formattedDateName}
+                </div>
+
+                {/* Dedicated Calendar Icon Button - ONLY opens calendar on click of this icon */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (dateInputRef.current) {
+                      if (typeof dateInputRef.current.showPicker === 'function') {
+                        dateInputRef.current.showPicker();
+                      } else {
+                        dateInputRef.current.focus();
+                      }
+                    }
+                  }}
+                  className="btn btn-ghost"
+                  style={{
+                    padding: '6px 8px',
+                    borderRadius: 6,
+                    border: '1px solid var(--b2)',
+                    background: 'var(--s2)',
+                    color: 'var(--a)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer'
+                  }}
+                  title="Open Calendar Picker"
+                >
+                  <CalendarDays size={16} />
+                </button>
+
+                {/* Hidden native date input */}
                 <input
+                  ref={dateInputRef}
                   type="date"
                   value={selectedDate}
                   max={getTodayStr()}
@@ -326,38 +358,32 @@ export default function AttendancePage() {
                     const val = e.target.value;
                     if (val && val <= getTodayStr()) setSelectedDate(val);
                   }}
-                  className="unified-date-input"
                   style={{
-                    background: 'var(--s2)',
-                    border: '1px solid var(--b2)',
-                    color: 'var(--t0)',
-                    padding: '3px 8px',
-                    borderRadius: '6px',
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    cursor: 'pointer'
+                    position: 'absolute',
+                    opacity: 0,
+                    pointerEvents: 'none',
+                    width: 0,
+                    height: 0
                   }}
-                  title="Pick any day from calendar"
                 />
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+
+                {/* Right arrow: Next Day */}
                 <button 
-                  onClick={() => handleDateChange(-1)} 
-                  className="btn btn-ghost" 
-                  style={{ padding: '6px 8px' }}
-                  title="Previous Day"
-                >
-                  <ChevronLeft size={16} />
-                </button>
-                <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--t0)', textAlign: 'center', flex: 1 }}>
-                  {formattedDateName}
-                </div>
-                <button 
-                  onClick={() => handleDateChange(1)} 
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDateChange(1);
+                  }}
                   disabled={selectedDate >= getTodayStr()}
                   className="btn btn-ghost" 
                   style={{
                     padding: '6px 8px',
+                    borderRadius: 6,
+                    border: '1px solid var(--b2)',
+                    background: 'var(--s2)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                     opacity: selectedDate >= getTodayStr() ? 0.3 : 1,
                     cursor: selectedDate >= getTodayStr() ? 'not-allowed' : 'pointer'
                   }}
@@ -365,15 +391,6 @@ export default function AttendancePage() {
                 >
                   <ChevronRight size={16} />
                 </button>
-                {selectedDate !== getTodayStr() && (
-                  <button 
-                    onClick={() => setSelectedDate(getTodayStr())}
-                    className="btn btn-sm"
-                    style={{ fontSize: 11, padding: '4px 8px', background: 'rgba(245,158,11,0.15)', color: 'var(--a)', border: '1px solid var(--a)', cursor: 'pointer' }}
-                  >
-                    Today
-                  </button>
-                )}
               </div>
             </div>
 
@@ -612,9 +629,9 @@ export default function AttendancePage() {
       {activeTab === 'monthly' && (
         <>
           {/* MONTH SELECTOR & MONTHLY KPI OVERVIEW */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 20 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginBottom: 14 }}>
             {/* Month selector card */}
-            <div style={{ background: 'var(--s1)', padding: '14px 18px', borderRadius: 12, border: '1px solid var(--b1)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div style={{ background: 'var(--s1)', padding: '12px 14px', borderRadius: 12, border: '1px solid var(--b1)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase', marginBottom: 6 }}>
                 Selected Month
               </div>

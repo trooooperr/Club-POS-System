@@ -160,39 +160,9 @@ export default function DiscountsPage() {
   }, [data.orders, searchTerm]);
 
   return (
-    <div style={{ padding: 'clamp(12px, 3vw, 20px)', maxWidth: '1400px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {/* Header & Date Range Filter */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <button
-            className="btn btn-ghost"
-            onClick={() => setActiveSection ? setActiveSection('billing') : null}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '6px 12px',
-              borderRadius: 8,
-              border: '1px solid var(--b2)',
-              background: 'var(--s2)',
-              color: 'var(--t0)',
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: 'pointer'
-            }}
-            title="Back to Billing"
-          >
-            <ArrowLeft size={16} />
-            <span>Back</span>
-          </button>
-          <div>
-            <h2 style={{ fontSize: '18px', fontWeight: 900, color: 'var(--t0)', margin: 0 }}>Discount Analytics</h2>
-            <p style={{ fontSize: '12px', color: 'var(--t2)', margin: 0 }}>
-              Overview of discounts given across daily, weekly, monthly, and custom time periods.
-            </p>
-          </div>
-        </div>
-
+    <div style={{ padding: 'clamp(10px, 2vw, 16px)', maxWidth: '1400px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      {/* Date Range & Filter Controls Bar */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
         {/* Range Selector Pills */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', background: 'var(--s2)', border: '1px solid var(--b2)', borderRadius: '9px', padding: '3px' }}>

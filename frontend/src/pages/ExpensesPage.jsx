@@ -267,52 +267,8 @@ export default function ExpensesPage() {
   }, [expenses, searchTerm]);
 
   return (
-    <div className="fi sales-page" style={{ maxWidth: '1400px', margin: '0 auto', padding: 'clamp(12px, 3vw, 20px)' }}>
-      {/* Top Header with Back Button */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <button
-            className="btn btn-ghost"
-            onClick={() => setActiveSection ? setActiveSection('billing') : null}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '6px 12px',
-              borderRadius: 8,
-              border: '1px solid var(--b2)',
-              background: 'var(--s2)',
-              color: 'var(--t0)',
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: 'pointer'
-            }}
-            title="Back to Billing"
-          >
-            <ArrowLeft size={16} />
-            <span>Back</span>
-          </button>
-          <div>
-            <h2 style={{ fontSize: '18px', fontWeight: 900, color: 'var(--t0)', margin: 0 }}>Expense Tracker</h2>
-            <p style={{ fontSize: '12px', color: 'var(--t2)', margin: 0 }}>
-              Record daily restaurant operating expenses and raw material costs
-            </p>
-          </div>
-        </div>
-
-        <button
-          onClick={openAddModal}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 18px',
-            borderRadius: 12, background: 'var(--a)', color: '#000', fontWeight: 800,
-            fontSize: 13, border: 'none', cursor: 'pointer', boxShadow: '0 4px 12px rgba(245,158,11,0.25)'
-          }}
-        >
-          <Plus size={16} /> Add Expense
-        </button>
-      </div>
-
-      <div className="sales-header-res" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+    <div className="fi sales-page" style={{ maxWidth: '1400px', margin: '0 auto', padding: 'clamp(10px, 2vw, 16px)' }}>
+      <div className="sales-header-res" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           <div className="unified-pill-box filter-pills">
             {['today', 'week', 'month', 'all'].map(f => (
@@ -328,6 +284,17 @@ export default function ExpensesPage() {
             <DateField label="To" value={endDate} onChange={e => handleDateChange('end', e.target.value)} inputRef={endInputRef} />
           </div>
         </div>
+
+        <button
+          onClick={openAddModal}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px',
+            borderRadius: 10, background: 'var(--a)', color: '#000', fontWeight: 800,
+            fontSize: 12.5, border: 'none', cursor: 'pointer', boxShadow: '0 4px 12px rgba(245,158,11,0.25)'
+          }}
+        >
+          <Plus size={15} /> Add Expense
+        </button>
       </div>
 
       {/* Single Total Expense KPI Card */}

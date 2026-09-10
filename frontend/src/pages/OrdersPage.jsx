@@ -767,15 +767,6 @@ export default function OrdersPage() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <button
-            className="btn btn-ghost"
-            onClick={() => setActiveSection ? setActiveSection('billing') : null}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 10px', fontSize: '12px', fontWeight: 700 }}
-            title="Back to Billing"
-          >
-            <ArrowLeft size={16} />
-            <span>Back</span>
-          </button>
-          <button
             className="btn btn-sm btn-subtle"
             onClick={handlePrevMonth}
             style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px', cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}
