@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { apiUrl, authFetch } from '../lib/api';
-import { Tag, TrendingUp, CalendarDays, Search, Percent, CheckCircle2, User, Clock } from 'lucide-react';
+import { Tag, TrendingUp, CalendarDays, Search, Percent, CheckCircle2, User, Clock, ArrowLeft } from 'lucide-react';
 
 function DateField({ value, onChange, inputRef, label }) {
   const triggerPicker = () => {
@@ -53,7 +53,7 @@ function DateField({ value, onChange, inputRef, label }) {
 }
 
 export default function DiscountsPage() {
-  const { currency = '₹' } = useApp();
+  const { currency = '₹', setActiveSection } = useApp();
 
   const getBusinessTodayStr = () => {
     const now = new Date();
@@ -160,13 +160,37 @@ export default function DiscountsPage() {
   }, [data.orders, searchTerm]);
 
   return (
-    <div style={{ padding: '20px', maxWidth: '1400px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div style={{ padding: 'clamp(12px, 3vw, 20px)', maxWidth: '1400px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* Header & Date Range Filter */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-        <div>
-          <p style={{ fontSize: '12.5px', color: 'var(--t2)', margin: 0 }}>
-            Overview of discounts given across daily, weekly, monthly, and custom time periods.
-          </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <button
+            className="btn btn-ghost"
+            onClick={() => setActiveSection ? setActiveSection('billing') : null}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '6px 12px',
+              borderRadius: 8,
+              border: '1px solid var(--b2)',
+              background: 'var(--s2)',
+              color: 'var(--t0)',
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: 'pointer'
+            }}
+            title="Back to Billing"
+          >
+            <ArrowLeft size={16} />
+            <span>Back</span>
+          </button>
+          <div>
+            <h2 style={{ fontSize: '18px', fontWeight: 900, color: 'var(--t0)', margin: 0 }}>Discount Analytics</h2>
+            <p style={{ fontSize: '12px', color: 'var(--t2)', margin: 0 }}>
+              Overview of discounts given across daily, weekly, monthly, and custom time periods.
+            </p>
+          </div>
         </div>
 
         {/* Range Selector Pills */}
@@ -207,7 +231,7 @@ export default function DiscountsPage() {
       </div>
 
       {/* KPI Cards Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px' }}>
         {/* Total Discount */}
         <div style={{ background: 'var(--s1)', border: '1px solid var(--b2)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: 'var(--t2)', fontWeight: 600 }}>
@@ -276,13 +300,17 @@ export default function DiscountsPage() {
           </div>
 
           {/* Search Bar */}
-          <div style={{ position: 'relative', width: '280px' }}>
+          <div style={{ position: 'relative', width: '100%', maxWidth: '300px' }}>
             <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--t2)' }} />
             <input
               type="text"
               placeholder="Search bill #, customer, phone..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Escape') setSearchTerm('');
+                if (e.key === 'Enter') e.target.blur();
+              }}
               style={{
                 width: '100%',
                 background: 'var(--s2)',
@@ -298,7 +326,7 @@ export default function DiscountsPage() {
         </div>
 
         {/* Orders Table */}
-        <div style={{ overflowX: 'auto' }}>
+        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px', textAlign: 'left' }}>
             <thead>
               <tr style={{ borderBottom: '1.5px solid var(--b2)', color: 'var(--t2)', fontSize: '11.5px' }}>
@@ -343,7 +371,7 @@ export default function DiscountsPage() {
                       {currency}{Math.round((ord.grandTotal || 0) + (ord.discount || 0)).toLocaleString('en-IN')}
                     </td>
                     <td style={{ padding: '10px', textAlign: 'right', fontWeight: 800, color: '#EF4444' }}>
-                      -{currency}{ord.discount.toLocaleString('en-IN')} {ord.discountPercent > 0 ? `(${ord.discountPercent}%)` : ''}
+                      -{currency}{ord.discount.toLocaleString('en-IN')} {ord.discountPercent > 0 ? `(${Math.round(ord.discountPercent)}%)` : ''}
                     </td>
                     <td style={{ padding: '10px', textAlign: 'right', fontWeight: 800, color: '#10B981' }}>
                       {currency}{ord.grandTotal.toLocaleString('en-IN')}

@@ -128,8 +128,20 @@ router.get('/', async (req, res) => {
         { isActive: false },
         { orderStatus: { $in: ['PAID', 'COMPLETED', 'BILLING'] } }
       ],
-      businessDate: monthRegex
-    }).sort({ businessDate: -1, billNo: -1 });
+      $and: [
+        {
+          $or: [
+            { businessDate: monthRegex },
+            {
+              $and: [
+                { $or: [{ businessDate: { $exists: false } }, { businessDate: null }, { businessDate: '' }] },
+                { date: { $gte: startDate, $lt: endDate } }
+              ]
+            }
+          ]
+        }
+      ]
+    }).sort({ businessDate: -1, billNo: -1, date: -1 });
 
     if (maxLimit > 0) {
       query = query.limit(maxLimit);

@@ -510,19 +510,19 @@ export function AppProvider({ children }) {
     let discountAmount = 0;
     let discountPercent = 0;
     if (typeof table.discountPercent === 'number' && table.discountPercent > 0) {
-      discountPercent = table.discountPercent;
+      discountPercent = Math.round(table.discountPercent);
       discountAmount = typeof table.discountAmount === 'number' ? table.discountAmount : Math.round(subtotal * (discountPercent / 100));
     } else {
       const dv = typeof table.discount === 'string' ? table.discount.trim() : (typeof table.discount === 'number' ? String(table.discount) : '');
       if (dv.endsWith('%')) {
-        discountPercent = parseFloat(dv) || 0;
+        discountPercent = Math.round(parseFloat(dv) || 0);
         discountAmount = Math.round(subtotal * (discountPercent / 100));
       } else if (parseFloat(dv) > 0) {
-        discountPercent = parseFloat(dv);
+        discountPercent = Math.round(parseFloat(dv));
         discountAmount = typeof table.discountAmount === 'number' ? table.discountAmount : Math.round(subtotal * (discountPercent / 100));
       } else if (typeof table.discountAmount === 'number' && table.discountAmount > 0) {
         discountAmount = table.discountAmount;
-        discountPercent = subtotal > 0 ? parseFloat(((discountAmount / subtotal) * 100).toFixed(1)) : 0;
+        discountPercent = subtotal > 0 ? Math.round((discountAmount / subtotal) * 100) : 0;
       }
     }
 
@@ -604,8 +604,8 @@ export function AppProvider({ children }) {
               <div class="row"><span>Subtotal</span><span>${subtotal.toFixed(2)}</span></div>
               ${gst > 0 ? `<div class="row"><span>GST (${gstRate}%)</span><span>${gst.toFixed(2)}</span></div>` : ''}
               ${serviceTax > 0 ? `<div class="row"><span>Service Tax (${stRate}%)</span><span>${serviceTax.toFixed(2)}</span></div>` : ''}
-              <div class="row" style="border-top: 1px dashed #000; padding-top: 2px; margin-top: 2px;"><span>Total (Before Disc)</span><span>${totalBeforeDiscount.toFixed(2)}</span></div>
-              ${discountAmount > 0 ? `<div class="row"><span>Discount (${discountPercent}%)</span><span>-${discountAmount.toFixed(2)}</span></div>` : ''}
+              <div class="row" style="border-top: 1px dashed #000; padding-top: 2px; margin-top: 2px;"><span>Total</span><span>${totalBeforeDiscount.toFixed(2)}</span></div>
+              ${discountAmount > 0 ? `<div class="row"><span>Discount (${Math.round(discountPercent)}%)</span><span>-${discountAmount.toFixed(2)}</span></div>` : ''}
               ${roundOff !== 0 ? `<div class="row"><span>Round Off</span><span>${roundOff > 0 ? '+' : ''}${roundOff.toFixed(2)}</span></div>` : ''}
             `;
           })()}

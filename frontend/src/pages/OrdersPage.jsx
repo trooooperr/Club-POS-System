@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
-import { Search, CalendarDays, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, CalendarDays, X, ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
 import { authFetch, apiUrl } from '../lib/api';
 import TopNavBar from '../components/TopNavBar';
 
@@ -47,7 +47,7 @@ function PaymentEditModal({ order, currency, onSave, onClose }) {
   const [dueAmt, setDueAmt] = useState(order.dueAmount ? String(order.dueAmount) : String(order.grandTotal || 0));
   const [saving, setSaving] = useState(false);
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     setSaving(true);
     try {
       let cash = 0, upi = 0, dAmt = 0;
@@ -75,7 +75,21 @@ function PaymentEditModal({ order, currency, onSave, onClose }) {
     } finally {
       setSaving(false);
     }
-  };
+  }, [mode, cashAmt, upiAmt, dueAmt, dueCustName, dueCustPhone, order, onSave, onClose]);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        handleSave();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose, handleSave]);
 
   return (
     <div className="moverlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.85)' }} onClick={onClose}>
@@ -261,6 +275,24 @@ function OrderEditModal({ order, currency, onSaveDiscount, onSavePayment, onClos
       setSaving(false);
     }
   };
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (activeTab === 'discount') {
+          handleSaveDiscount();
+        } else {
+          handleMarkAsDue();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose, activeTab, discountVal, dueAmt, custName, custPhone, subtotalAndTax]);
 
   return (
     <div className="moverlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.85)' }} onClick={onClose}>
@@ -483,14 +515,26 @@ export default function OrdersPage() {
 
   const activeOrdersList = useMemo(() => {
     const listMap = new Map();
-    (Array.isArray(orderHistory) ? orderHistory : []).forEach(o => {
-      if (o && o._id && o.billNo) listMap.set(String(o._id), o);
-    });
+    // Orders fetched specifically for selectedMonth from API
     (Array.isArray(monthOrders) ? monthOrders : []).forEach(o => {
-      if (o && o._id && o.billNo) listMap.set(String(o._id), o);
+      if (o && o._id && o.billNo) {
+        const localDateStr = o.businessDate || getLocalDateString(o.date);
+        if (localDateStr && localDateStr.startsWith(selectedMonth)) {
+          listMap.set(String(o._id), o);
+        }
+      }
+    });
+    // Only include orders from AppContext orderHistory IF they belong to the selectedMonth
+    (Array.isArray(orderHistory) ? orderHistory : []).forEach(o => {
+      if (o && o._id && o.billNo) {
+        const localDateStr = o.businessDate || getLocalDateString(o.date);
+        if (localDateStr && localDateStr.startsWith(selectedMonth)) {
+          listMap.set(String(o._id), o);
+        }
+      }
     });
     return Array.from(listMap.values());
-  }, [monthOrders, orderHistory]);
+  }, [monthOrders, orderHistory, selectedMonth]);
 
   const formatMonthLabel = (ymStr) => {
     if (!ymStr) return '';
@@ -507,6 +551,8 @@ export default function OrdersPage() {
       prevM = 12;
       prevY -= 1;
     }
+    setStartDate('');
+    setEndDate('');
     setSelectedMonth(`${prevY}-${String(prevM).padStart(2, '0')}`);
   };
 
@@ -518,6 +564,8 @@ export default function OrdersPage() {
       nextM = 1;
       nextY += 1;
     }
+    setStartDate('');
+    setEndDate('');
     setSelectedMonth(`${nextY}-${String(nextM).padStart(2, '0')}`);
   };
 
@@ -612,11 +660,13 @@ export default function OrdersPage() {
     const list = (Array.isArray(activeOrdersList) ? activeOrdersList : []).filter(o => {
       if (!o.billNo || o.billNo.trim() === '') return false;
       const localDateStr = o.businessDate || getLocalDateString(o.date);
+      // Strictly enforce selected month when custom startDate/endDate are not specified
+      const matchMonth = (!startDate && !endDate) ? (localDateStr && localDateStr.startsWith(selectedMonth)) : true;
       const matchDate = (!startDate || localDateStr >= startDate) && (!endDate || localDateStr <= endDate);
       const matchSearch = !search ||
         (o.billNo && o.billNo.toLowerCase().includes(search.toLowerCase())) ||
         (o.customerName || 'Walk-in Customer').toLowerCase().includes(search.toLowerCase());
-      return matchDate && matchSearch;
+      return matchMonth && matchDate && matchSearch;
     });
 
     return list.sort((a, b) => {
@@ -642,7 +692,7 @@ export default function OrdersPage() {
       const bTime = new Date(b.date || b.createdAt || 0).getTime();
       return bTime - aTime;
     });
-  }, [activeOrdersList, search, startDate, endDate]);
+  }, [activeOrdersList, search, startDate, endDate, selectedMonth]);
 
   const payBadge = (mode, order) => {
     const isDue = mode === 'due' || mode === 'pending' || order?.paymentMethod === 'due' || order?.isCredit || (order?.dueAmount > 0 && order?.paidAmount === 0);
@@ -702,26 +752,39 @@ export default function OrdersPage() {
   return (
     <div className="fi fade-in orders-container">
 
-      {/* MONTH PAGINATION BAR */}
-      <div style={{
+      {/* MONTH PAGINATION BAR - FULLY RESPONSIVE */}
+      <div className="orders-month-pagination" style={{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '10px 16px',
+        padding: '10px 14px',
         background: 'var(--s1)',
         borderRadius: '12px',
         border: '1px solid var(--b1)',
-        marginBottom: 12
+        marginBottom: 12,
+        gap: 8,
+        flexWrap: 'wrap'
       }}>
-        <button
-          className="btn btn-sm btn-subtle"
-          onClick={handlePrevMonth}
-          style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px', cursor: 'pointer' }}
-          title="Previous Month"
-        >
-          <ChevronLeft size={16} />
-          <span>Previous</span>
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <button
+            className="btn btn-ghost"
+            onClick={() => setActiveSection ? setActiveSection('billing') : null}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 10px', fontSize: '12px', fontWeight: 700 }}
+            title="Back to Billing"
+          >
+            <ArrowLeft size={16} />
+            <span>Back</span>
+          </button>
+          <button
+            className="btn btn-sm btn-subtle"
+            onClick={handlePrevMonth}
+            style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px', cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}
+            title="Previous Month"
+          >
+            <ChevronLeft size={16} />
+            <span>Previous</span>
+          </button>
+        </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 800, color: 'var(--t0)' }}>
           <CalendarDays size={16} style={{ color: 'var(--a)' }} />
@@ -736,7 +799,8 @@ export default function OrdersPage() {
           style={{
             display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px',
             cursor: isCurrentOrFutureMonth(selectedMonth) ? 'not-allowed' : 'pointer',
-            opacity: isCurrentOrFutureMonth(selectedMonth) ? 0.4 : 1
+            opacity: isCurrentOrFutureMonth(selectedMonth) ? 0.4 : 1,
+            fontSize: '12px', fontWeight: 700
           }}
           title="Next Month"
         >

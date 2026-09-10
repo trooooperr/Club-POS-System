@@ -16,12 +16,13 @@ import {
   X,
   TrendingUp,
   Award,
-  Filter
+  Filter,
+  ArrowLeft
 } from 'lucide-react';
 import { apiUrl, authFetch } from '../lib/api';
 
 export default function AttendancePage() {
-  const { showToast, role } = useApp();
+  const { showToast, role, setActiveSection } = useApp();
   const [activeTab, setActiveTab] = useState('daily'); // 'daily' | 'monthly'
 
   // Daily view state
@@ -91,6 +92,16 @@ export default function AttendancePage() {
   }, [showToast]);
 
   useEffect(() => {
+    const today = getTodayStr();
+    if (selectedDate > today) {
+      setSelectedDate(today);
+      return;
+    }
+    const currentMonth = getCurrentMonthStr();
+    if (selectedMonth > currentMonth) {
+      setSelectedMonth(currentMonth);
+      return;
+    }
     if (activeTab === 'daily') {
       fetchDailyAttendance(selectedDate);
     } else {
@@ -103,6 +114,8 @@ export default function AttendancePage() {
     const d = new Date(selectedDate + 'T00:00:00');
     d.setDate(d.getDate() + offset);
     const nextStr = d.toLocaleDateString('en-CA');
+    const today = getTodayStr();
+    if (offset > 0 && nextStr > today) return;
     setSelectedDate(nextStr);
   };
 
@@ -112,8 +125,28 @@ export default function AttendancePage() {
     const d = new Date(year, month - 1 + offset, 1);
     const yStr = d.getFullYear();
     const mStr = String(d.getMonth() + 1).padStart(2, '0');
-    setSelectedMonth(`${yStr}-${mStr}`);
+    const nextMonth = `${yStr}-${mStr}`;
+    const currentMonth = getCurrentMonthStr();
+    if (offset > 0 && nextMonth > currentMonth) return;
+    setSelectedMonth(nextMonth);
   };
+
+  // Global ESC / Enter key handler for modals
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (markingModal.isOpen) {
+          e.preventDefault();
+          setMarkingModal({ isOpen: false, worker: null, status: 'absent', note: '', submitting: false });
+        } else if (historyModal.isOpen) {
+          e.preventDefault();
+          setHistoryModal({ isOpen: false, staff: null });
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [markingModal.isOpen, historyModal.isOpen]);
 
   // Quick mark present
   const handleMarkPresent = async (worker) => {
@@ -200,13 +233,36 @@ export default function AttendancePage() {
       
       {/* HEADER & TAB SWITCHER */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16, marginBottom: 20 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 900, color: 'var(--t0)', letterSpacing: '0.5px' }}>
-            Staff Attendance
-          </h1>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--t2)' }}>
-            All active staff are counted Present by default. Mark absent when needed and track monthly records.
-          </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button
+            className="btn btn-ghost"
+            onClick={() => setActiveSection ? setActiveSection('billing') : null}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '6px 12px',
+              borderRadius: 8,
+              border: '1px solid var(--b2)',
+              background: 'var(--s2)',
+              color: 'var(--t0)',
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: 'pointer'
+            }}
+            title="Back to Billing"
+          >
+            <ArrowLeft size={16} />
+            <span>Back</span>
+          </button>
+          <div>
+            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 900, color: 'var(--t0)', letterSpacing: '0.5px' }}>
+              Staff Attendance
+            </h1>
+            <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--t2)' }}>
+              All active staff are counted Present by default. Mark absent when needed and track monthly records.
+            </p>
+          </div>
         </div>
 
         <div style={{ display: 'flex', background: 'var(--s2)', padding: 4, borderRadius: 10, border: '1px solid var(--b1)' }}>
@@ -258,10 +314,31 @@ export default function AttendancePage() {
         <>
           {/* DATE CONTROL & KPI SUMMARY */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 20 }}>
-            {/* Date selector card */}
+            {/* Date selector card with Calendar Picker */}
             <div style={{ background: 'var(--s1)', padding: '14px 18px', borderRadius: 12, border: '1px solid var(--b1)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase', marginBottom: 6 }}>
-                Selected Date
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase' }}>Selected Date</span>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  max={getTodayStr()}
+                  onChange={e => {
+                    const val = e.target.value;
+                    if (val && val <= getTodayStr()) setSelectedDate(val);
+                  }}
+                  className="unified-date-input"
+                  style={{
+                    background: 'var(--s2)',
+                    border: '1px solid var(--b2)',
+                    color: 'var(--t0)',
+                    padding: '3px 8px',
+                    borderRadius: '6px',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                  title="Pick any day from calendar"
+                />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                 <button 
@@ -272,14 +349,19 @@ export default function AttendancePage() {
                 >
                   <ChevronLeft size={16} />
                 </button>
-                <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--t0)', textAlign: 'center' }}>
+                <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--t0)', textAlign: 'center', flex: 1 }}>
                   {formattedDateName}
                 </div>
                 <button 
                   onClick={() => handleDateChange(1)} 
+                  disabled={selectedDate >= getTodayStr()}
                   className="btn btn-ghost" 
-                  style={{ padding: '6px 8px' }}
-                  title="Next Day"
+                  style={{
+                    padding: '6px 8px',
+                    opacity: selectedDate >= getTodayStr() ? 0.3 : 1,
+                    cursor: selectedDate >= getTodayStr() ? 'not-allowed' : 'pointer'
+                  }}
+                  title={selectedDate >= getTodayStr() ? "Cannot select future dates" : "Next Day"}
                 >
                   <ChevronRight size={16} />
                 </button>
@@ -287,7 +369,7 @@ export default function AttendancePage() {
                   <button 
                     onClick={() => setSelectedDate(getTodayStr())}
                     className="btn btn-sm"
-                    style={{ fontSize: 11, padding: '4px 8px', background: 'rgba(245,158,11,0.15)', color: 'var(--a)', border: '1px solid var(--a)' }}
+                    style={{ fontSize: 11, padding: '4px 8px', background: 'rgba(245,158,11,0.15)', color: 'var(--a)', border: '1px solid var(--a)', cursor: 'pointer' }}
                   >
                     Today
                   </button>
@@ -372,9 +454,10 @@ export default function AttendancePage() {
                   </thead>
                   <tbody>
                     {filteredDailyList.map((worker) => {
-                      const isAbsent = worker.status === 'absent';
-                      const isLeave = worker.status === 'leave';
-                      const isHalfDay = worker.status === 'half-day';
+                      const isFuture = selectedDate > getTodayStr() || worker.isFutureDate || worker.status === 'upcoming';
+                      const isAbsent = !isFuture && worker.status === 'absent';
+                      const isLeave = !isFuture && worker.status === 'leave';
+                      const isHalfDay = !isFuture && worker.status === 'half-day';
 
                       return (
                         <tr key={worker.workerId} style={{ borderBottom: '1px solid var(--b0)', transition: 'background 0.15s' }}>
@@ -390,7 +473,22 @@ export default function AttendancePage() {
                             {worker.contact || '—'}
                           </td>
                           <td style={{ padding: '14px 16px', textAlign: 'center' }}>
-                            {isAbsent ? (
+                            {isFuture ? (
+                              <span style={{ 
+                                display: 'inline-flex', 
+                                alignItems: 'center', 
+                                gap: 4, 
+                                background: 'var(--s2)', 
+                                color: 'var(--t3)', 
+                                padding: '4px 10px', 
+                                borderRadius: 20, 
+                                fontSize: 12, 
+                                fontWeight: 700, 
+                                border: '1px solid var(--b2)' 
+                              }}>
+                                <Clock size={13} /> UPCOMING
+                              </span>
+                            ) : isAbsent ? (
                               <span style={{ 
                                 display: 'inline-flex', 
                                 alignItems: 'center', 
@@ -462,36 +560,40 @@ export default function AttendancePage() {
                             )}
                           </td>
                           <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                            <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
-                              {isAbsent || isLeave || isHalfDay ? (
-                                <button
-                                  onClick={() => handleMarkPresent(worker)}
-                                  className="btn btn-sm"
-                                  style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e', border: '1px solid #22c55e', fontSize: 11 }}
-                                  title="Change status back to Present"
-                                >
-                                  Mark Present
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={() => setMarkingModal({ isOpen: true, worker, status: 'absent', note: '', submitting: false })}
-                                  className="btn btn-sm btn-danger"
-                                  style={{ fontSize: 11 }}
-                                  title="Mark this staff member Absent for today"
-                                >
-                                  Mark Absent
-                                </button>
-                              )}
+                            {isFuture ? (
+                              <span style={{ fontSize: 11, color: 'var(--t3)', fontStyle: 'italic' }}>Upcoming date</span>
+                            ) : (
+                              <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+                                {isAbsent || isLeave || isHalfDay ? (
+                                  <button
+                                    onClick={() => handleMarkPresent(worker)}
+                                    className="btn btn-sm"
+                                    style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e', border: '1px solid #22c55e', fontSize: 11 }}
+                                    title="Change status back to Present"
+                                  >
+                                    Mark Present
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => setMarkingModal({ isOpen: true, worker, status: 'absent', note: '', submitting: false })}
+                                    className="btn btn-sm btn-danger"
+                                    style={{ fontSize: 11 }}
+                                    title="Mark this staff member Absent for today"
+                                  >
+                                    Mark Absent
+                                  </button>
+                                )}
 
-                              <button
-                                onClick={() => setMarkingModal({ isOpen: true, worker, status: worker.status || 'absent', note: worker.note || '', submitting: false })}
-                                className="btn btn-sm btn-ghost"
-                                style={{ padding: '4px 8px', fontSize: 11 }}
-                                title="Edit status or add note"
-                              >
-                                Edit / Note
-                              </button>
-                            </div>
+                                <button
+                                  onClick={() => setMarkingModal({ isOpen: true, worker, status: worker.status || 'absent', note: worker.note || '', submitting: false })}
+                                  className="btn btn-sm btn-ghost"
+                                  style={{ padding: '4px 8px', fontSize: 11 }}
+                                  title="Edit status or add note"
+                                >
+                                  Edit / Note
+                                </button>
+                              </div>
+                            )}
                           </td>
                         </tr>
                       );
@@ -530,9 +632,14 @@ export default function AttendancePage() {
                 </div>
                 <button 
                   onClick={() => handleMonthChange(1)} 
+                  disabled={selectedMonth >= getCurrentMonthStr()}
                   className="btn btn-ghost" 
-                  style={{ padding: '6px 8px' }}
-                  title="Next Month"
+                  style={{
+                    padding: '6px 8px',
+                    opacity: selectedMonth >= getCurrentMonthStr() ? 0.3 : 1,
+                    cursor: selectedMonth >= getCurrentMonthStr() ? 'not-allowed' : 'pointer'
+                  }}
+                  title={selectedMonth >= getCurrentMonthStr() ? "Cannot view future months" : "Next Month"}
                 >
                   <ChevronRight size={16} />
                 </button>
@@ -764,7 +871,13 @@ export default function AttendancePage() {
               <textarea
                 value={markingModal.note}
                 onChange={e => setMarkingModal(prev => ({ ...prev, note: e.target.value }))}
-                placeholder="Enter details for why the staff member is absent..."
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSaveAbsence();
+                  }
+                }}
+                placeholder="Enter details for why the staff member is absent... (Press Enter to save)"
                 rows={3}
                 style={{
                   width: '100%',

@@ -388,7 +388,7 @@ function TodayDiscountDropdown() {
                       {ord.billNo} <span style={{ color: 'var(--t2)', fontWeight: 600 }}>(Table {ord.tableNo})</span>
                     </span>
                     <span style={{ color: '#EF4444', fontWeight: 800, fontSize: '13px' }}>
-                      -₹{ord.discount.toLocaleString('en-IN')} {ord.discountPercent > 0 ? `(${ord.discountPercent}%)` : ''}
+                      -₹{ord.discount.toLocaleString('en-IN')} {ord.discountPercent > 0 ? `(${Math.round(ord.discountPercent)}%)` : ''}
                     </span>
                   </div>
 
@@ -1657,7 +1657,7 @@ export default function BillingPage() {
                   </div>
                 )}
                 <div className="s-row" style={{ borderTop: '1px dashed var(--b1)', paddingTop: 4, fontWeight: 'bold' }}>
-                  <span>Total (Before Disc)</span><span>{c}{totalBeforeDiscount.toFixed(2)}</span>
+                  <span>Total</span><span>{c}{totalBeforeDiscount.toFixed(2)}</span>
                 </div>
                 <div className="s-row">
                   <span>Discount (%)</span>
@@ -1681,7 +1681,7 @@ export default function BillingPage() {
                 </div>
                 {discountAmount > 0 && (
                   <div className="s-row" style={{ color: '#ef4444' }}>
-                    <span>Discount Amount ({discountVal}%)</span>
+                    <span>Discount Amount ({Math.round(discountVal)}%)</span>
                     <span>-{c}{discountAmount.toFixed(2)}</span>
                   </div>
                 )}

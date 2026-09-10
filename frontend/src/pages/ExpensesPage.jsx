@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { apiUrl, authFetch } from '../lib/api';
-import { DollarSign, Plus, CalendarDays, Search, Trash2, Edit3, ArrowRight, Tag, Wallet } from 'lucide-react';
+import { DollarSign, Plus, CalendarDays, Search, Trash2, Edit3, ArrowRight, Tag, Wallet, ArrowLeft } from 'lucide-react';
 
 function DateField({ value, onChange, inputRef, label }) {
   const triggerPicker = () => {
@@ -42,7 +42,7 @@ const CATEGORIES = [
 ];
 
 export default function ExpensesPage() {
-  const { showToast, currency } = useApp();
+  const { showToast, currency, setActiveSection } = useApp();
   const c = currency || '₹';
 
   const getBusinessTodayStr = () => {
@@ -149,6 +149,20 @@ export default function ExpensesPage() {
     fetchExpenses();
   }, [range, startDate, endDate, categoryFilter]);
 
+  // ESC key to close add/edit modal
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (modalOpen) {
+          e.preventDefault();
+          setModalOpen(false);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [modalOpen]);
+
   const handleDateChange = (type, val) => {
     setRange('custom');
     if (type === 'start') setStartDate(val);
@@ -253,7 +267,51 @@ export default function ExpensesPage() {
   }, [expenses, searchTerm]);
 
   return (
-    <div className="fi sales-page" style={{ maxWidth: '1400px', margin: '0 auto', padding: '16px' }}>
+    <div className="fi sales-page" style={{ maxWidth: '1400px', margin: '0 auto', padding: 'clamp(12px, 3vw, 20px)' }}>
+      {/* Top Header with Back Button */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button
+            className="btn btn-ghost"
+            onClick={() => setActiveSection ? setActiveSection('billing') : null}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '6px 12px',
+              borderRadius: 8,
+              border: '1px solid var(--b2)',
+              background: 'var(--s2)',
+              color: 'var(--t0)',
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: 'pointer'
+            }}
+            title="Back to Billing"
+          >
+            <ArrowLeft size={16} />
+            <span>Back</span>
+          </button>
+          <div>
+            <h2 style={{ fontSize: '18px', fontWeight: 900, color: 'var(--t0)', margin: 0 }}>Expense Tracker</h2>
+            <p style={{ fontSize: '12px', color: 'var(--t2)', margin: 0 }}>
+              Record daily restaurant operating expenses and raw material costs
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={openAddModal}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 18px',
+            borderRadius: 12, background: 'var(--a)', color: '#000', fontWeight: 800,
+            fontSize: 13, border: 'none', cursor: 'pointer', boxShadow: '0 4px 12px rgba(245,158,11,0.25)'
+          }}
+        >
+          <Plus size={16} /> Add Expense
+        </button>
+      </div>
+
       <div className="sales-header-res" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           <div className="unified-pill-box filter-pills">
@@ -270,17 +328,6 @@ export default function ExpensesPage() {
             <DateField label="To" value={endDate} onChange={e => handleDateChange('end', e.target.value)} inputRef={endInputRef} />
           </div>
         </div>
-
-        <button
-          onClick={openAddModal}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 18px',
-            borderRadius: 12, background: 'var(--a)', color: '#000', fontWeight: 800,
-            fontSize: 13, border: 'none', cursor: 'pointer', boxShadow: '0 4px 12px rgba(245,158,11,0.25)'
-          }}
-        >
-          <Plus size={16} /> Add Expense
-        </button>
       </div>
 
       {/* Single Total Expense KPI Card */}
@@ -306,13 +353,17 @@ export default function ExpensesPage() {
           ))}
         </div>
 
-        <div className="sales-search-box" style={{ width: 240, maxWidth: '100%' }}>
+        <div className="sales-search-box" style={{ width: '100%', maxWidth: 280 }}>
           <Search size={14} className="sales-search-icon" />
           <input
             type="text"
             placeholder="Search expense..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Escape') setSearchTerm('');
+              if (e.key === 'Enter') e.target.blur();
+            }}
             className="sales-search-input"
           />
         </div>
@@ -320,7 +371,7 @@ export default function ExpensesPage() {
 
       {/* Expense Table Card */}
       <div className="settings-card" style={{ padding: 0, overflow: 'hidden', border: '1px solid var(--b2)', borderRadius: '12px' }}>
-        <div style={{ overflowX: 'auto' }}>
+        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
           <table className="invTable" style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: 'var(--s2)', borderBottom: '1px solid var(--b1)', color: 'var(--t2)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>

@@ -48,13 +48,24 @@ export default function InvoiceModal() {
     generateQRs();
   }, [o, s, waiterObj]);
 
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setInvoiceOrder(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [setInvoiceOrder]);
+
   const billDate = o.date || o.createdAt || new Date();
   const formattedDate = formatBillDateTime(billDate);
   const gstRate = s.gstRate !== undefined ? s.gstRate : Number(((s.cgstRate || 0) + (s.sgstRate || 0)).toFixed(2));
   const gst = typeof o.gst === 'number' ? o.gst : Number(((o.cgst || 0) + (o.sgst || 0)).toFixed(2));
   const totalBeforeDiscount = Number(((o.subtotal || 0) + gst + (o.serviceTax || 0)).toFixed(2));
   const discountVal = typeof o.discount === 'number' ? o.discount : (parseFloat(o.discount) || 0);
-  const discountPercent = (o.subtotal || 0) > 0 && discountVal > 0 ? parseFloat(((discountVal / o.subtotal) * 100).toFixed(1)) : 0;
+  const discountPercent = (o.subtotal || 0) > 0 && discountVal > 0 ? Math.round((discountVal / o.subtotal) * 100) : 0;
 
   const handlePrint = async () => {
     try {
@@ -116,7 +127,7 @@ ${itemsText}
 
 ━━━━━━━━━━━━━━━━━━━━
 Subtotal: ${s.currency}${o.subtotal.toFixed(2)}
-${gst > 0 ? `GST (${gstRate}%): ${s.currency}${gst.toFixed(2)}\n` : ''}${(o.serviceTax || 0) > 0 ? `Service Tax (${stRate}%): ${s.currency}${o.serviceTax.toFixed(2)}\n` : ''}Total (Before Disc): ${s.currency}${totalBeforeDiscount.toFixed(2)}
+${gst > 0 ? `GST (${gstRate}%): ${s.currency}${gst.toFixed(2)}\n` : ''}${(o.serviceTax || 0) > 0 ? `Service Tax (${stRate}%): ${s.currency}${o.serviceTax.toFixed(2)}\n` : ''}Total: ${s.currency}${totalBeforeDiscount.toFixed(2)}
 ${
   discountVal > 0
     ? `Discount (${discountPercent}%): -${s.currency}${discountVal.toFixed(2)}\n`
@@ -198,7 +209,7 @@ ${s.thankYouMsg}
                 {gst > 0 && <div className="sum-row"><span>GST ({gstRate}%)</span><span>{s.currency}{gst.toFixed(2)}</span></div>}
                 {(o.serviceTax || 0) > 0 && <div className="sum-row"><span>Service Tax ({stRate}%)</span><span>{s.currency}{o.serviceTax.toFixed(2)}</span></div>}
                 <div className="sum-row" style={{ borderTop: '1px dashed #cbd5e1', paddingTop: '4px', marginTop: '2px', fontWeight: 'bold' }}>
-                  <span>Total (Before Disc)</span><span>{s.currency}{totalBeforeDiscount.toFixed(2)}</span>
+                  <span>Total</span><span>{s.currency}{totalBeforeDiscount.toFixed(2)}</span>
                 </div>
                 {discountVal > 0 && <div className="sum-row discount"><span>Discount ({discountPercent}%)</span><span>-{s.currency}{discountVal.toFixed(2)}</span></div>}
                 {(o.roundOff || 0) !== 0 && <div className="sum-row"> <span>Round-Off</span><span>{o.roundOff > 0 ? '+' : ''}{o.roundOff.toFixed(2)}</span></div>}

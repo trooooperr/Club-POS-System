@@ -19,10 +19,12 @@ function getDaysInMonth(year, monthIndex) {
 }
 
 // GET /api/attendance/daily?date=YYYY-MM-DD
-// Returns attendance for all staff on a specific date (defaults to present if unmarked)
+// Returns attendance for all staff on a specific date (defaults to present if unmarked, unless future date)
 router.get('/daily', requireRole(['admin', 'manager', 'staff']), async (req, res) => {
   try {
-    const queryDate = req.query.date ? String(req.query.date).trim() : getTodayIST();
+    const todayIST = getTodayIST();
+    const queryDate = req.query.date ? String(req.query.date).trim() : todayIST;
+    const isFutureDate = queryDate > todayIST;
     const workers = await Worker.find().sort({ name: 1 }).lean();
     const records = await Attendance.find({ date: queryDate }).lean();
 
@@ -38,8 +40,8 @@ router.get('/daily', requireRole(['admin', 'manager', 'staff']), async (req, res
 
     const list = workers.map(w => {
       const rec = recordMap.get(w._id.toString());
-      // Default to "present" if no specific record exists
-      const status = rec ? rec.status : 'present';
+      // Default to "present" if no specific record exists and date is not in future
+      const status = rec ? rec.status : (isFutureDate ? 'upcoming' : 'present');
       const note = rec ? (rec.note || '') : '';
       const markedBy = rec ? (rec.markedBy || '') : '';
       const isExplicit = !!rec;
@@ -47,7 +49,7 @@ router.get('/daily', requireRole(['admin', 'manager', 'staff']), async (req, res
       if (status === 'absent') absentCount++;
       else if (status === 'half-day') halfDayCount++;
       else if (status === 'leave') leaveCount++;
-      else presentCount++;
+      else if (status === 'present') presentCount++;
 
       return {
         _id: rec ? rec._id : null,
@@ -60,13 +62,15 @@ router.get('/daily', requireRole(['admin', 'manager', 'staff']), async (req, res
         note,
         markedBy,
         isExplicit,
-        date: queryDate
+        date: queryDate,
+        isFutureDate
       };
     });
 
     res.json({
       success: true,
       date: queryDate,
+      isFutureDate,
       summary: {
         total: workers.length,
         present: presentCount,
@@ -91,12 +95,17 @@ router.post('/mark', requireRole(['admin', 'manager']), async (req, res) => {
       return res.status(400).json({ success: false, message: 'workerId is required' });
     }
 
+    const todayIST = getTodayIST();
+    const targetDate = date ? String(date).trim() : todayIST;
+    if (targetDate > todayIST) {
+      return res.status(400).json({ success: false, message: 'Cannot mark attendance for future dates' });
+    }
+
     const worker = await Worker.findById(workerId);
     if (!worker) {
       return res.status(404).json({ success: false, message: 'Worker not found' });
     }
 
-    const targetDate = date ? String(date).trim() : getTodayIST();
     const targetMonth = targetDate.slice(0, 7);
     const validStatus = ['present', 'absent', 'half-day', 'leave'].includes(status) ? status : 'present';
     const cleanNote = typeof note === 'string' ? note.trim() : '';
@@ -141,8 +150,17 @@ router.get('/monthly', requireRole(['admin', 'manager', 'staff']), async (req, r
     const totalDaysInMonth = getDaysInMonth(year, monthIndex);
     const todayIST = getTodayIST();
     const isCurrentMonth = queryMonth === currentMonthIST;
-    const currentDayIST = isCurrentMonth ? parseInt(todayIST.split('-')[2], 10) : totalDaysInMonth;
-    const elapsedDays = Math.min(totalDaysInMonth, Math.max(1, currentDayIST));
+    const isFutureMonth = queryMonth > currentMonthIST;
+
+    let elapsedDays = 0;
+    if (isFutureMonth) {
+      elapsedDays = 0;
+    } else if (isCurrentMonth) {
+      const currentDayIST = parseInt(todayIST.split('-')[2], 10);
+      elapsedDays = Math.min(totalDaysInMonth, Math.max(0, currentDayIST));
+    } else {
+      elapsedDays = totalDaysInMonth;
+    }
 
     const workers = await Worker.find().sort({ name: 1 }).lean();
     const records = await Attendance.find({ month: queryMonth }).sort({ date: 1 }).lean();
@@ -168,10 +186,10 @@ router.get('/monthly', requireRole(['admin', 'manager', 'staff']), async (req, r
       const leaveCount = leaves.length;
       const halfDayCount = halfDays.length;
 
-      // Unrecorded days are treated as present!
+      // Unrecorded days are treated as present for past and elapsed days!
       const totalNonPresent = absentCount + leaveCount + (halfDayCount * 0.5);
-      const presentDays = Math.max(0, parseFloat((elapsedDays - totalNonPresent).toFixed(1)));
-      const attendanceRate = elapsedDays > 0 ? Math.round((presentDays / elapsedDays) * 100) : 100;
+      const presentDays = isFutureMonth ? 0 : Math.max(0, parseFloat((elapsedDays - totalNonPresent).toFixed(1)));
+      const attendanceRate = elapsedDays > 0 ? Math.round((presentDays / elapsedDays) * 100) : 0;
 
       totalAbsencesAll += absentCount;
       totalPresentDaysAll += presentDays;

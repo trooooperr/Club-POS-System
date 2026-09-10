@@ -123,7 +123,9 @@ function Shell() {
         {showTopBar && (
           <HumTumBar
             onMenuClick={()=>setSidebarOpen(true)}
+            onBack={()=>setActiveSection('billing')}
             title={currentPageTitle}
+            section={activeSection}
             tableStats={tableStats}
             hint={navHint}
           />

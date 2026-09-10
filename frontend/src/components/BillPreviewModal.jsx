@@ -31,6 +31,17 @@ export default function BillPreviewModal({ bill, table, tableNo, settings, onClo
     window.location.href = `sms:${customerPhone}?body=${encodeURIComponent(message)}`;
   };
 
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   const billDate = bill?.date || bill?.createdAt || table?.date || table?.createdAt || new Date();
   const formattedDate = formatBillDateTime(billDate);
   const gstRate = settings?.gstRate !== undefined ? settings.gstRate : Number(((settings?.cgstRate || 0) + (settings?.sgstRate || 0)).toFixed(2));
@@ -39,7 +50,7 @@ export default function BillPreviewModal({ bill, table, tableNo, settings, onClo
   const subtotal = bill?.subtotal || 0;
   const totalBeforeDiscount = Number((subtotal + gst + serviceTax).toFixed(2));
   const discountVal = typeof bill?.discount === 'number' ? bill.discount : (parseFloat(bill?.discount) || 0);
-  const discountPercent = subtotal > 0 && discountVal > 0 ? parseFloat(((discountVal / subtotal) * 100).toFixed(1)) : 0;
+  const discountPercent = subtotal > 0 && discountVal > 0 ? Math.round((discountVal / subtotal) * 100) : 0;
 
   return (
     <div className="moverlay" style={{ background: 'rgba(0,0,0,0.7)', zIndex: 1000 }}>
@@ -134,7 +145,7 @@ export default function BillPreviewModal({ bill, table, tableNo, settings, onClo
               </div>
             )}
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, color: '#000', fontWeight: 600, borderTop: '1px dashed #ccc', paddingTop: 4 }}>
-              <span>Total (Before Disc)</span>
+              <span>Total</span>
               <span>₹{totalBeforeDiscount.toFixed(2)}</span>
             </div>
             {discountVal > 0 && (

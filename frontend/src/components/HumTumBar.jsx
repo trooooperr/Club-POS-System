@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Menu,
+  Menu, ArrowLeft,
   UtensilsCrossed, LayoutGrid, ClipboardList,
   BarChart2, Users, Package, Settings2, ChefHat
 } from 'lucide-react';
@@ -19,22 +19,31 @@ const PAGE_ICONS = {
 
 export default function HumTumBar({
   onMenuClick,
+  onBack,
   title = '',
   section = '',
   tableStats = {},
   hint = '',
 }) {
-  const { isDryDay, toggleDryDay, role } = useApp();
+  const { isDryDay, toggleDryDay, role, setActiveSection } = useApp();
   const isAdmin = role === 'admin' || role === 'manager';
   const icon = PAGE_ICONS[section] || PAGE_ICONS[title?.toLowerCase()] || null;
   const activeCount = tableStats.active ?? 0;
   const vacantCount = tableStats.complete ?? 0;
   const isInventoryPage = section === 'inventory' || title?.toLowerCase() === 'inventory';
 
+  const handleBack = () => {
+    if (typeof onBack === 'function') {
+      onBack();
+    } else if (setActiveSection) {
+      setActiveSection('billing');
+    }
+  };
+
   return (
     <header className="humtum-bar">
-      {/* LEFT ─ menu toggle + title */}
-      <div className="humtum-left">
+      {/* LEFT ─ menu toggle + back + title */}
+      <div className="humtum-left" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         <button
           className="hnav-menu-btn"
           onClick={onMenuClick}
@@ -42,6 +51,31 @@ export default function HumTumBar({
         >
           <Menu size={18} />
         </button>
+
+        {section !== 'billing' && title?.toLowerCase() !== 'billing' && (
+          <button
+            className="btn btn-ghost hnav-back-btn"
+            onClick={handleBack}
+            aria-label="Back"
+            title="Go back to Billing"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '6px 10px',
+              borderRadius: '8px',
+              border: '1px solid var(--b2)',
+              background: 'var(--s2)',
+              color: 'var(--t0)',
+              fontSize: '12px',
+              fontWeight: 700,
+              cursor: 'pointer'
+            }}
+          >
+            <ArrowLeft size={15} />
+            <span className="hnav-back-text">Back</span>
+          </button>
+        )}
 
         <div className="hnav-title-group">
           {icon && <span className="hnav-page-icon">{icon}</span>}

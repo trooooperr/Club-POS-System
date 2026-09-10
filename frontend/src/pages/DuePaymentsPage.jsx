@@ -1,10 +1,10 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { apiUrl, authFetch } from '../lib/api';
-import { Search, Wallet, User, Phone, Edit3, Trash2, X } from 'lucide-react';
+import { Search, Wallet, User, Phone, Edit3, Trash2, X, ArrowLeft } from 'lucide-react';
 
 export default function DuePaymentsPage() {
-  const { showToast, loadData, currency = '₹' } = useApp();
+  const { showToast, loadData, currency = '₹', setActiveSection } = useApp();
 
   const [data, setData] = useState({ totalDue: 0, count: 0, orders: [] });
   const [loading, setLoading] = useState(false);
@@ -47,6 +47,23 @@ export default function DuePaymentsPage() {
   useEffect(() => {
     fetchDuePayments();
   }, []);
+
+  // ESC key to close open modals
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (addModalOpen) {
+          e.preventDefault();
+          setAddModalOpen(false);
+        } else if (editOrder) {
+          e.preventDefault();
+          setEditOrder(null);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [addModalOpen, editOrder]);
 
   const filteredOrders = useMemo(() => {
     let list = data.orders || [];
@@ -209,12 +226,36 @@ export default function DuePaymentsPage() {
   };
 
   return (
-    <div style={{ padding: '20px', maxWidth: '1400px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div style={{ padding: 'clamp(12px, 3vw, 20px)', maxWidth: '1400px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-        <div>
-          <p style={{ fontSize: '12.5px', color: 'var(--t2)', margin: 0 }}>
-            Manage customer pay-later & credit due balances.
-          </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <button
+            className="btn btn-ghost"
+            onClick={() => setActiveSection ? setActiveSection('billing') : null}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '6px 12px',
+              borderRadius: 8,
+              border: '1px solid var(--b2)',
+              background: 'var(--s2)',
+              color: 'var(--t0)',
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: 'pointer'
+            }}
+            title="Back to Billing"
+          >
+            <ArrowLeft size={16} />
+            <span>Back</span>
+          </button>
+          <div>
+            <h2 style={{ fontSize: '18px', fontWeight: 900, color: 'var(--t0)', margin: 0 }}>Due Payments</h2>
+            <p style={{ fontSize: '12px', color: 'var(--t2)', margin: 0 }}>
+              Manage customer pay-later & credit due balances.
+            </p>
+          </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
@@ -282,7 +323,7 @@ export default function DuePaymentsPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px' }}>
         <div style={{ background: 'var(--s2)', border: '1px solid var(--b2)', borderRadius: '12px', padding: '16px 20px' }}>
           <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             Total Pending Due Amount
@@ -309,6 +350,10 @@ export default function DuePaymentsPage() {
           placeholder="Search by customer name, phone, bill #..."
           value={searchTerm}
           onChange={e => setSearchTerm(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Escape') setSearchTerm('');
+            if (e.key === 'Enter') e.target.blur();
+          }}
           style={{
             width: '100%',
             padding: '9px 12px 9px 36px',
@@ -322,7 +367,7 @@ export default function DuePaymentsPage() {
       </div>
 
       <div style={{ background: 'var(--s1)', border: '1px solid var(--b2)', borderRadius: '12px', overflow: 'hidden' }}>
-        <div style={{ overflowX: 'auto' }}>
+        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
             <thead>
               <tr style={{ background: 'var(--s2)', borderBottom: '1px solid var(--b2)', textTransform: 'uppercase', fontSize: '11px', color: 'var(--t2)', letterSpacing: '0.05em' }}>
