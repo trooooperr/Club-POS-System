@@ -235,7 +235,7 @@ export default function AttendancePage() {
   }, [selectedDate]);
 
   return (
-    <div className="fi attendance-page-container" style={{ width: '100%', padding: '0 4px' }}>
+    <div className="fi attendance-page">
       
       {/* TAB SWITCHER */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 12 }}>
