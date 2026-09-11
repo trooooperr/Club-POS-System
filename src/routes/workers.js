@@ -8,15 +8,80 @@ const router = express.Router();
 
 const WORKERS_CACHE_KEY = 'workers:all';
 
-// GET workers list (Allowed for all authenticated staff for table assignments)
+/**
+ * Calculates the cycle start date based on the worker's joining date.
+ * Every month on the joining date day, the worker's monthly cycle starts and advance resets.
+ */
+function getWorkerCycleStartDate(joiningDate, now = new Date()) {
+  const jd = new Date(joiningDate || Date.now());
+  const joinDay = jd.getDate(); // 1 - 31
+  const curYear = now.getFullYear();
+  const curMonth = now.getMonth(); // 0 - 11
+  const curDate = now.getDate();
+
+  let cycleYear = curYear;
+  let cycleMonth = curMonth;
+
+  if (curDate < joinDay) {
+    cycleMonth = curMonth - 1;
+    if (cycleMonth < 0) {
+      cycleMonth = 11;
+      cycleYear = curYear - 1;
+    }
+  }
+
+  const maxDaysInCycleMonth = new Date(cycleYear, cycleMonth + 1, 0).getDate();
+  const effectiveDay = Math.min(joinDay, maxDaysInCycleMonth);
+
+  return new Date(cycleYear, cycleMonth, effectiveDay, 0, 0, 0, 0);
+}
+
+// GET workers list (computes advance taken this month, resets on joining date)
 router.get('/', async (req, res) => {
   try {
-    const cached = await getCache(WORKERS_CACHE_KEY);
-    if (cached) return res.json(cached);
-
     const workers = await Worker.find().sort({ name: 1 }).populate('userId', 'isActive role username');
-    await setCache(WORKERS_CACHE_KEY, workers, 300);
-    res.json(workers);
+    const now = new Date();
+
+    const workerIds = workers.map(w => w._id);
+    const thirtyFiveDaysAgo = new Date(now.getTime() - 35 * 24 * 60 * 60 * 1000);
+    const recentTransactions = await Transaction.find({
+      workerId: { $in: workerIds },
+      date: { $gte: thirtyFiveDaysAgo }
+    }).lean();
+
+    const txMap = new Map();
+    for (const tx of recentTransactions) {
+      const wid = tx.workerId.toString();
+      if (!txMap.has(wid)) txMap.set(wid, []);
+      txMap.get(wid).push(tx);
+    }
+
+    const list = workers.map(w => {
+      const cycleStart = getWorkerCycleStartDate(w.joiningDate, now);
+      const wTxs = txMap.get(w._id.toString()) || [];
+      const cycleTxs = wTxs.filter(t => new Date(t.date) >= cycleStart && t.type === 'Payment');
+
+      let advanceThisMonth = 0;
+      if (cycleTxs.length > 0) {
+        advanceThisMonth = cycleTxs.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+      } else {
+        const lastUpdated = w.updatedAt ? new Date(w.updatedAt) : new Date(w.createdAt || 0);
+        if (lastUpdated >= cycleStart) {
+          advanceThisMonth = parseFloat(w.advance !== undefined ? w.advance : w.paidSalary) || 0;
+        } else {
+          // Reset advance on joining date
+          advanceThisMonth = 0;
+        }
+      }
+
+      const wObj = w.toObject ? w.toObject() : { ...w };
+      wObj.advance = advanceThisMonth;
+      wObj.paidSalary = advanceThisMonth;
+      wObj.cycleStartDate = cycleStart;
+      return wObj;
+    });
+
+    res.json(list);
   }
   catch (err) { res.status(500).json({ message: err.message }); }
 });
@@ -91,7 +156,13 @@ router.post(
       }).save();
     }
     await deleteCache(WORKERS_CACHE_KEY);
-    res.status(201).json(savedWorker);
+
+    const savedObj = savedWorker.toObject ? savedWorker.toObject() : { ...savedWorker };
+    const initialAdvance = parseFloat(workerData.paidSalary) || 0;
+    savedObj.advance = initialAdvance;
+    savedObj.paidSalary = initialAdvance;
+    savedObj.cycleStartDate = getWorkerCycleStartDate(savedWorker.joiningDate, new Date());
+    res.status(201).json(savedObj);
   } catch (err) { res.status(400).json({ message: err.message }); }
 });
 
@@ -162,7 +233,21 @@ router.put(
     }
 
     await deleteCache(WORKERS_CACHE_KEY);
-    res.json(updated);
+
+    const now = new Date();
+    const cycleStart = getWorkerCycleStartDate(updated.joiningDate, now);
+    const recentTransactions = await Transaction.find({
+      workerId: updated._id,
+      date: { $gte: cycleStart },
+      type: 'Payment'
+    });
+    const cycleAdvance = recentTransactions.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+    const updatedObj = updated.toObject ? updated.toObject() : { ...updated };
+    updatedObj.advance = cycleAdvance;
+    updatedObj.paidSalary = cycleAdvance;
+    updatedObj.cycleStartDate = cycleStart;
+
+    res.json(updatedObj);
   } catch (err) { res.status(400).json({ message: err.message }); }
 });
 

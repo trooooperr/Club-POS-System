@@ -536,9 +536,11 @@ export function AppProvider({ children }) {
     const itemCount = table.items.length;
     const hasQr = grandTotal > 0 && settings.upiId;
     const hasTipQr = !!waiterTipQrUrl;
-    const pageHeight = 125 + (itemCount * 9) + (hasQr ? 55 : 0) + (hasTipQr ? 45 : 0);
+    const hasCustInfo = !!(table.customerPhone || table.customerName);
+    const pageHeight = 125 + (itemCount * 9) + (hasQr ? 55 : 0) + (hasTipQr ? 45 : 0) + (hasCustInfo ? 8 : 0);
 
     const restName = (settings.restaurantName || 'HUMTUM').trim();
+    const restPhone = settings.phone || settings.contact || '';
 
     const formattedBillDate = formatBillDateTime(dateOverride || table?.date || table?.createdAt || Date.now());
 
@@ -568,7 +570,7 @@ export function AppProvider({ children }) {
           <div class="center">
             <div class="brand">${restName}</div>
             ${settings.address ? `<div class="address">${settings.address}</div>` : ''}
-            ${settings.phone ? `<div class="address" style="margin-top:-4px">Ph: ${settings.phone}</div>` : ''}
+            ${restPhone ? `<div class="address" style="margin-top:-4px">Contact: ${restPhone}</div>` : ''}
             ${settings.gstin ? `<div class="address" style="margin-top:-4px">GSTIN: ${settings.gstin}</div>` : ''}
           </div>
 
@@ -577,6 +579,12 @@ export function AppProvider({ children }) {
           <div class="row"><span>BILL: ${tempBillNo}</span><span>TABLE: ${tableNo}</span></div>
           <div class="row">DATE: ${formattedBillDate}</div>
           ${waiterName ? `<div class="row">WAITER: ${waiterName.toUpperCase()}</div>` : ''}
+          ${(table.customerPhone || table.customerName) ? `
+            <div class="row">
+              <span>CUSTOMER: ${(table.customerName || 'GUEST').toUpperCase()}</span>
+              ${table.customerPhone ? `<span>Ph: ${table.customerPhone}</span>` : ''}
+            </div>
+          ` : ''}
 
           <div class="dash-line"></div>
 
@@ -634,7 +642,7 @@ export function AppProvider({ children }) {
 
             <div class="dash-line" style="margin-top: 10px;"></div>
             <div class="footer-msg">${settings.thankYouMsg || 'THANK YOU FOR VISITING!'}</div>
-            <div class="footer-msg"><strong>NOTE:</strong> Contact us for parties & group gatherings</div>
+            <div class="footer-msg"><strong>NOTE:</strong> Contact us for parties & group gatherings${restPhone ? `: ${restPhone}` : ''}</div>
           </div>
         </body>
       </html>

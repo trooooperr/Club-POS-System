@@ -37,11 +37,13 @@ router.get('/daily', requireRole(['admin', 'manager', 'staff']), async (req, res
     let absentCount = 0;
     let halfDayCount = 0;
     let leaveCount = 0;
+    let totalOvertimeHours = 0;
 
     const list = workers.map(w => {
       const rec = recordMap.get(w._id.toString());
       // Default to "present" if no specific record exists and date is not in future
       const status = rec ? rec.status : (isFutureDate ? 'upcoming' : 'present');
+      const overtimeHours = rec ? (Number(rec.overtimeHours) || 0) : 0;
       const note = rec ? (rec.note || '') : '';
       const markedBy = rec ? (rec.markedBy || '') : '';
       const isExplicit = !!rec;
@@ -49,7 +51,9 @@ router.get('/daily', requireRole(['admin', 'manager', 'staff']), async (req, res
       if (status === 'absent') absentCount++;
       else if (status === 'half-day') halfDayCount++;
       else if (status === 'leave') leaveCount++;
-      else if (status === 'present') presentCount++;
+      else if (status === 'present' || status === 'overtime') presentCount++;
+
+      totalOvertimeHours += overtimeHours;
 
       return {
         _id: rec ? rec._id : null,
@@ -59,6 +63,7 @@ router.get('/daily', requireRole(['admin', 'manager', 'staff']), async (req, res
         contact: w.contact || '',
         salary: w.salary || 0,
         status,
+        overtimeHours,
         note,
         markedBy,
         isExplicit,
@@ -76,7 +81,8 @@ router.get('/daily', requireRole(['admin', 'manager', 'staff']), async (req, res
         present: presentCount,
         absent: absentCount,
         halfDay: halfDayCount,
-        leave: leaveCount
+        leave: leaveCount,
+        totalOvertime: totalOvertimeHours
       },
       attendance: list
     });
@@ -107,11 +113,14 @@ router.post('/mark', requireRole(['admin', 'manager']), async (req, res) => {
     }
 
     const targetMonth = targetDate.slice(0, 7);
-    const validStatus = ['present', 'absent', 'half-day', 'leave'].includes(status) ? status : 'present';
+    const validStatus = ['present', 'absent', 'half-day', 'leave', 'overtime'].includes(status) ? status : 'present';
     const cleanNote = typeof note === 'string' ? note.trim() : '';
+    const cleanOvertime = req.body.overtimeHours !== undefined 
+      ? Math.max(0, parseFloat(req.body.overtimeHours) || 0) 
+      : (req.body.overtime !== undefined ? Math.max(0, parseFloat(req.body.overtime) || 0) : 0);
     const markedBy = req.user?.username || req.user?.name || 'admin';
 
-    // If marked present and without note, we can delete the absence record or upsert present
+    // Update or upsert attendance record with overtime
     const updated = await Attendance.findOneAndUpdate(
       { workerId: worker._id, date: targetDate },
       {
@@ -120,6 +129,7 @@ router.post('/mark', requireRole(['admin', 'manager']), async (req, res) => {
         date: targetDate,
         month: targetMonth,
         status: validStatus,
+        overtimeHours: cleanOvertime,
         note: cleanNote,
         markedBy
       },
@@ -175,6 +185,7 @@ router.get('/monthly', requireRole(['admin', 'manager', 'staff']), async (req, r
 
     let totalAbsencesAll = 0;
     let totalPresentDaysAll = 0;
+    let totalOvertimeAll = 0;
 
     const staffSummary = workers.map(w => {
       const wRecords = recordsByWorker.get(w._id.toString()) || [];
@@ -185,6 +196,7 @@ router.get('/monthly', requireRole(['admin', 'manager', 'staff']), async (req, r
       const absentCount = absences.length;
       const leaveCount = leaves.length;
       const halfDayCount = halfDays.length;
+      const totalOvertimeHours = wRecords.reduce((sum, r) => sum + (Number(r.overtimeHours) || 0), 0);
 
       // Unrecorded days are treated as present for past and elapsed days!
       const totalNonPresent = absentCount + leaveCount + (halfDayCount * 0.5);
@@ -193,10 +205,11 @@ router.get('/monthly', requireRole(['admin', 'manager', 'staff']), async (req, r
 
       totalAbsencesAll += absentCount;
       totalPresentDaysAll += presentDays;
+      totalOvertimeAll += totalOvertimeHours;
 
-      // Full details of all days this staff member was absent or on leave
+      // Full details of all days this staff member was absent, on leave, or worked overtime
       const absenceDetails = wRecords
-        .filter(r => r.status !== 'present')
+        .filter(r => r.status !== 'present' || (r.overtimeHours || 0) > 0)
         .map(r => {
           const d = new Date(r.date + 'T00:00:00Z');
           const dayName = d.toLocaleDateString('en-IN', { weekday: 'short', timeZone: 'UTC' });
@@ -205,7 +218,8 @@ router.get('/monthly', requireRole(['admin', 'manager', 'staff']), async (req, r
             date: r.date,
             dayName,
             status: r.status,
-            note: r.note || 'No reason provided',
+            overtimeHours: r.overtimeHours || 0,
+            note: r.note || (r.overtimeHours > 0 ? `Overtime: ${r.overtimeHours} hrs` : 'No reason provided'),
             markedBy: r.markedBy || 'System',
             updatedAt: r.updatedAt
           };
@@ -223,6 +237,7 @@ router.get('/monthly', requireRole(['admin', 'manager', 'staff']), async (req, r
         absentDays: absentCount,
         halfDays: halfDayCount,
         leaveDays: leaveCount,
+        totalOvertimeHours,
         attendanceRate,
         absenceDetails
       };
@@ -243,7 +258,8 @@ router.get('/monthly', requireRole(['admin', 'manager', 'staff']), async (req, r
         totalStaff,
         totalAbsences: totalAbsencesAll,
         avgAttendanceRate,
-        totalWorkingDays: elapsedDays
+        totalWorkingDays: elapsedDays,
+        totalOvertimeHours: totalOvertimeAll
       },
       staff: staffSummary
     });

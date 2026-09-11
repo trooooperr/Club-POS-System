@@ -5,6 +5,7 @@ const workerSchema = new mongoose.Schema({
   role: { type: String, default: 'Staff' },
   salary: { type: Number, default: 0, min: 0 },
   paidSalary: { type: Number, default: 0 },
+  advance: { type: Number, default: 0 },
   contact: { 
     type: String, 
     default: '',

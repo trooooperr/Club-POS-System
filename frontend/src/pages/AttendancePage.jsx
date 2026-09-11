@@ -39,11 +39,12 @@ export default function AttendancePage() {
   const [monthlyData, setMonthlyData] = useState({ overallStats: {}, staff: [] });
   const [monthlyLoading, setMonthlyLoading] = useState(false);
 
-  // Absence marking modal state
+  // Attendance marking modal state (absence, leave, half-day, overtime)
   const [markingModal, setMarkingModal] = useState({
     isOpen: false,
     worker: null,
     status: 'absent',
+    overtimeHours: '',
     note: '',
     submitting: false
   });
@@ -138,7 +139,7 @@ export default function AttendancePage() {
       if (e.key === 'Escape') {
         if (markingModal.isOpen) {
           e.preventDefault();
-          setMarkingModal({ isOpen: false, worker: null, status: 'absent', note: '', submitting: false });
+          setMarkingModal({ isOpen: false, worker: null, status: 'absent', overtimeHours: '', note: '', submitting: false });
         } else if (historyModal.isOpen) {
           e.preventDefault();
           setHistoryModal({ isOpen: false, staff: null });
@@ -159,6 +160,7 @@ export default function AttendancePage() {
           workerId: worker.workerId || worker._id,
           date: selectedDate,
           status: 'present',
+          overtimeHours: worker.overtimeHours || 0,
           note: ''
         })
       });
@@ -174,11 +176,12 @@ export default function AttendancePage() {
     }
   };
 
-  // Submit absent or leave from modal
+  // Submit attendance / overtime / absence from modal
   const handleSaveAbsence = async () => {
     if (!markingModal.worker) return;
     setMarkingModal(prev => ({ ...prev, submitting: true }));
     try {
+      const otVal = parseFloat(markingModal.overtimeHours) || 0;
       const res = await authFetch(apiUrl('/api/attendance/mark'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -186,13 +189,15 @@ export default function AttendancePage() {
           workerId: markingModal.worker.workerId || markingModal.worker._id,
           date: selectedDate,
           status: markingModal.status,
+          overtimeHours: otVal,
           note: markingModal.note
         })
       });
       const data = await res.json();
       if (data.success) {
-        showToast(`Marked ${markingModal.worker.workerName || markingModal.worker.name} as ${markingModal.status}`, 'amber');
-        setMarkingModal({ isOpen: false, worker: null, status: 'absent', note: '', submitting: false });
+        const otMsg = otVal > 0 ? ` (+${otVal}h OT)` : '';
+        showToast(`Saved attendance for ${markingModal.worker.workerName || markingModal.worker.name}: ${markingModal.status}${otMsg}`, 'success');
+        setMarkingModal({ isOpen: false, worker: null, status: 'absent', overtimeHours: '', note: '', submitting: false });
         fetchDailyAttendance(selectedDate);
       } else {
         showToast(data.message || 'Failed to update attendance', 'error');
@@ -424,6 +429,17 @@ export default function AttendancePage() {
               </div>
               <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>Marked absent by manager</div>
             </div>
+
+            {/* Metric: Overtime Today */}
+            <div style={{ background: 'var(--s1)', padding: '14px 18px', borderRadius: 12, border: '1px solid rgba(6,182,212,0.3)' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#06b6d4', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Clock size={14} /> Overtime Today
+              </div>
+              <div style={{ fontSize: 24, fontWeight: 900, color: '#06b6d4', marginTop: 4 }}>
+                {dailyData.summary?.totalOvertime ?? 0} <span style={{ fontSize: 14, fontWeight: 600 }}>hrs</span>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>Extra working hours</div>
+            </div>
           </div>
 
           {/* SEARCH & FILTER BAR */}
@@ -465,6 +481,7 @@ export default function AttendancePage() {
                       <th style={{ padding: '12px 16px' }}>Role</th>
                       <th style={{ padding: '12px 16px' }}>Contact</th>
                       <th style={{ padding: '12px 16px', textAlign: 'center' }}>Today's Status</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'center' }}>Overtime (Hrs)</th>
                       <th style={{ padding: '12px 16px' }}>Reason / Notes</th>
                       <th style={{ padding: '12px 16px', textAlign: 'right' }}>Actions</th>
                     </tr>
@@ -475,6 +492,7 @@ export default function AttendancePage() {
                       const isAbsent = !isFuture && worker.status === 'absent';
                       const isLeave = !isFuture && worker.status === 'leave';
                       const isHalfDay = !isFuture && worker.status === 'half-day';
+                      const isOvertime = !isFuture && (worker.status === 'overtime' || (worker.overtimeHours > 0 && worker.status === 'present'));
 
                       return (
                         <tr key={worker.workerId} style={{ borderBottom: '1px solid var(--b0)', transition: 'background 0.15s' }}>
@@ -550,6 +568,21 @@ export default function AttendancePage() {
                               }}>
                                 <Clock size={13} /> HALF DAY
                               </span>
+                            ) : worker.status === 'overtime' ? (
+                              <span style={{ 
+                                display: 'inline-flex', 
+                                alignItems: 'center', 
+                                gap: 4, 
+                                background: 'rgba(6,182,212,0.15)', 
+                                color: '#06b6d4', 
+                                padding: '4px 10px', 
+                                borderRadius: 20, 
+                                fontSize: 12, 
+                                fontWeight: 800, 
+                                border: '1px solid rgba(6,182,212,0.3)' 
+                              }}>
+                                <Clock size={13} /> OVERTIME
+                              </span>
                             ) : (
                               <span style={{ 
                                 display: 'inline-flex', 
@@ -567,6 +600,26 @@ export default function AttendancePage() {
                               </span>
                             )}
                           </td>
+                          <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                            {worker.overtimeHours > 0 ? (
+                              <span style={{ 
+                                display: 'inline-flex', 
+                                alignItems: 'center', 
+                                gap: 3, 
+                                background: 'rgba(6,182,212,0.15)', 
+                                color: '#06b6d4', 
+                                padding: '3px 8px', 
+                                borderRadius: 12, 
+                                fontSize: 11.5, 
+                                fontWeight: 800, 
+                                border: '1px solid rgba(6,182,212,0.3)' 
+                              }}>
+                                <Clock size={12} /> {worker.overtimeHours} hrs
+                              </span>
+                            ) : (
+                              <span style={{ color: 'var(--t3)', fontSize: 12 }}>—</span>
+                            )}
+                          </td>
                           <td style={{ padding: '14px 16px', color: 'var(--t2)', fontSize: 12 }}>
                             {worker.note ? (
                               <span>{worker.note}</span>
@@ -580,7 +633,7 @@ export default function AttendancePage() {
                             {isFuture ? (
                               <span style={{ fontSize: 11, color: 'var(--t3)', fontStyle: 'italic' }}>Upcoming date</span>
                             ) : (
-                              <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+                              <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
                                 {isAbsent || isLeave || isHalfDay ? (
                                   <button
                                     onClick={() => handleMarkPresent(worker)}
@@ -592,7 +645,7 @@ export default function AttendancePage() {
                                   </button>
                                 ) : (
                                   <button
-                                    onClick={() => setMarkingModal({ isOpen: true, worker, status: 'absent', note: '', submitting: false })}
+                                    onClick={() => setMarkingModal({ isOpen: true, worker, status: 'absent', overtimeHours: worker.overtimeHours || '', note: '', submitting: false })}
                                     className="btn btn-sm btn-danger"
                                     style={{ fontSize: 11 }}
                                     title="Mark this staff member Absent for today"
@@ -602,7 +655,30 @@ export default function AttendancePage() {
                                 )}
 
                                 <button
-                                  onClick={() => setMarkingModal({ isOpen: true, worker, status: worker.status || 'absent', note: worker.note || '', submitting: false })}
+                                  onClick={() => setMarkingModal({ 
+                                    isOpen: true, 
+                                    worker, 
+                                    status: worker.status === 'absent' ? 'present' : (worker.status || 'present'), 
+                                    overtimeHours: worker.overtimeHours || '', 
+                                    note: worker.note || '', 
+                                    submitting: false 
+                                  })}
+                                  className="btn btn-sm btn-ghost"
+                                  style={{ padding: '4px 8px', fontSize: 11, color: '#06b6d4', border: '1px solid rgba(6, 182, 212, 0.35)' }}
+                                  title="Log or edit overtime hours"
+                                >
+                                  + OT
+                                </button>
+
+                                <button
+                                  onClick={() => setMarkingModal({ 
+                                    isOpen: true, 
+                                    worker, 
+                                    status: worker.status || 'absent', 
+                                    overtimeHours: worker.overtimeHours || '', 
+                                    note: worker.note || '', 
+                                    submitting: false 
+                                  })}
                                   className="btn btn-sm btn-ghost"
                                   style={{ padding: '4px 8px', fontSize: 11 }}
                                   title="Edit status or add note"
@@ -693,6 +769,17 @@ export default function AttendancePage() {
               </div>
               <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>Across all members</div>
             </div>
+
+            {/* Metric: Total Overtime this month */}
+            <div style={{ background: 'var(--s1)', padding: '14px 18px', borderRadius: 12, border: '1px solid rgba(6,182,212,0.3)' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#06b6d4', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Clock size={14} /> Total Overtime (MTD)
+              </div>
+              <div style={{ fontSize: 24, fontWeight: 900, color: '#06b6d4', marginTop: 4 }}>
+                {monthlyData.overallStats?.totalOvertimeHours ?? 0} <span style={{ fontSize: 14, fontWeight: 600 }}>hrs</span>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>Monthly total extra hours</div>
+            </div>
           </div>
 
           {/* MONTHLY STAFF BREAKDOWN TABLE */}
@@ -702,7 +789,7 @@ export default function AttendancePage() {
                 Monthly Staff Breakdown — {formattedMonthName}
               </h2>
               <span style={{ fontSize: 12, color: 'var(--t2)' }}>
-                Click <strong>"View Absence Log"</strong> to inspect exact dates and reasons for each absence.
+                Click <strong>"View Absence / OT Log"</strong> to inspect exact dates, reasons, and overtime records.
               </span>
             </div>
 
@@ -721,13 +808,14 @@ export default function AttendancePage() {
                       <th style={{ padding: '12px 16px', textAlign: 'center' }}>Present</th>
                       <th style={{ padding: '12px 16px', textAlign: 'center' }}>Absent</th>
                       <th style={{ padding: '12px 16px', textAlign: 'center' }}>Leave / Half-Day</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'center' }}>Overtime (Hrs)</th>
                       <th style={{ padding: '12px 16px', textAlign: 'center' }}>Attendance %</th>
-                      <th style={{ padding: '12px 16px', textAlign: 'right' }}>Absence History</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'right' }}>Log Details</th>
                     </tr>
                   </thead>
                   <tbody>
                     {monthlyData.staff.map(s => {
-                      const hasAbsences = s.absenceDetails && s.absenceDetails.length > 0;
+                      const hasAbsencesOrOT = s.absenceDetails && s.absenceDetails.length > 0;
                       const rateColor = s.attendanceRate >= 90 ? '#22c55e' : s.attendanceRate >= 75 ? '#f59e0b' : '#ef4444';
 
                       return (
@@ -753,6 +841,23 @@ export default function AttendancePage() {
                             {s.leaveDays + (s.halfDays > 0 ? ` (${s.halfDays} HD)` : '') || '0'}
                           </td>
                           <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                            {s.totalOvertimeHours > 0 ? (
+                              <span style={{
+                                background: 'rgba(6,182,212,0.15)',
+                                color: '#06b6d4',
+                                border: '1px solid rgba(6,182,212,0.35)',
+                                padding: '3px 8px',
+                                borderRadius: 12,
+                                fontWeight: 800,
+                                fontSize: 12
+                              }}>
+                                {s.totalOvertimeHours} hrs
+                              </span>
+                            ) : (
+                              <span style={{ color: 'var(--t3)', fontSize: 12 }}>—</span>
+                            )}
+                          </td>
+                          <td style={{ padding: '14px 16px', textAlign: 'center' }}>
                             <span style={{ 
                               background: `${rateColor}18`, 
                               color: rateColor, 
@@ -766,21 +871,21 @@ export default function AttendancePage() {
                             </span>
                           </td>
                           <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                            {hasAbsences ? (
+                            {hasAbsencesOrOT ? (
                               <button
                                 onClick={() => setHistoryModal({ isOpen: true, staff: s })}
                                 className="btn btn-sm"
                                 style={{ 
                                   fontSize: 11, 
-                                  background: 'rgba(239,68,68,0.12)', 
-                                  color: '#ef4444', 
-                                  border: '1px solid rgba(239,68,68,0.3)',
+                                  background: 'rgba(6,182,212,0.12)', 
+                                  color: '#06b6d4', 
+                                  border: '1px solid rgba(6,182,212,0.3)',
                                   display: 'inline-flex',
                                   alignItems: 'center',
                                   gap: 4
                                 }}
                               >
-                                <FileText size={12} /> View {s.absenceDetails.length} Absence Log
+                                <FileText size={12} /> View {s.absenceDetails.length} Log Entries
                               </button>
                             ) : (
                               <span style={{ fontSize: 11, color: '#22c55e', fontStyle: 'italic', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
@@ -826,16 +931,25 @@ export default function AttendancePage() {
               <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>
                 Select Status
               </label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))', gap: 6 }}>
                 {[
-                  { key: 'absent', label: 'Absent', color: '#ef4444' },
+                  { key: 'present', label: 'Present', color: '#22c55e' },
+                  { key: 'overtime', label: 'Overtime', color: '#06b6d4' },
+                  { key: 'half-day', label: 'Half Day', color: '#3b82f6' },
                   { key: 'leave', label: 'On Leave', color: '#f59e0b' },
-                  { key: 'half-day', label: 'Half Day', color: '#3b82f6' }
+                  { key: 'absent', label: 'Absent', color: '#ef4444' }
                 ].map(st => (
                   <button
                     key={st.key}
                     type="button"
-                    onClick={() => setMarkingModal(prev => ({ ...prev, status: st.key }))}
+                    onClick={() => {
+                      setMarkingModal(prev => ({ 
+                        ...prev, 
+                        status: st.key,
+                        // If switching to overtime and no hours set, suggest 2 hours default
+                        overtimeHours: st.key === 'overtime' && (!prev.overtimeHours || prev.overtimeHours === '0') ? '2' : prev.overtimeHours 
+                      }));
+                    }}
                     style={{
                       padding: '8px 4px',
                       borderRadius: 8,
@@ -853,13 +967,93 @@ export default function AttendancePage() {
               </div>
             </div>
 
+            {/* OVERTIME (IN HOURS) INPUT */}
+            <div style={{ marginBottom: 16, background: 'var(--s2)', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--b1)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: '#06b6d4', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <Clock size={13} /> Overtime (in Hours)
+                </label>
+                <span style={{ fontSize: 10.5, color: 'var(--t2)' }}>Add extra work hours</span>
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  value={markingModal.overtimeHours}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setMarkingModal(prev => ({
+                      ...prev,
+                      overtimeHours: val,
+                      status: (parseFloat(val) > 0 && prev.status === 'absent') ? 'present' : prev.status
+                    }));
+                  }}
+                  placeholder="0 hrs"
+                  style={{
+                    width: '90px',
+                    borderRadius: 8,
+                    background: 'var(--s1)',
+                    border: '1px solid var(--b2)',
+                    padding: '7px 10px',
+                    color: 'var(--t0)',
+                    fontSize: 13,
+                    fontWeight: 800
+                  }}
+                />
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                  {[1, 1.5, 2, 3, 4].map(h => (
+                    <button
+                      key={h}
+                      type="button"
+                      onClick={() => setMarkingModal(prev => ({ 
+                        ...prev, 
+                        overtimeHours: String(h),
+                        status: prev.status === 'absent' ? 'present' : prev.status
+                      }))}
+                      style={{
+                        padding: '5px 8px',
+                        borderRadius: 6,
+                        border: Number(markingModal.overtimeHours) === h ? '1px solid #06b6d4' : '1px solid var(--b1)',
+                        background: Number(markingModal.overtimeHours) === h ? 'rgba(6, 182, 212, 0.2)' : 'var(--s1)',
+                        color: Number(markingModal.overtimeHours) === h ? '#06b6d4' : 'var(--t2)',
+                        fontSize: 11,
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      +{h}h
+                    </button>
+                  ))}
+                  {parseFloat(markingModal.overtimeHours) > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setMarkingModal(prev => ({ ...prev, overtimeHours: '' }))}
+                      style={{
+                        padding: '5px 8px',
+                        borderRadius: 6,
+                        border: '1px solid var(--b1)',
+                        background: 'var(--s1)',
+                        color: '#ef4444',
+                        fontSize: 11,
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
             {/* PRESET QUICK REASONS */}
             <div style={{ marginBottom: 12 }}>
               <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>
-                Quick Reasons
+                Quick Reasons / Notes
               </label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {['Sick Leave / Fever', 'Family Emergency', 'Personal Work', 'Uninformed Absence', 'Out of Station'].map(preset => (
+                {['Sick Leave / Fever', 'Family Emergency', 'Personal Work', 'Extra Shift / Overtime', 'Out of Station'].map(preset => (
                   <button
                     key={preset}
                     type="button"
@@ -894,8 +1088,8 @@ export default function AttendancePage() {
                     handleSaveAbsence();
                   }
                 }}
-                placeholder="Enter details for why the staff member is absent... (Press Enter to save)"
-                rows={3}
+                placeholder="Enter details or notes... (Press Enter to save)"
+                rows={2}
                 style={{
                   width: '100%',
                   borderRadius: 8,
@@ -914,19 +1108,24 @@ export default function AttendancePage() {
               <button
                 type="button"
                 className="btn btn-ghost"
-                onClick={() => setMarkingModal({ isOpen: false, worker: null, status: 'absent', note: '', submitting: false })}
+                onClick={() => setMarkingModal({ isOpen: false, worker: null, status: 'absent', overtimeHours: '', note: '', submitting: false })}
                 disabled={markingModal.submitting}
               >
                 Cancel
               </button>
               <button
                 type="button"
-                className="btn btn-danger"
+                className={`btn ${markingModal.status === 'absent' ? 'btn-danger' : 'btn-primary'}`}
                 onClick={handleSaveAbsence}
                 disabled={markingModal.submitting}
-                style={{ minWidth: 100 }}
+                style={{ 
+                  minWidth: 120,
+                  background: markingModal.status === 'overtime' ? '#06b6d4' : undefined,
+                  borderColor: markingModal.status === 'overtime' ? '#06b6d4' : undefined,
+                  color: markingModal.status === 'overtime' ? '#000' : undefined
+                }}
               >
-                {markingModal.submitting ? 'Saving...' : 'Confirm Absence'}
+                {markingModal.submitting ? 'Saving...' : markingModal.status === 'absent' ? 'Confirm Absence' : 'Save Attendance'}
               </button>
             </div>
           </div>
@@ -942,7 +1141,7 @@ export default function AttendancePage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, borderBottom: '1px solid var(--b1)', paddingBottom: 10 }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: 'var(--t0)' }}>
-                  Absence Log: {historyModal.staff.name}
+                  Attendance & Overtime Log: {historyModal.staff.name}
                 </h3>
                 <div style={{ fontSize: 12, color: 'var(--t2)', marginTop: 2 }}>
                   Month: <strong>{formattedMonthName}</strong> • Role: <strong>{historyModal.staff.role}</strong>
@@ -959,7 +1158,7 @@ export default function AttendancePage() {
             <div style={{ flex: 1, overflowY: 'auto', paddingRight: 4 }}>
               {historyModal.staff.absenceDetails?.length === 0 ? (
                 <div style={{ padding: 30, textAlign: 'center', color: '#22c55e' }}>
-                  No absences recorded for this staff member in this month! 100% Present.
+                  No absences or overtime records for this staff member this month.
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -978,7 +1177,7 @@ export default function AttendancePage() {
                       }}
                     >
                       <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                           <span style={{ fontWeight: 800, color: 'var(--t0)', fontSize: 14 }}>
                             {item.date} ({item.dayName})
                           </span>
@@ -988,14 +1187,35 @@ export default function AttendancePage() {
                             textTransform: 'uppercase', 
                             padding: '2px 6px', 
                             borderRadius: 4, 
-                            background: item.status === 'absent' ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)',
-                            color: item.status === 'absent' ? '#ef4444' : '#f59e0b'
+                            background: item.status === 'absent' 
+                              ? 'rgba(239,68,68,0.15)' 
+                              : item.status === 'overtime' 
+                              ? 'rgba(6,182,212,0.15)'
+                              : 'rgba(245,158,11,0.15)',
+                            color: item.status === 'absent' 
+                              ? '#ef4444' 
+                              : item.status === 'overtime' 
+                              ? '#06b6d4'
+                              : '#f59e0b'
                           }}>
                             {item.status}
                           </span>
+                          {item.overtimeHours > 0 && (
+                            <span style={{
+                              fontSize: 10,
+                              fontWeight: 800,
+                              padding: '2px 6px',
+                              borderRadius: 4,
+                              background: 'rgba(6,182,212,0.15)',
+                              color: '#06b6d4',
+                              border: '1px solid rgba(6,182,212,0.3)'
+                            }}>
+                              +{item.overtimeHours} hrs OT
+                            </span>
+                          )}
                         </div>
                         <div style={{ fontSize: 13, color: 'var(--t1)' }}>
-                          <strong>Reason:</strong> {item.note}
+                          <strong>Notes / Reason:</strong> {item.note}
                         </div>
                       </div>
                       <div style={{ fontSize: 10, color: 'var(--t3)', textAlign: 'right', flexShrink: 0 }}>
@@ -1007,9 +1227,9 @@ export default function AttendancePage() {
               )}
             </div>
 
-            <div style={{ marginTop: 16, borderTop: '1px solid var(--b1)', paddingTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ marginTop: 16, borderTop: '1px solid var(--b1)', paddingTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
               <div style={{ fontSize: 12, color: 'var(--t2)' }}>
-                Total Absent Days: <strong style={{ color: '#ef4444' }}>{historyModal.staff.absentDays}</strong> | Attendance: <strong>{historyModal.staff.attendanceRate}%</strong>
+                Absent: <strong style={{ color: '#ef4444' }}>{historyModal.staff.absentDays}</strong> | Overtime: <strong style={{ color: '#06b6d4' }}>{historyModal.staff.totalOvertimeHours || 0} hrs</strong> | Attendance: <strong>{historyModal.staff.attendanceRate}%</strong>
               </div>
               <button 
                 className="btn btn-sm btn-ghost" 

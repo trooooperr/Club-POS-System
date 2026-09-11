@@ -74,6 +74,7 @@ function WorkerModal({ worker, onClose, onSave }) {
     contact: worker?.contact || '',
     joiningDate: worker?.joiningDate ? worker.joiningDate.split('T')[0] : new Date().toISOString().split('T')[0],
     upiId: worker?.upiId || '',
+    advanceAmount: '',
   });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -86,14 +87,23 @@ function WorkerModal({ worker, onClose, onSave }) {
     setBusy(true);
     try {
       const currentPaid = parseFloat(worker?.paidSalary) || 0;
-      const newAddition = parseFloat(form.paidSalary) || 0;
-      await onSave({ ...form, salary: parseFloat(form.salary) || 0, paidSalary: currentPaid + newAddition });
+      const currentAdvance = parseFloat(worker?.advance !== undefined ? worker.advance : worker?.paidSalary) || 0;
+      const newAddition = parseFloat(form.advanceAmount) || 0;
+      await onSave({
+        ...form,
+        salary: parseFloat(form.salary) || 0,
+        paidSalary: currentPaid + newAddition,
+        advance: currentAdvance + newAddition
+      });
       onClose();
     } catch (e) {
       setError(e.response?.data?.message || e.message);
       setBusy(false);
     }
   };
+
+  const currentAdv = parseFloat(worker?.advance !== undefined ? worker.advance : worker?.paidSalary) || 0;
+  const joinDay = worker?.joiningDate ? new Date(worker.joiningDate).getDate() : new Date().getDate();
 
   return (
     <div className="moverlay">
@@ -115,11 +125,19 @@ function WorkerModal({ worker, onClose, onSave }) {
           <div className="fgroup"><label className="lbl">Contact</label><input maxLength={10} value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} /></div>
         </div>
 
-
         <div className="fgroup">
-          <label className="lbl">{worker ? "Add Payment (₹)" : "Initial Payment (₹)"}</label>
-          <input type="number" value={form.paidSalary} onChange={e => setForm({ ...form, paidSalary: e.target.value })} placeholder="0" />
-          {worker && <div style={{ fontSize: '10px', color: 'var(--green)', marginTop: '4px' }}>Total Paid: ₹{worker.paidSalary.toLocaleString()}</div>}
+          <label className="lbl">{worker ? "Add Advance / Payment (₹)" : "Initial Advance (₹)"}</label>
+          <input
+            type="number"
+            value={form.advanceAmount}
+            onChange={e => setForm({ ...form, advanceAmount: e.target.value })}
+            placeholder="Enter advance amount..."
+          />
+          {worker && (
+            <div style={{ fontSize: '11px', color: 'var(--amber)', marginTop: '4px' }}>
+              Advance Taken This Month: ₹{currentAdv.toLocaleString('en-IN')} (Resets automatically on {joinDay}th)
+            </div>
+          )}
         </div>
 
         <div className="fgroup">
@@ -148,8 +166,8 @@ export default function WorkersPage() {
   const [removeId, setRemoveId] = useState(null);
 
   const totalPayroll = (workers || []).reduce((s, w) => s + (parseFloat(w.salary) || 0), 0);
-  const totalPaid = (workers || []).reduce((s, w) => s + (parseFloat(w.paidSalary) || 0), 0);
-  const totalPending = totalPayroll - totalPaid;
+  const totalAdvance = (workers || []).reduce((s, w) => s + (parseFloat(w.advance !== undefined ? w.advance : w.paidSalary) || 0), 0);
+  const totalPending = Math.max(0, totalPayroll - totalAdvance);
   const { showToast, updateWorkerStatus } = useApp();
 
   // Hierarchy check: viewer can manage worker if viewer level > worker level
@@ -162,7 +180,6 @@ export default function WorkersPage() {
   // Robust check for account activity
   const isWorkerActive = (w) => (w.userId && typeof w.userId === 'object') ? w.userId.isActive : true;
 
-
   return (
     <div className="fi workers-page">
       <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: "6px" }}>
@@ -172,16 +189,16 @@ export default function WorkersPage() {
       </div>
 
       <div className="workers-kpi-row">
-        <div className="kpi " style={{ '--accent-color': 'var(--green)' }}>
+        <div className="kpi" style={{ '--accent-color': 'var(--green)' }}>
           <div className="kpi-label">Total Payroll</div>
           <div className="kpi-value mono" style={{ 'color': 'var(--t0)' }}>₹{totalPayroll.toLocaleString('en-IN')}</div>
         </div>
-        <div className="kpi" style={{ '--accent-color': 'var(--blue)' }}>
-          <div className="kpi-label">Paid This Month</div>
-          <div className="kpi-value mono" style={{ 'color': 'var(--t0)' }}>₹{totalPaid.toLocaleString('en-IN')}</div>
+        <div className="kpi" style={{ '--accent-color': 'var(--amber)' }}>
+          <div className="kpi-label">Advance Taken (This Month)</div>
+          <div className="kpi-value mono" style={{ 'color': 'var(--amber)' }}>₹{totalAdvance.toLocaleString('en-IN')}</div>
         </div>
-        <div className="kpi" style={{ '--accent-color': 'var(--red)' }}>
-          <div className="kpi-label">Pending Salary</div>
+        <div className="kpi" style={{ '--accent-color': 'var(--blue)' }}>
+          <div className="kpi-label">Pending Balance</div>
           <div className="kpi-value mono" style={{ 'color': 'var(--t0)' }}>₹{totalPending.toLocaleString('en-IN')}</div>
         </div>
       </div>
@@ -191,12 +208,13 @@ export default function WorkersPage() {
         <table className="dtable">
           <thead>
             <tr>
-              <th>NAME</th><th>ROLE</th><th>SALARY</th><th>PAID</th><th>REMAINING</th><th>JOINING DATE</th><th style={{ textAlign: 'right' }}>ACTIONS</th>
+              <th>NAME</th><th>ROLE</th><th>SALARY</th><th>ADVANCE (THIS MONTH)</th><th>JOINING DATE</th><th style={{ textAlign: 'right' }}>ACTIONS</th>
             </tr>
           </thead>
           <tbody>
             {workers.map(w => {
-              const remaining = (parseFloat(w.salary) || 0) - (parseFloat(w.paidSalary) || 0);
+              const advance = parseFloat(w.advance !== undefined ? w.advance : w.paidSalary) || 0;
+              const joinDay = new Date(w.joiningDate || Date.now()).getDate();
               const isActive = isWorkerActive(w);
               return (
                 <React.Fragment key={w._id}>
@@ -208,9 +226,13 @@ export default function WorkersPage() {
                     </td>
                     <td><span className="badge b-amber">{w.role}</span></td>
                     <td className="mono">₹{parseFloat(w.salary).toLocaleString('en-IN')}</td>
-                    <td className="mono" style={{ color: 'var(--green)', fontWeight: 700 }}>₹{parseFloat(w.paidSalary).toLocaleString('en-IN')}</td>
-                    <td className="mono" style={{ color: remaining > 0 ? 'var(--red)' : 'var(--green)', fontWeight: 700 }}>₹{remaining.toLocaleString('en-IN')}</td>
-                    <td className="mono" style={{ color: 'var(--green)', fontWeight: 700 }}>{new Date(w.joiningDate).getDate()}th</td>
+                    <td>
+                      <div className="mono" style={{ color: advance > 0 ? 'var(--amber)' : 'var(--t1)', fontWeight: 700 }}>
+                        ₹{advance.toLocaleString('en-IN')}
+                      </div>
+                      <div style={{ fontSize: '10px', color: 'var(--t2)' }}>Resets {joinDay}th</div>
+                    </td>
+                    <td className="mono" style={{ color: 'var(--green)', fontWeight: 700 }}>{joinDay}th</td>
                     <td style={{ textAlign: 'right' }}>
                       <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
                         <button className="iBtn" onClick={() => setHistoryWorker(w)} title="View Payment History"><History size={16} /></button>
@@ -222,7 +244,7 @@ export default function WorkersPage() {
                   </tr>
                   {removeId === w._id && (
                     <tr style={{ background: 'rgba(239,68,68,0.04)' }}>
-                      <td colSpan={7}>
+                      <td colSpan={6}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 20px' }}>
                           <span style={{ fontSize: 13, fontWeight: 600 }}>Confirm remove <strong>{w.name}</strong>?</span>
                           <div style={{ display: 'flex', gap: 8 }}>
@@ -243,7 +265,8 @@ export default function WorkersPage() {
       {/* MOBILE LIST */}
       <div className="mobile-view">
         {workers.map(w => {
-          const remaining = (parseFloat(w.salary) || 0) - (parseFloat(w.paidSalary) || 0);
+          const advance = parseFloat(w.advance !== undefined ? w.advance : w.paidSalary) || 0;
+          const joinDay = new Date(w.joiningDate || Date.now()).getDate();
           const isActive = isWorkerActive(w);
           return (
             <div key={w._id} className="card card-p" style={{ opacity: isActive ? 1 : 0.7 }}>
@@ -254,22 +277,22 @@ export default function WorkersPage() {
                   <div>
                     <div style={{ fontWeight: 700, color: 'var(--t0)' }}>{w.name}</div>
                     <div className="ph-sub">
-                      {w.role} • {new Date(w.joiningDate).getDate()}th
+                      {w.role} • Salary: ₹{parseFloat(w.salary).toLocaleString('en-IN')}
                     </div>
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <div
-                    className="mono txt-red"
+                    className="mono"
                     style={{
                       fontSize: 14,
                       fontWeight: 700,
-                      color: remaining > 0 ? 'var(--red)' : 'var(--green)'
+                      color: advance > 0 ? 'var(--amber)' : 'var(--t1)'
                     }}
                   >
-                    ₹{remaining.toLocaleString()}
+                    ₹{advance.toLocaleString('en-IN')}
                   </div>
-                  <div className="ph-sub">Remaining</div>
+                  <div className="ph-sub">Advance (Resets {joinDay}th)</div>
                 </div>
               </div>
 

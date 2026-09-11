@@ -83,7 +83,9 @@ export default function InvoiceModal() {
           discountPercent,
           roundOff: o.roundOff || 0,
           grandTotal: o.grandTotal,
-          date: billDate
+          date: billDate,
+          customerPhone: o.customerPhone || '',
+          customerName: o.customerName || ''
         },
         o.grandTotal,
         o.waiterName || '',
@@ -168,7 +170,7 @@ ${s.thankYouMsg}
               <div className="bill-top-center">
                 <div className="bill-name-heavy">{s.restaurantName}</div>
                 {s.address && <div className="bill-sub-info">{s.address}</div>}
-                {s.phone && <div className="bill-sub-info">Ph: {s.phone}</div>}
+                {(s.phone || s.contact) && <div className="bill-sub-info">Contact: {s.phone || s.contact}</div>}
                 {s.gstin && <div className="bill-sub-info">GSTIN: {s.gstin}</div>}
               </div>
 
@@ -179,6 +181,12 @@ ${s.thankYouMsg}
                 <div className="meta-item" style={{textAlign:'right'}}><span>TABLE</span><strong>{o.tableNo}</strong></div>
                 <div className="meta-item full-row"><span>DATE</span><strong>{formattedDate}</strong></div>
                 {o.waiterName && <div className="meta-item full-row"><span>WAITER</span><strong>{o.waiterName.toUpperCase()}</strong></div>}
+                {(o.customerPhone || o.customerName) && (
+                  <div className="meta-item full-row">
+                    <span>CUSTOMER</span>
+                    <strong>{(o.customerName || 'GUEST').toUpperCase()}{o.customerPhone ? ` (${o.customerPhone})` : ''}</strong>
+                  </div>
+                )}
               </div>
 
               <div className="bill-zig-zag-sep"></div>
@@ -238,7 +246,7 @@ ${s.thankYouMsg}
               <div className="bill-footer-note">
                 {o.paymentMode?.toUpperCase()} · THANK YOU FOR VISITING!
                 <br />
-                <strong>Note:</strong>  Contact us for parties & group gatherings
+                <strong>Note:</strong> Contact us for parties & group gatherings{(s.phone || s.contact) ? `: ${s.phone || s.contact}` : ''}
               </div>
             </div>
           </div>

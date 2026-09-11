@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { apiUrl, authFetch } from '../lib/api';
-import { DollarSign, Plus, CalendarDays, Search, Trash2, Edit3, ArrowRight, Tag, Wallet, ArrowLeft } from 'lucide-react';
+import { Plus, CalendarDays, Trash2, Edit3, ArrowRight } from 'lucide-react';
 
 function DateField({ value, onChange, inputRef, label }) {
   const triggerPicker = () => {
@@ -42,7 +42,7 @@ const CATEGORIES = [
 ];
 
 export default function ExpensesPage() {
-  const { showToast, currency, setActiveSection } = useApp();
+  const { showToast, currency } = useApp();
   const c = currency || '₹';
 
   const getBusinessTodayStr = () => {
@@ -71,7 +71,6 @@ export default function ExpensesPage() {
   const [startDate, setStartDate] = useState(todayStr);
   const [endDate, setEndDate] = useState(todayStr);
   const [categoryFilter, setCategoryFilter] = useState('all');
-  const [searchTerm, setSearchTerm] = useState('');
 
   const [expenses, setExpenses] = useState([]);
   const [totalAmount, setTotalAmount] = useState(0);
@@ -252,24 +251,11 @@ export default function ExpensesPage() {
     }
   };
 
-  const filteredExpenses = useMemo(() => {
-    return (expenses || []).filter(e => {
-      if (!searchTerm.trim()) return true;
-      const term = searchTerm.toLowerCase();
-      return (
-        (e.title || '').toLowerCase().includes(term) ||
-        (e.category || '').toLowerCase().includes(term) ||
-        (e.personName || '').toLowerCase().includes(term) ||
-        (e.notes || '').toLowerCase().includes(term) ||
-        (e.createdBy || '').toLowerCase().includes(term)
-      );
-    });
-  }, [expenses, searchTerm]);
-
   return (
-    <div className="fi sales-page" style={{ maxWidth: '1400px', margin: '0 auto', padding: 'clamp(10px, 2vw, 16px)' }}>
-      <div className="sales-header-res" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+    <div className="fi expenses-page" style={{ maxWidth: '1400px', margin: '0 auto', padding: 'clamp(10px, 2vw, 16px)' }}>
+      {/* Top Controls: Range Pills, Date Pickers, Add Button */}
+      <div className="expenses-header-res" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10, flex: 1 }}>
           <div className="unified-pill-box filter-pills">
             {['today', 'week', 'month', 'all'].map(f => (
               <button key={f} className={`f-pill ${range === f ? 'active' : ''}`} onClick={() => setRange(f)}>
@@ -278,7 +264,7 @@ export default function ExpensesPage() {
             ))}
           </div>
 
-          <div className={`unified-pill-box date-box-res ${range === 'custom' ? 'active-border' : ''}`} style={{ gap: 12, paddingLeft: 12, paddingRight: 12 }}>
+          <div className={`unified-pill-box date-box-res ${range === 'custom' ? 'active-border' : ''}`} style={{ gap: 10, paddingLeft: 10, paddingRight: 10 }}>
             <DateField label="From" value={startDate} onChange={e => handleDateChange('start', e.target.value)} inputRef={startInputRef} />
             <ArrowRight size={14} style={{ color: 'var(--t2)', flexShrink: 0 }} />
             <DateField label="To" value={endDate} onChange={e => handleDateChange('end', e.target.value)} inputRef={endInputRef} />
@@ -287,29 +273,30 @@ export default function ExpensesPage() {
 
         <button
           onClick={openAddModal}
+          className="btn-add-expense-responsive"
           style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px 18px',
             borderRadius: 10, background: 'var(--a)', color: '#000', fontWeight: 800,
-            fontSize: 12.5, border: 'none', cursor: 'pointer', boxShadow: '0 4px 12px rgba(245,158,11,0.25)'
+            fontSize: 13, border: 'none', cursor: 'pointer', boxShadow: '0 4px 12px rgba(245,158,11,0.25)'
           }}
         >
-          <Plus size={15} /> Add Expense
+          <Plus size={16} /> <span>Add Expense</span>
         </button>
       </div>
 
-      {/* Single Total Expense KPI Card */}
+      {/* Total Expense KPI Card */}
       <div style={{ marginBottom: 16 }}>
-        <div className="kpi" style={{ color: 'var(--t0)', maxWidth: '320px', padding: '18px 24px', borderRadius: '16px', background: 'var(--s2)', border: '1px solid var(--b2)' }}>
-          <div className="kpi-label" style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--t2)' }}>Total Expenses</div>
-          <div className="kpi-value mono" style={{ color: '#EF4444', fontSize: 28, fontWeight: 900, marginTop: 4 }}>
+        <div className="kpi expense-kpi-card" style={{ color: 'var(--t0)', maxWidth: '320px', padding: '16px 20px', borderRadius: '14px', background: 'var(--s2)', border: '1px solid var(--b2)' }}>
+          <div className="kpi-label" style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--t2)' }}>Total Expenses</div>
+          <div className="kpi-value mono" style={{ color: '#EF4444', fontSize: 26, fontWeight: 900, marginTop: 4 }}>
             {loading ? '...' : `${c}${totalAmount.toLocaleString('en-IN')}`}
           </div>
         </div>
       </div>
 
-      {/* Category Filter Pills & Search */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
-        <div className="unified-pill-box filter-pills" style={{ overflowX: 'auto', padding: 4, maxWidth: '100%' }}>
+      {/* Category Filter Pills (No search box) */}
+      <div style={{ marginBottom: 16 }}>
+        <div className="unified-pill-box filter-pills expense-cat-scroll" style={{ overflowX: 'auto', padding: 4, maxWidth: '100%', WebkitOverflowScrolling: 'touch' }}>
           <button className={`f-pill ${categoryFilter === 'all' ? 'active' : ''}`} onClick={() => setCategoryFilter('all')}>
             ALL CATEGORIES
           </button>
@@ -319,25 +306,10 @@ export default function ExpensesPage() {
             </button>
           ))}
         </div>
-
-        <div className="sales-search-box" style={{ width: '100%', maxWidth: 280 }}>
-          <Search size={14} className="sales-search-icon" />
-          <input
-            type="text"
-            placeholder="Search expense..."
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Escape') setSearchTerm('');
-              if (e.key === 'Enter') e.target.blur();
-            }}
-            className="sales-search-input"
-          />
-        </div>
       </div>
 
-      {/* Expense Table Card */}
-      <div className="settings-card" style={{ padding: 0, overflow: 'hidden', border: '1px solid var(--b2)', borderRadius: '12px' }}>
+      {/* DESKTOP TABLE VIEW */}
+      <div className="settings-card expenses-desktop-view" style={{ padding: 0, overflow: 'hidden', border: '1px solid var(--b2)', borderRadius: '12px' }}>
         <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
           <table className="invTable" style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
@@ -352,14 +324,14 @@ export default function ExpensesPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredExpenses.length === 0 ? (
+              {expenses.length === 0 ? (
                 <tr>
                   <td colSpan="7" style={{ padding: 32, textAlign: 'center', color: 'var(--t2)', fontSize: 14 }}>
                     No expense records found for this period.
                   </td>
                 </tr>
               ) : (
-                filteredExpenses.map(exp => (
+                expenses.map(exp => (
                   <tr key={exp._id} style={{ borderBottom: '1px solid var(--b1)', fontSize: 13 }}>
                     <td style={{ padding: '14px 16px', color: 'var(--t1)' }}>
                       {exp.businessDate || (exp.date ? new Date(exp.date).toLocaleDateString('en-IN') : '-')}
@@ -417,28 +389,95 @@ export default function ExpensesPage() {
         </div>
       </div>
 
+      {/* MOBILE CARD VIEW */}
+      <div className="expenses-mobile-view">
+        {expenses.length === 0 ? (
+          <div className="card card-p" style={{ textAlign: 'center', color: 'var(--t2)', padding: '28px 16px' }}>
+            No expense records found for this period.
+          </div>
+        ) : (
+          expenses.map(exp => (
+            <div key={exp._id} className="card card-p expense-mob-card" style={{ padding: '14px', borderRadius: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--t0)', lineHeight: 1.3 }}>{exp.title}</div>
+                  {exp.notes && <div style={{ fontSize: 12, color: 'var(--t2)', marginTop: 2 }}>{exp.notes}</div>}
+                </div>
+                <div className="mono" style={{ fontSize: 16, fontWeight: 800, color: '#EF4444', whiteSpace: 'nowrap' }}>
+                  {c}{parseFloat(exp.amount || 0).toLocaleString('en-IN')}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginBottom: 10, fontSize: 11 }}>
+                <span style={{
+                  padding: '2px 7px', borderRadius: 6, fontWeight: 700,
+                  background: 'rgba(245,158,11,0.12)', color: 'var(--a)'
+                }}>
+                  {exp.category}
+                </span>
+
+                <span style={{
+                  padding: '2px 7px', borderRadius: 6, fontWeight: 700,
+                  background: 'var(--s3)', color: 'var(--t1)', textTransform: 'uppercase'
+                }}>
+                  {exp.paymentMethod || 'CASH'}
+                </span>
+
+                <span style={{ color: 'var(--t2)', marginLeft: 'auto' }}>
+                  {exp.businessDate || (exp.date ? new Date(exp.date).toLocaleDateString('en-IN') : '-')}
+                </span>
+              </div>
+
+              {exp.personName && (
+                <div style={{ fontSize: 12, color: 'var(--t1)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span style={{ color: 'var(--t2)' }}>Given to:</span>
+                  <strong>{exp.personName}</strong>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 8, borderTop: '1px solid var(--b1)', paddingTop: 8 }}>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '6px 0', fontSize: 12 }}
+                  onClick={() => openEditModal(exp)}
+                >
+                  <Edit3 size={13} /> Edit
+                </button>
+                <button
+                  className="btn btn-danger btn-sm"
+                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '6px 0', fontSize: 12 }}
+                  onClick={() => handleDeleteExpense(exp._id, exp.title)}
+                >
+                  <Trash2 size={13} /> Delete
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
       {/* Add / Edit Expense Modal */}
       {modalOpen && (
         <div className="moverlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.85)' }} onClick={() => setModalOpen(false)}>
-          <div className="mbox" style={{ maxWidth: '440px', width: '92%', padding: '24px', position: 'relative' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 900, color: 'var(--t0)' }}>
+          <div className="mbox expense-modal-box" style={{ maxWidth: '440px', width: '92%', padding: '20px', position: 'relative' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 900, color: 'var(--t0)' }}>
                 {editingExpense ? 'Edit Expense' : 'Add New Expense'}
               </h3>
-              <button onClick={() => setModalOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--t2)', cursor: 'pointer' }}>
+              <button onClick={() => setModalOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--t2)', cursor: 'pointer', fontSize: 16, padding: 4 }}>
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleSaveExpense} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <form onSubmit={handleSaveExpense} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
                 <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--t2)', display: 'block', marginBottom: 4 }}>Expense Title *</label>
                 <input
                   type="text"
-                  placeholder="e.g. Vegetables & Raw Material Purchase"
+                  placeholder="e.g. Vegetables & Raw Material"
                   value={formTitle}
                   onChange={e => setFormTitle(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)', fontSize: 13 }}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)', fontSize: 13 }}
                   required
                 />
               </div>
@@ -450,11 +489,11 @@ export default function ExpensesPage() {
                   placeholder="e.g. Ramesh Kumar / Vendor Name"
                   value={formPersonName}
                   onChange={e => setFormPersonName(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)', fontSize: 13 }}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)', fontSize: 13 }}
                 />
               </div>
 
-              <div style={{ display: 'flex', gap: 12 }}>
+              <div className="expense-form-row" style={{ display: 'flex', gap: 10 }}>
                 <div style={{ flex: 1 }}>
                   <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--t2)', display: 'block', marginBottom: 4 }}>Amount ({c}) *</label>
                   <input
@@ -464,7 +503,7 @@ export default function ExpensesPage() {
                     placeholder="0.00"
                     value={formAmount}
                     onChange={e => setFormAmount(e.target.value)}
-                    style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)', fontSize: 13, fontWeight: 700 }}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)', fontSize: 13, fontWeight: 700 }}
                     required
                   />
                 </div>
@@ -474,7 +513,7 @@ export default function ExpensesPage() {
                   <select
                     value={formCategory}
                     onChange={e => setFormCategory(e.target.value)}
-                    style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)', fontSize: 13 }}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)', fontSize: 13 }}
                   >
                     {CATEGORIES.map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
@@ -483,13 +522,13 @@ export default function ExpensesPage() {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: 12 }}>
+              <div className="expense-form-row" style={{ display: 'flex', gap: 10 }}>
                 <div style={{ flex: 1 }}>
                   <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--t2)', display: 'block', marginBottom: 4 }}>Payment Method</label>
                   <select
                     value={formPaymentMethod}
                     onChange={e => setFormPaymentMethod(e.target.value)}
-                    style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)', fontSize: 13 }}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)', fontSize: 13 }}
                   >
                     <option value="cash">Cash</option>
                     <option value="upi">UPI</option>
@@ -504,7 +543,7 @@ export default function ExpensesPage() {
                     type="date"
                     value={formDate}
                     onChange={e => setFormDate(e.target.value)}
-                    style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)', fontSize: 13 }}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)', fontSize: 13 }}
                   />
                 </div>
               </div>
@@ -513,14 +552,14 @@ export default function ExpensesPage() {
                 <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--t2)', display: 'block', marginBottom: 4 }}>Notes / Remarks (Optional)</label>
                 <textarea
                   rows="2"
-                  placeholder="Additional details or vendor info..."
+                  placeholder="Additional details or notes..."
                   value={formNotes}
                   onChange={e => setFormNotes(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)', fontSize: 13, resize: 'vertical' }}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)', fontSize: 13, resize: 'vertical' }}
                 />
               </div>
 
-              <div style={{ display: 'flex', gap: 12, marginTop: 10 }}>
+              <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
@@ -540,6 +579,57 @@ export default function ExpensesPage() {
           </div>
         </div>
       )}
+
+      {/* Responsive Styles for Expenses Page */}
+      <style>{`
+        .expenses-cat-scroll::-webkit-scrollbar {
+          height: 4px;
+        }
+        .expenses-cat-scroll::-webkit-scrollbar-thumb {
+          background: var(--b2);
+          border-radius: 4px;
+        }
+
+        @media (max-width: 768px) {
+          .expenses-desktop-view {
+            display: none !important;
+          }
+          .expenses-mobile-view {
+            display: flex !important;
+            flex-direction: column;
+            gap: 10px;
+          }
+          .expenses-header-res {
+            flex-direction: column !important;
+            align-items: stretch !important;
+          }
+          .btn-add-expense-responsive {
+            width: 100%;
+            padding: 11px 0 !important;
+          }
+          .expense-kpi-card {
+            max-width: 100% !important;
+            width: 100%;
+          }
+          .expense-mob-card {
+            background: var(--s2);
+            border: 1px solid var(--b2);
+          }
+          .expense-form-row {
+            flex-direction: column !important;
+            gap: 10px !important;
+          }
+        }
+
+        @media (min-width: 769px) {
+          .expenses-desktop-view {
+            display: block !important;
+          }
+          .expenses-mobile-view {
+            display: none !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

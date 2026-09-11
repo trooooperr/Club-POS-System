@@ -1083,7 +1083,9 @@ export default function BillingPage() {
           discountPercent: discountVal,
           roundOff,
           grandTotal,
-          date: finalizedDate
+          date: finalizedDate,
+          customerPhone: table.customerPhone || finalizedOrder?.customerPhone || '',
+          customerName: table.customerName || finalizedOrder?.customerName || ''
         },
         grandTotal,
         selectedWaiterObj?.name || '',

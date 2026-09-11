@@ -4,6 +4,7 @@ const settingsSchema = new mongoose.Schema({
   restaurantName: { type: String, default: 'HUMTUM Billing System' },
   address:        { type: String, default: '' },
   gstin:          { type: String, default: '' },
+  phone:          { type: String, default: '' },
   gstRate:        { type: Number, default: 5 },
   sgstRate:       { type: Number, default: 2.5 },
   cgstRate:       { type: Number, default: 2.5 },

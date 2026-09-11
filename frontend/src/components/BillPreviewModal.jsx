@@ -74,8 +74,8 @@ export default function BillPreviewModal({ bill, table, tableNo, settings, onClo
             {settings.address && (
               <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>{settings.address}</div>
             )}
-            {settings.phone && (
-              <div style={{ fontSize: 11, color: '#666' }}>Ph: {settings.phone}</div>
+            {(settings.phone || settings.contact) && (
+              <div style={{ fontSize: 11, color: '#666' }}>Contact: {settings.phone || settings.contact}</div>
             )}
             {settings.gstin && (
               <div style={{ fontSize: 11, color: '#666' }}>GSTIN: {settings.gstin}</div>
@@ -103,6 +103,15 @@ export default function BillPreviewModal({ bill, table, tableNo, settings, onClo
               {formattedDate}
             </div>
           </div>
+
+          {(table?.customerPhone || table?.customerName || customerPhone) && (
+            <div style={{ fontSize: 12, color: '#666', marginBottom: 12 }}>
+              <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' }}>CUSTOMER</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#000' }}>
+                {(table?.customerName || 'GUEST').toUpperCase()}{customerPhone || table?.customerPhone ? ` (${customerPhone || table?.customerPhone})` : ''}
+              </div>
+            </div>
+          )}
 
           {/* Separator */}
           <div style={{ borderBottom: '1px dashed #999', margin: '12px 0' }}></div>
