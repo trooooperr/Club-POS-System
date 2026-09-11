@@ -135,7 +135,7 @@ function WorkerModal({ worker, onClose, onSave }) {
           />
           {worker && (
             <div style={{ fontSize: '11px', color: 'var(--amber)', marginTop: '4px' }}>
-              Advance Taken This Month: ₹{currentAdv.toLocaleString('en-IN')} (Resets automatically on {joinDay}th)
+              Advance Taken This Month: ₹{currentAdv.toLocaleString('en-IN')}
             </div>
           )}
         </div>
@@ -230,7 +230,6 @@ export default function WorkersPage() {
                       <div className="mono" style={{ color: advance > 0 ? 'var(--amber)' : 'var(--t1)', fontWeight: 700 }}>
                         ₹{advance.toLocaleString('en-IN')}
                       </div>
-                      <div style={{ fontSize: '10px', color: 'var(--t2)' }}>Resets {joinDay}th</div>
                     </td>
                     <td className="mono" style={{ color: 'var(--green)', fontWeight: 700 }}>{joinDay}th</td>
                     <td style={{ textAlign: 'right' }}>
@@ -292,7 +291,7 @@ export default function WorkersPage() {
                   >
                     ₹{advance.toLocaleString('en-IN')}
                   </div>
-                  <div className="ph-sub">Advance (Resets {joinDay}th)</div>
+                  <div className="ph-sub">Advance</div>
                 </div>
               </div>
 

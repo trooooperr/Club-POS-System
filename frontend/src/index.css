@@ -3200,6 +3200,12 @@ textarea,
   }
 }
 
+@media (max-width: 768px) {
+  .bnav-desktop-only {
+    display: none !important;
+  }
+}
+
 @media (max-width: 400px) {
   .bnav-stats {
     gap: 6px;

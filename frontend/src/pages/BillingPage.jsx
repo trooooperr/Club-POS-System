@@ -489,11 +489,14 @@ function BillingNavBar({
       )}
 
       {/* RIGHT: Stats & Live KOTs Button */}
-      <div className="bnav-stats" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <TodayDiscountDropdown />
+      <div className="bnav-stats" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="bnav-desktop-only">
+          <TodayDiscountDropdown />
+        </div>
 
         <button
           type="button"
+          className="bnav-desktop-only"
           onClick={onOpenLiveQueue}
           style={{ background: 'rgba(245,158,11,0.14)', border: '1px solid rgba(245,158,11,0.3)', color: '#F59E0B', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: '8px', fontWeight: 700, fontSize: '12px', height: '36px' }}
           title="Open Live KOT Display"
@@ -502,6 +505,14 @@ function BillingNavBar({
           <span>Live KOTs</span>
         </button>
 
+        <div className="bnav-stat total">
+          <span className="bnav-stat-dot" style={{ background: '#3B82F6' }} />
+          <div>
+            <div className="bnav-stat-num">{totalTables}</div>
+            <div className="bnav-stat-label">Total</div>
+          </div>
+        </div>
+
         <div className="bnav-stat occupied">
           <span className="bnav-stat-dot occ-dot" />
           <div>
@@ -509,7 +520,7 @@ function BillingNavBar({
             <div className="bnav-stat-label">Active</div>
           </div>
         </div>
-        <div className="bnav-stat vacant">
+        <div className="bnav-stat vacant bnav-desktop-only">
           <span className="bnav-stat-dot vac-dot" />
           <div>
             <div className="bnav-stat-num">{vacantCount}</div>
