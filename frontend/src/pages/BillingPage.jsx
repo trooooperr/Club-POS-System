@@ -690,7 +690,7 @@ export default function BillingPage() {
     return { subtotal, gst, gstRate, sgst, cgst, serviceTax, effectiveServiceTaxRate, isServiceTaxOn, totalBeforeDiscount, discountVal, discountAmount, grandTotal, roundOff };
   }, [combinedItems.all, table.discount, table.serviceTaxEnabled, table.serviceTaxRate, activeSessions, activeTableId, settings]);
 
-  const { subtotal, gst, gstRate, sgst, cgst, serviceTax, effectiveServiceTaxRate, totalBeforeDiscount, discountVal, discountAmount, grandTotal, roundOff } = totals;
+  const { subtotal, gst, gstRate, sgst, cgst, serviceTax, effectiveServiceTaxRate, isServiceTaxOn, totalBeforeDiscount, discountVal, discountAmount, grandTotal, roundOff } = totals;
 
   const tableList = Array.from({ length: NUM_TABLES }, (_, i) => {
     const id = `t${i + 1}`;
