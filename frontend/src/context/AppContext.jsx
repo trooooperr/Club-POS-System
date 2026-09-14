@@ -503,9 +503,17 @@ export function AppProvider({ children }) {
           ? table.sgst + table.cgst
           : subtotal * (gstRate / 100));
 
-    const serviceTax = typeof table.serviceTax === 'number'
+    const isServiceTaxOn = table?.serviceTaxEnabled !== undefined
+      ? table.serviceTaxEnabled
+      : (typeof table?.serviceTax === 'number' && table.serviceTax > 0 ? true : !!settings.serviceTaxEnabled);
+
+    const effectiveServiceTaxRate = (table?.serviceTaxRate !== undefined && table.serviceTaxRate > 0)
+      ? table.serviceTaxRate
+      : (settings.serviceTaxRate || 0);
+
+    const serviceTax = typeof table?.serviceTax === 'number'
       ? table.serviceTax
-      : (settings.serviceTaxEnabled ? subtotal * ((settings.serviceTaxRate || 0) / 100) : 0);
+      : (isServiceTaxOn ? subtotal * (effectiveServiceTaxRate / 100) : 0);
 
     let discountAmount = 0;
     let discountPercent = 0;
@@ -1140,7 +1148,13 @@ export function AppProvider({ children }) {
     const subtotal = (table?.items || []).reduce((s,i) => s + (i.price || 0) * (i.quantity || 0), 0);
     const sgst     = subtotal * (settings.sgstRate / 100);
     const cgst     = subtotal * (settings.cgstRate / 100);
-    const serviceTax = settings.serviceTaxEnabled ? subtotal * ((settings.serviceTaxRate || 0) / 100) : 0;
+    const isServiceTaxOn = table?.serviceTaxEnabled !== undefined 
+      ? table.serviceTaxEnabled 
+      : !!settings.serviceTaxEnabled;
+    const effectiveServiceTaxRate = (table?.serviceTaxRate !== undefined && table.serviceTaxRate > 0)
+      ? table.serviceTaxRate
+      : (settings.serviceTaxRate || 0);
+    const serviceTax = isServiceTaxOn ? subtotal * ((effectiveServiceTaxRate || 0) / 100) : 0;
     const dv       = (table.discount || '').trim();
     const discountAmount = Math.round(dv.endsWith('%')
       ? subtotal * (parseFloat(dv)/100) || 0
@@ -1615,12 +1629,12 @@ export function AppProvider({ children }) {
     }
   }, [socket, applyInventoryUpdate, setOrderHistory, setInvoiceOrder]);
 
-  const finalizeBill = useCallback(async (orderId, items, subtotal, sgst, cgst, serviceTax, discount, roundOff, grandTotal, waiterName = '', orderType = 'dine-in', customerName = '', customerPhone = '', paymentMode = 'cash', cashAmount = 0, upiAmount = 0, isCredit = false, paidAmount = undefined, dueAmount = undefined, discountPercent = undefined) => {
+  const finalizeBill = useCallback(async (orderId, items, subtotal, sgst, cgst, serviceTax, discount, roundOff, grandTotal, waiterName = '', orderType = 'dine-in', customerName = '', customerPhone = '', paymentMode = 'cash', cashAmount = 0, upiAmount = 0, isCredit = false, paidAmount = undefined, dueAmount = undefined, discountPercent = undefined, serviceTaxRate = undefined) => {
     try {
       const res = await authFetch(apiUrl(`/api/orders/${orderId}/finalize-bill`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items, subtotal, sgst, cgst, serviceTax, discount, discountPercent, roundOff, grandTotal, waiterName, orderType, customerName, customerPhone, paymentMode, cashAmount, upiAmount, isCredit, paidAmount, dueAmount })
+        body: JSON.stringify({ items, subtotal, sgst, cgst, serviceTax, serviceTaxRate, discount, discountPercent, roundOff, grandTotal, waiterName, orderType, customerName, customerPhone, paymentMode, cashAmount, upiAmount, isCredit, paidAmount, dueAmount })
       });
       if (!res.ok) throw new Error('Failed to finalize bill');
       const orderResponse = await res.json();

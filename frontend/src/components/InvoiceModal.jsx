@@ -305,6 +305,11 @@ ${s.thankYouMsg}
                     discountPctStr = String(Math.round((order.discount / order.subtotal) * 100));
                   }
 
+                  const hasServiceTax = (order.serviceTax && order.serviceTax > 0) || (order.serviceTaxRate && order.serviceTaxRate > 0);
+                  const orderServiceTaxRate = order.serviceTaxRate > 0 
+                    ? order.serviceTaxRate 
+                    : (order.subtotal > 0 && order.serviceTax > 0 ? Number(((order.serviceTax / order.subtotal) * 100).toFixed(2)) : 0);
+
                   setTableBills(prev => ({
                     ...prev,
                     [targetTableId]: {
@@ -313,7 +318,9 @@ ${s.thankYouMsg}
                       customerPhone: order.customerPhone || '',
                       discount: discountPctStr,
                       isCreditPay: order.isCredit || false,
-                      paidAmount: order.paidAmount !== undefined ? String(order.paidAmount) : ''
+                      paidAmount: order.paidAmount !== undefined ? String(order.paidAmount) : '',
+                      serviceTaxEnabled: hasServiceTax,
+                      serviceTaxRate: orderServiceTaxRate
                     }
                   }));
                 }

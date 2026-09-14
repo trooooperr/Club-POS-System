@@ -664,17 +664,23 @@ export default function BillingPage() {
     const gst = subtotal * (gstRate / 100);
     const sgst = subtotal * ((gstRate / 2) / 100);
     const cgst = subtotal * ((gstRate / 2) / 100);
-    const serviceTax = settings.serviceTaxEnabled ? subtotal * ((settings.serviceTaxRate || 0) / 100) : 0;
+    const isServiceTaxOn = table.serviceTaxEnabled !== undefined 
+      ? table.serviceTaxEnabled 
+      : !!settings.serviceTaxEnabled;
+    const effectiveServiceTaxRate = (table.serviceTaxRate !== undefined && table.serviceTaxRate > 0)
+      ? table.serviceTaxRate
+      : (settings.serviceTaxRate || 0);
+    const serviceTax = isServiceTaxOn ? subtotal * (effectiveServiceTaxRate / 100) : 0;
     const totalBeforeDiscount = subtotal + gst + serviceTax;
     const discountVal = parseFloat((table.discount || '').replace(/[^0-9.]/g, '')) || 0;
     const discountAmount = Math.round(subtotal * (discountVal / 100));
     const rawTotal = totalBeforeDiscount - discountAmount;
     const grandTotal = Math.max(0, Math.round(rawTotal));
     const roundOff = grandTotal - rawTotal;
-    return { subtotal, gst, gstRate, sgst, cgst, serviceTax, totalBeforeDiscount, discountVal, discountAmount, grandTotal, roundOff };
-  }, [combinedItems.all, table.discount, settings]);
+    return { subtotal, gst, gstRate, sgst, cgst, serviceTax, effectiveServiceTaxRate, totalBeforeDiscount, discountVal, discountAmount, grandTotal, roundOff };
+  }, [combinedItems.all, table.discount, table.serviceTaxEnabled, table.serviceTaxRate, settings]);
 
-  const { subtotal, gst, gstRate, sgst, cgst, serviceTax, totalBeforeDiscount, discountVal, discountAmount, grandTotal, roundOff } = totals;
+  const { subtotal, gst, gstRate, sgst, cgst, serviceTax, effectiveServiceTaxRate, totalBeforeDiscount, discountVal, discountAmount, grandTotal, roundOff } = totals;
 
   const tableList = Array.from({ length: NUM_TABLES }, (_, i) => {
     const id = `t${i + 1}`;
@@ -783,7 +789,8 @@ export default function BillingPage() {
       if (timeSinceLastEdit >= 2500) {
         setTableBills(prev => {
           const actOrder = session?.activeOrderId;
-          let discountPctStr = '';
+          let serviceTaxEnabledVal = undefined;
+          let serviceTaxRateVal = undefined;
           if (actOrder) {
             if (actOrder.discountPercent !== undefined && actOrder.discountPercent !== null && actOrder.discountPercent > 0) {
               discountPctStr = String(Math.round(actOrder.discountPercent));
@@ -791,6 +798,14 @@ export default function BillingPage() {
               discountPctStr = String(Math.round((actOrder.discount / actOrder.subtotal) * 100));
             } else {
               discountPctStr = '';
+            }
+
+            const orderHasST = (actOrder.serviceTax && actOrder.serviceTax > 0) || (actOrder.serviceTaxRate && actOrder.serviceTaxRate > 0);
+            if (orderHasST) {
+              serviceTaxEnabledVal = true;
+              serviceTaxRateVal = actOrder.serviceTaxRate > 0
+                ? actOrder.serviceTaxRate
+                : (actOrder.subtotal > 0 && actOrder.serviceTax > 0 ? Number(((actOrder.serviceTax / actOrder.subtotal) * 100).toFixed(2)) : undefined);
             }
           } else {
             discountPctStr = prev[targetTableId]?.discount || '';
@@ -803,7 +818,9 @@ export default function BillingPage() {
               items: dbPendingItems,
               customerName: session?.activeOrderId?.customerName || prev[targetTableId]?.customerName || '',
               customerPhone: session?.activeOrderId?.customerPhone || prev[targetTableId]?.customerPhone || '',
-              discount: discountPctStr
+              discount: discountPctStr,
+              ...(serviceTaxEnabledVal !== undefined ? { serviceTaxEnabled: serviceTaxEnabledVal } : {}),
+              ...(serviceTaxRateVal !== undefined ? { serviceTaxRate: serviceTaxRateVal } : {})
             }
           };
         });
@@ -1092,7 +1109,8 @@ export default function BillingPage() {
         isCreditPay,
         paidVal,
         dueVal,
-        discountVal
+        discountVal,
+        effectiveServiceTaxRate
       );
 
       // Print bill
@@ -1107,6 +1125,8 @@ export default function BillingPage() {
           sgst,
           cgst,
           serviceTax,
+          serviceTaxRate: effectiveServiceTaxRate,
+          serviceTaxEnabled: isServiceTaxOn,
           discountAmount,
           discountPercent: discountVal,
           roundOff,
@@ -1681,7 +1701,7 @@ export default function BillingPage() {
                 {serviceTax > 0 && (
                   <div className="s-row">
                     <span>
-                      Service Tax ({settings.serviceTaxRate > 0 ? settings.serviceTaxRate : (subtotal > 0 && serviceTax > 0 ? parseFloat(((serviceTax / subtotal) * 100).toFixed(1)) : 5)}%)
+                      Service Tax ({effectiveServiceTaxRate > 0 ? effectiveServiceTaxRate : (settings.serviceTaxRate > 0 ? settings.serviceTaxRate : (subtotal > 0 && serviceTax > 0 ? parseFloat(((serviceTax / subtotal) * 100).toFixed(1)) : 5))}%)
                     </span>
                     <span>{c}{serviceTax.toFixed(2)}</span>
                   </div>

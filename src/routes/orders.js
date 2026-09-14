@@ -281,7 +281,7 @@ router.get('/sessions/active', async (req, res) => {
   try {
     const sessions = await TableSession.find({ status: { $ne: 'COMPLETED' } })
       .populate({ path: 'kotIds', select: 'kotNo tableNo items status orderType waiterName createdAt' })
-      .populate({ path: 'activeOrderId', select: 'billNo tableNo items subtotal discount discountPercent grandTotal dueAmount paidAmount status orderType waiterName customerName customerPhone' })
+      .populate({ path: 'activeOrderId', select: 'billNo tableNo items subtotal serviceTax serviceTaxRate discount discountPercent grandTotal dueAmount paidAmount status orderType waiterName customerName customerPhone' })
       .lean();
     res.json(sessions);
   } catch (err) {
@@ -491,7 +491,7 @@ router.post('/', async (req, res) => {
 // ── FINALIZE BILL (called when printing final bill) ─────────────
 router.patch('/:id/finalize-bill', async (req, res) => {
   try {
-    const { items, subtotal, sgst, cgst, serviceTax, discount, discountPercent, roundOff, grandTotal, waiterName, orderType, customerName, customerPhone, paymentMode, cashAmount, upiAmount, isCredit, paidAmount, dueAmount } = req.body;
+    const { items, subtotal, sgst, cgst, serviceTax, serviceTaxRate, discount, discountPercent, roundOff, grandTotal, waiterName, orderType, customerName, customerPhone, paymentMode, cashAmount, upiAmount, isCredit, paidAmount, dueAmount } = req.body;
 
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ message: 'Order not found' });
@@ -529,6 +529,11 @@ router.patch('/:id/finalize-bill', async (req, res) => {
     order.sgst = sgst;
     order.cgst = cgst;
     order.serviceTax = typeof serviceTax === 'number' ? serviceTax : 0;
+    if (serviceTaxRate !== undefined && serviceTaxRate !== null) {
+      order.serviceTaxRate = parseFloat(serviceTaxRate) || 0;
+    } else if (order.serviceTax > 0 && order.subtotal > 0 && (!order.serviceTaxRate || order.serviceTaxRate === 0)) {
+      order.serviceTaxRate = Number(((order.serviceTax / order.subtotal) * 100).toFixed(2));
+    }
     order.discount = typeof discount === 'number' ? discount : (parseFloat(discount) || 0);
     order.discountPercent = discountPercent !== undefined && discountPercent !== null
       ? (parseFloat(discountPercent) || 0)
