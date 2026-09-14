@@ -40,6 +40,7 @@ async function recalculateOrderTotals(order) {
   const Settings = require('../models/Settings');
   const settings = await Settings.findOne();
   const sgstRate = settings ? settings.sgstRate : 2.5;
+  const cgstRate = settings ? settings.cgstRate : 2.5;
   const serviceTaxRate = (order && order.serviceTaxRate > 0)
     ? order.serviceTaxRate
     : (order && order.serviceTax > 0 && order.subtotal > 0 ? Number(((order.serviceTax / order.subtotal) * 100).toFixed(2)) : (settings && settings.serviceTaxEnabled ? (settings.serviceTaxRate || 0) : 0));

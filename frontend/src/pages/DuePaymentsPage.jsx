@@ -34,7 +34,13 @@ export default function DuePaymentsPage() {
       .then(res => res.json())
       .then(resData => {
         if (resData.orders) {
-          setData(resData);
+          const sorted = [...resData.orders].sort((a, b) => {
+            const timeA = new Date(a.date || a.createdAt || 0).getTime();
+            const timeB = new Date(b.date || b.createdAt || 0).getTime();
+            if (timeB !== timeA) return timeB - timeA;
+            return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+          });
+          setData({ ...resData, orders: sorted });
         }
         setLoading(false);
       })
@@ -85,7 +91,12 @@ export default function DuePaymentsPage() {
       );
     }
 
-    return list;
+    return [...list].sort((a, b) => {
+      const timeA = new Date(a.date || a.createdAt || 0).getTime();
+      const timeB = new Date(b.date || b.createdAt || 0).getTime();
+      if (timeB !== timeA) return timeB - timeA;
+      return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+    });
   }, [data.orders, filterTab, searchTerm]);
 
   const openEditModal = (order) => {

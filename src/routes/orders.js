@@ -163,7 +163,7 @@ router.get('/due-payments', requireRole(['admin', 'manager', 'staff']), async (r
       ]
     })
       .select('billNo tableNo date businessDate customerName customerPhone grandTotal paidAmount dueAmount isCredit paymentStatus notes createdAt')
-      .sort({ updatedAt: -1, date: -1 })
+      .sort({ date: -1, createdAt: -1 })
       .lean();
 
     const processedOrders = dueOrders.filter(o => {
