@@ -544,8 +544,7 @@ export function AppProvider({ children }) {
     const itemCount = table.items.length;
     const hasQr = grandTotal > 0 && settings.upiId;
     const hasTipQr = !!waiterTipQrUrl;
-    const hasCustInfo = !!(table.customerPhone || table.customerName);
-    const pageHeight = 125 + (itemCount * 9) + (hasQr ? 55 : 0) + (hasTipQr ? 45 : 0) + (hasCustInfo ? 8 : 0);
+    const pageHeight = 125 + (itemCount * 9) + (hasQr ? 55 : 0) + (hasTipQr ? 45 : 0);
 
     const restName = (settings.restaurantName || 'HUMTUM').trim();
     const restPhone = settings.phone || settings.contact || '';
@@ -587,12 +586,6 @@ export function AppProvider({ children }) {
           <div class="row"><span>BILL: ${tempBillNo}</span><span>TABLE: ${tableNo}</span></div>
           <div class="row">DATE: ${formattedBillDate}</div>
           ${waiterName ? `<div class="row">WAITER: ${waiterName.toUpperCase()}</div>` : ''}
-          ${(table.customerPhone || table.customerName) ? `
-            <div class="row">
-              <span>CUSTOMER: ${(table.customerName || 'GUEST').toUpperCase()}</span>
-              ${table.customerPhone ? `<span>Ph: ${table.customerPhone}</span>` : ''}
-            </div>
-          ` : ''}
 
           <div class="dash-line"></div>
 

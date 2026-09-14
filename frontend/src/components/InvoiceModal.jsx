@@ -181,12 +181,6 @@ ${s.thankYouMsg}
                 <div className="meta-item" style={{textAlign:'right'}}><span>TABLE</span><strong>{o.tableNo}</strong></div>
                 <div className="meta-item full-row"><span>DATE</span><strong>{formattedDate}</strong></div>
                 {o.waiterName && <div className="meta-item full-row"><span>WAITER</span><strong>{o.waiterName.toUpperCase()}</strong></div>}
-                {(o.customerPhone || o.customerName) && (
-                  <div className="meta-item full-row">
-                    <span>CUSTOMER</span>
-                    <strong>{(o.customerName || 'GUEST').toUpperCase()}{o.customerPhone ? ` (${o.customerPhone})` : ''}</strong>
-                  </div>
-                )}
               </div>
 
               <div className="bill-zig-zag-sep"></div>

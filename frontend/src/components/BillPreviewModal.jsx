@@ -104,15 +104,6 @@ export default function BillPreviewModal({ bill, table, tableNo, settings, onClo
             </div>
           </div>
 
-          {(table?.customerPhone || table?.customerName || customerPhone) && (
-            <div style={{ fontSize: 12, color: '#666', marginBottom: 12 }}>
-              <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' }}>CUSTOMER</div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#000' }}>
-                {(table?.customerName || 'GUEST').toUpperCase()}{customerPhone || table?.customerPhone ? ` (${customerPhone || table?.customerPhone})` : ''}
-              </div>
-            </div>
-          )}
-
           {/* Separator */}
           <div style={{ borderBottom: '1px dashed #999', margin: '12px 0' }}></div>
 
