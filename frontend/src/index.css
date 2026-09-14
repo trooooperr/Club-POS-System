@@ -5841,6 +5841,10 @@ textarea,
   accent-color: var(--a);
 }
 
+.settings-service-tax-toggle {
+  align-self: end;
+}
+
 .staff-force-toggle {
   margin-bottom: 0;
 }
@@ -6048,6 +6052,10 @@ textarea,
   .staff-reset-grid,
   .settings-kpi-grid {
     grid-template-columns: 1fr;
+  }
+
+  .settings-service-tax-toggle {
+    align-self: stretch;
   }
 
   .settings-grid-action {

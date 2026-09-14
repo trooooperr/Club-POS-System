@@ -539,14 +539,14 @@ export default function SettingsPage() {
                 }}
               />
             </div>
-            <label className="settings-toggle settings-wide">
-              <input type="checkbox" checked={!!form.serviceTaxEnabled} onChange={e => set('serviceTaxEnabled', e.target.checked)} />
-              <span>Enable Service Tax</span>
-            </label>
             <div className="settings-field">
               <label>Maximum Discount Limit %</label>
               <input type="number" min="0" max="100" step="1" value={form.maxDiscountLimit ?? 30} onChange={e => set('maxDiscountLimit', Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)))} />
             </div>
+            <label className={`settings-toggle ${!form.serviceTaxEnabled ? 'settings-wide' : 'settings-service-tax-toggle'}`}>
+              <input type="checkbox" checked={!!form.serviceTaxEnabled} onChange={e => set('serviceTaxEnabled', e.target.checked)} />
+              <span>Enable Service Tax</span>
+            </label>
             {form.serviceTaxEnabled && (
               <div className="settings-field">
                 <label>Service Tax Rate %</label>
