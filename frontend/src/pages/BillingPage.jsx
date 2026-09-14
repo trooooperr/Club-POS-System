@@ -781,16 +781,32 @@ export default function BillingPage() {
       const timeSinceLastEdit = Date.now() - lastEdit;
 
       if (timeSinceLastEdit >= 2500) {
-        setTableBills(prev => ({
-          ...prev,
-          [targetTableId]: {
-            ...prev[targetTableId],
-            items: dbPendingItems,
-            customerName: session?.activeOrderId?.customerName || prev[targetTableId]?.customerName || '',
-            customerPhone: session?.activeOrderId?.customerPhone || prev[targetTableId]?.customerPhone || '',
-            discount: session?.activeOrderId?.discount?.toString() || prev[targetTableId]?.discount || ''
+        setTableBills(prev => {
+          const actOrder = session?.activeOrderId;
+          let discountPctStr = '';
+          if (actOrder) {
+            if (actOrder.discountPercent !== undefined && actOrder.discountPercent !== null && actOrder.discountPercent > 0) {
+              discountPctStr = String(Math.round(actOrder.discountPercent));
+            } else if (actOrder.discount && actOrder.subtotal > 0) {
+              discountPctStr = String(Math.round((actOrder.discount / actOrder.subtotal) * 100));
+            } else {
+              discountPctStr = '';
+            }
+          } else {
+            discountPctStr = prev[targetTableId]?.discount || '';
           }
-        }));
+
+          return {
+            ...prev,
+            [targetTableId]: {
+              ...prev[targetTableId],
+              items: dbPendingItems,
+              customerName: session?.activeOrderId?.customerName || prev[targetTableId]?.customerName || '',
+              customerPhone: session?.activeOrderId?.customerPhone || prev[targetTableId]?.customerPhone || '',
+              discount: discountPctStr
+            }
+          };
+        });
 
         // Update selectedWaiter and orderType from DB session
         if (session?.waiterName) {
@@ -1075,7 +1091,8 @@ export default function BillingPage() {
         pm === 'upi' ? paidVal : 0,
         isCreditPay,
         paidVal,
-        dueVal
+        dueVal,
+        discountVal
       );
 
       // Print bill

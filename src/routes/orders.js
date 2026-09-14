@@ -281,7 +281,7 @@ router.get('/sessions/active', async (req, res) => {
   try {
     const sessions = await TableSession.find({ status: { $ne: 'COMPLETED' } })
       .populate({ path: 'kotIds', select: 'kotNo tableNo items status orderType waiterName createdAt' })
-      .populate({ path: 'activeOrderId', select: 'billNo tableNo items grandTotal dueAmount paidAmount status orderType waiterName customerName customerPhone' })
+      .populate({ path: 'activeOrderId', select: 'billNo tableNo items subtotal discount discountPercent grandTotal dueAmount paidAmount status orderType waiterName customerName customerPhone' })
       .lean();
     res.json(sessions);
   } catch (err) {
@@ -398,9 +398,20 @@ router.post('/', async (req, res) => {
 
     const isDirectOrder = Array.isArray(orderData.items) && orderData.items.length > 0;
 
+    const discountAmount = typeof orderData.discount === 'number' ? orderData.discount : (parseFloat(orderData.discount) || 0);
+    const subtotalVal = typeof orderData.subtotal === 'number' ? orderData.subtotal : (parseFloat(orderData.subtotal) || 0);
+    let discountPercentVal = 0;
+    if (orderData.discountPercent !== undefined && orderData.discountPercent !== null) {
+      discountPercentVal = parseFloat(orderData.discountPercent) || 0;
+    } else if (discountAmount > 0 && subtotalVal > 0) {
+      discountPercentVal = Math.round((discountAmount / subtotalVal) * 100);
+    }
+
     // New KOT workflow: don't deduct inventory yet, only create order if items empty
     const order = new Order({
       ...orderData,
+      discount: discountAmount,
+      discountPercent: discountPercentVal,
       date: targetDate,
       businessDate: orderData.businessDate,
       orderStatus: orderData.orderStatus || (isDirectOrder ? (orderData.dueAmount === 0 ? 'COMPLETED' : 'OPEN') : 'OPEN'),
@@ -480,7 +491,7 @@ router.post('/', async (req, res) => {
 // ── FINALIZE BILL (called when printing final bill) ─────────────
 router.patch('/:id/finalize-bill', async (req, res) => {
   try {
-    const { items, subtotal, sgst, cgst, serviceTax, discount, roundOff, grandTotal, waiterName, orderType, customerName, customerPhone, paymentMode, cashAmount, upiAmount, isCredit, paidAmount, dueAmount } = req.body;
+    const { items, subtotal, sgst, cgst, serviceTax, discount, discountPercent, roundOff, grandTotal, waiterName, orderType, customerName, customerPhone, paymentMode, cashAmount, upiAmount, isCredit, paidAmount, dueAmount } = req.body;
 
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ message: 'Order not found' });
@@ -518,7 +529,10 @@ router.patch('/:id/finalize-bill', async (req, res) => {
     order.sgst = sgst;
     order.cgst = cgst;
     order.serviceTax = typeof serviceTax === 'number' ? serviceTax : 0;
-    order.discount = discount;
+    order.discount = typeof discount === 'number' ? discount : (parseFloat(discount) || 0);
+    order.discountPercent = discountPercent !== undefined && discountPercent !== null
+      ? (parseFloat(discountPercent) || 0)
+      : (order.subtotal > 0 && order.discount > 0 ? Math.round((order.discount / order.subtotal) * 100) : 0);
     order.roundOff = roundOff;
     order.grandTotal = grandTotal;
     order.orderStatus = 'COMPLETED';

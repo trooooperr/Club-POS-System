@@ -298,13 +298,20 @@ ${s.thankYouMsg}
                     note: i.notes || i.note || ''
                   }));
 
+                  let discountPctStr = '';
+                  if (order.discountPercent !== undefined && order.discountPercent !== null && order.discountPercent > 0) {
+                    discountPctStr = String(Math.round(order.discountPercent));
+                  } else if (order.discount && order.subtotal > 0) {
+                    discountPctStr = String(Math.round((order.discount / order.subtotal) * 100));
+                  }
+
                   setTableBills(prev => ({
                     ...prev,
                     [targetTableId]: {
                       items: mappedItems,
                       customerName: order.customerName || '',
                       customerPhone: order.customerPhone || '',
-                      discount: order.discount ? String(order.discount) : '',
+                      discount: discountPctStr,
                       isCreditPay: order.isCredit || false,
                       paidAmount: order.paidAmount !== undefined ? String(order.paidAmount) : ''
                     }
