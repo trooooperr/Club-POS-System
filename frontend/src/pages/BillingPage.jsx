@@ -541,7 +541,7 @@ export default function BillingPage() {
     setItemNote: setItemNoteRaw,
     allSellableItems,
     billTotals, filteredMenu, categories, categoryFilter, setCategoryFilter,
-    menuSearch, setMenuSearch, inventory, workers, getTableStatus, getTableInfo, settings, NUM_TABLES, activeTableCount,
+    menuSearch, setMenuSearch, inventory, workers, getTableStatus, getTableInfo, settings, NUM_TABLES, activeTableCount, activeSessions,
     openTableSession, createKOT, finalizeBill, completeOrder, socket, syncTableSession, cancelTableSession,
     setSidebarOpen, showToast, printKOTDocument, printBillDocument,
     removeKOTItem, deleteKOT, role
@@ -664,12 +664,22 @@ export default function BillingPage() {
     const gst = subtotal * (gstRate / 100);
     const sgst = subtotal * ((gstRate / 2) / 100);
     const cgst = subtotal * ((gstRate / 2) / 100);
+    const activeTableNum = parseTableNum(activeTableId);
+    const activeSession = activeTableNum ? (activeSessions || []).find(s => s.tableNo === activeTableNum) : null;
+    const actOrder = activeSession?.activeOrderId;
+    const orderHasST = actOrder ? ((actOrder.serviceTax && actOrder.serviceTax > 0) || (actOrder.serviceTaxRate && actOrder.serviceTaxRate > 0)) : false;
+    const orderSTRate = actOrder ? ((actOrder.serviceTaxRate && actOrder.serviceTaxRate > 0)
+      ? actOrder.serviceTaxRate
+      : (actOrder.subtotal > 0 && actOrder.serviceTax > 0 ? Number(((actOrder.serviceTax / actOrder.subtotal) * 100).toFixed(2)) : (settings?.serviceTaxRate || 5))) : undefined;
+
     const isServiceTaxOn = table.serviceTaxEnabled !== undefined 
       ? table.serviceTaxEnabled 
-      : !!settings.serviceTaxEnabled;
+      : (orderHasST ? true : !!settings.serviceTaxEnabled);
     const effectiveServiceTaxRate = (table.serviceTaxRate !== undefined && table.serviceTaxRate > 0)
       ? table.serviceTaxRate
-      : (settings.serviceTaxRate || 0);
+      : (orderSTRate !== undefined && orderSTRate > 0
+          ? orderSTRate
+          : (settings.serviceTaxRate || 0));
     const serviceTax = isServiceTaxOn ? subtotal * (effectiveServiceTaxRate / 100) : 0;
     const totalBeforeDiscount = subtotal + gst + serviceTax;
     const discountVal = parseFloat((table.discount || '').replace(/[^0-9.]/g, '')) || 0;
@@ -677,8 +687,8 @@ export default function BillingPage() {
     const rawTotal = totalBeforeDiscount - discountAmount;
     const grandTotal = Math.max(0, Math.round(rawTotal));
     const roundOff = grandTotal - rawTotal;
-    return { subtotal, gst, gstRate, sgst, cgst, serviceTax, effectiveServiceTaxRate, totalBeforeDiscount, discountVal, discountAmount, grandTotal, roundOff };
-  }, [combinedItems.all, table.discount, table.serviceTaxEnabled, table.serviceTaxRate, settings]);
+    return { subtotal, gst, gstRate, sgst, cgst, serviceTax, effectiveServiceTaxRate, isServiceTaxOn, totalBeforeDiscount, discountVal, discountAmount, grandTotal, roundOff };
+  }, [combinedItems.all, table.discount, table.serviceTaxEnabled, table.serviceTaxRate, activeSessions, activeTableId, settings]);
 
   const { subtotal, gst, gstRate, sgst, cgst, serviceTax, effectiveServiceTaxRate, totalBeforeDiscount, discountVal, discountAmount, grandTotal, roundOff } = totals;
 
@@ -789,6 +799,7 @@ export default function BillingPage() {
       if (timeSinceLastEdit >= 2500) {
         setTableBills(prev => {
           const actOrder = session?.activeOrderId;
+          let discountPctStr = '';
           let serviceTaxEnabledVal = undefined;
           let serviceTaxRateVal = undefined;
           if (actOrder) {
@@ -803,9 +814,9 @@ export default function BillingPage() {
             const orderHasST = (actOrder.serviceTax && actOrder.serviceTax > 0) || (actOrder.serviceTaxRate && actOrder.serviceTaxRate > 0);
             if (orderHasST) {
               serviceTaxEnabledVal = true;
-              serviceTaxRateVal = actOrder.serviceTaxRate > 0
+              serviceTaxRateVal = (actOrder.serviceTaxRate && actOrder.serviceTaxRate > 0)
                 ? actOrder.serviceTaxRate
-                : (actOrder.subtotal > 0 && actOrder.serviceTax > 0 ? Number(((actOrder.serviceTax / actOrder.subtotal) * 100).toFixed(2)) : undefined);
+                : (actOrder.subtotal > 0 && actOrder.serviceTax > 0 ? Number(((actOrder.serviceTax / actOrder.subtotal) * 100).toFixed(2)) : (settings?.serviceTaxRate || 5));
             }
           } else {
             discountPctStr = prev[targetTableId]?.discount || '';
