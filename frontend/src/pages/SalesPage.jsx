@@ -10,9 +10,39 @@ import { TrendingUp, Zap, ArrowRight, CalendarDays, Wallet, Wine, Search, Flame 
 
 const Tip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
+  const itemData = payload[0]?.payload || {};
+
+  let day = itemData.dayOfWeek || itemData.dayShort || '';
+  if (!day && itemData.date) {
+    const parts = itemData.date.split('-');
+    if (parts.length === 3) {
+      const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+      if (!isNaN(d.getTime())) {
+        day = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d.getDay()];
+      }
+    }
+  }
+  if (!day && label) {
+    const parts = String(label).trim().split(/\s+/);
+    if (parts.length >= 2) {
+      const dayNum = parseInt(parts[0], 10);
+      const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const monthIdx = monthNames.findIndex(m => m.toLowerCase() === parts[1].toLowerCase().slice(0, 3));
+      if (monthIdx !== -1 && !isNaN(dayNum)) {
+        const year = new Date().getFullYear();
+        const d = new Date(year, monthIdx, dayNum);
+        if (!isNaN(d.getTime())) {
+          day = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d.getDay()];
+        }
+      }
+    }
+  }
+
+  const tipTitle = day ? `${day}, ${label}` : label;
+
   return (
     <div className="chart-tip">
-      <div className="tip-head">{label}</div>
+      <div className="tip-head" style={{ whiteSpace: 'nowrap' }}>{tipTitle}</div>
       {payload.map((p, i) => (
         <div key={i} className="tip-row">
           <span className="tip-dot" style={{ background: p.color || 'var(--blue)' }}></span>
@@ -258,7 +288,7 @@ export default function SalesPage() {
           <div className="chart-info"><Zap size={16} style={{ color: 'var(--a)' }} /><span>Revenue Growth</span></div>
           <ResponsiveContainer width="100%" height={280}>
             {loading ? <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t2)' }}>Loading...</div> : (
-              <AreaChart data={analytics.dailyData} margin={{ left: -25, right: 10, top: 10, bottom: 0 }}>
+              <AreaChart data={analytics.dailyData} margin={{ left: 10, right: 10, top: 10, bottom: 0 }}>
                 <defs>
                   <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="var(--a)" stopOpacity={0.3} />

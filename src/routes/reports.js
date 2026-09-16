@@ -395,16 +395,28 @@ router.get('/discounts', requireRole(['admin', 'manager', 'staff']), async (req,
       dailyMap[bDate] = (dailyMap[bDate] || 0) + (o.discount || 0);
     });
 
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const shortDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const sortedDates = Object.keys(dailyMap).sort();
     const dailyData = sortedDates.map(dateStr => {
       const parts = dateStr.split('-');
+      let dayOfWeek = '';
+      let dayShort = '';
       if (parts.length === 3) {
+        const y = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10) - 1;
+        const d = parseInt(parts[2], 10);
+        const dateObj = new Date(y, m, d);
+        if (!isNaN(dateObj.getTime())) {
+          dayOfWeek = days[dateObj.getDay()];
+          dayShort = shortDays[dateObj.getDay()];
+        }
         const day = parts[2];
-        const month = months[parseInt(parts[1], 10) - 1] || parts[1];
-        return { name: `${day} ${month}`, discount: dailyMap[dateStr] };
+        const month = months[m] || parts[1];
+        return { name: `${day} ${month}`, date: dateStr, dayOfWeek, dayShort, discount: dailyMap[dateStr] };
       }
-      return { name: dateStr, discount: dailyMap[dateStr] };
+      return { name: dateStr, date: dateStr, discount: dailyMap[dateStr] };
     });
 
     const details = ordersWithDiscount.map(o => ({
@@ -490,13 +502,33 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
       dailyMap[d._id] = (dailyMap[d._id] || 0) + d.sales;
     });
 
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const shortDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const sortedDates = Object.keys(dailyMap).sort();
     const dailyData = sortedDates.map(dateStr => {
       const dateParts = dateStr.split('-');
+      let dayOfWeek = '';
+      let dayShort = '';
+      if (dateParts.length === 3) {
+        const y = parseInt(dateParts[0], 10);
+        const m = parseInt(dateParts[1], 10) - 1;
+        const d = parseInt(dateParts[2], 10);
+        const dateObj = new Date(y, m, d);
+        if (!isNaN(dateObj.getTime())) {
+          dayOfWeek = days[dateObj.getDay()];
+          dayShort = shortDays[dateObj.getDay()];
+        }
+      }
       const day = dateParts[2];
-      const month = months[parseInt(dateParts[1], 10) - 1];
-      return { name: `${day} ${month}`, sales: dailyMap[dateStr] };
+      const month = months[parseInt(dateParts[1], 10) - 1] || dateParts[1];
+      return { 
+        name: `${day} ${month}`, 
+        date: dateStr,
+        dayOfWeek,
+        dayShort,
+        sales: dailyMap[dateStr] 
+      };
     });
 
     // 3. Payment Breakdown (Cash vs UPI, with split allocation for Orders & Events)
