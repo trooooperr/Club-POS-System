@@ -307,11 +307,21 @@ export default function SalesPage() {
               <Zap size={16} style={{ color: 'var(--a)' }} />
               <span>Revenue Growth</span>
             </div>
-            <div className="unified-pill-box" style={{ padding: '2px 4px', gap: 4 }}>
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                background: 'var(--s2)',
+                padding: '3px 4px',
+                borderRadius: '24px',
+                border: '1px solid var(--b1)',
+                gap: '3px'
+              }}
+            >
               <button
                 type="button"
                 className={`f-pill ${chartMetric === 'all' ? 'active' : ''}`}
-                style={{ fontSize: '11px', padding: '3px 8px' }}
+                style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '16px' }}
                 onClick={() => setChartMetric('all')}
               >
                 Both
@@ -319,7 +329,7 @@ export default function SalesPage() {
               <button
                 type="button"
                 className={`f-pill ${chartMetric === 'gross' ? 'active' : ''}`}
-                style={{ fontSize: '11px', padding: '3px 8px' }}
+                style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '16px' }}
                 onClick={() => setChartMetric('gross')}
               >
                 Total
@@ -327,7 +337,7 @@ export default function SalesPage() {
               <button
                 type="button"
                 className={`f-pill ${chartMetric === 'collected' ? 'active' : ''}`}
-                style={{ fontSize: '11px', padding: '3px 8px' }}
+                style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '16px' }}
                 onClick={() => setChartMetric('collected')}
               >
                 Collected
