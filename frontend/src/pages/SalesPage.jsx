@@ -152,6 +152,7 @@ export default function SalesPage() {
 
   const [analytics, setAnalytics] = useState({ revenue: 0, count: 0, dailyData: [], paymentBreakdown: { cash: 0, upi: 0 }, shotsStats: { totalShots: 0, totalRevenue: 0, items: [] } });
   const [loading, setLoading] = useState(false);
+  const [chartMetric, setChartMetric] = useState('all'); // 'all' | 'gross' | 'collected'
 
   useEffect(() => {
     let start = startDate;
@@ -240,9 +241,34 @@ export default function SalesPage() {
 
       {/* KPI Cards Row */}
       <div className="kpi-row-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
-        <div className="kpi" style={{ color: 'var(--t0)' }}>
-          <div className="kpi-label">Total Revenue</div>
-          <div className="kpi-value mono">{loading ? '...' : `₹${(analytics?.revenue || 0).toLocaleString('en-IN')}`}</div>
+        <div className="kpi" style={{ color: 'var(--t0)', borderLeft: '3px solid var(--a)' }}>
+          <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>Total Sales (incl. Due)</span>
+            <span style={{ fontSize: '9.5px', background: 'rgba(245,158,11,0.15)', color: 'var(--a)', padding: '1px 5px', borderRadius: '4px', fontWeight: 800 }}>GROSS</span>
+          </div>
+          <div className="kpi-value mono" style={{ color: 'var(--a)' }}>
+            {loading ? '...' : `₹${((analytics?.grossRevenue ?? analytics?.totalSalesWithDue) || 0).toLocaleString('en-IN')}`}
+          </div>
+        </div>
+
+        <div className="kpi" style={{ color: 'var(--t0)', borderLeft: '3px solid #10B981' }}>
+          <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>Collected Revenue</span>
+            <span style={{ fontSize: '9.5px', background: 'rgba(16,185,129,0.15)', color: '#10B981', padding: '1px 5px', borderRadius: '4px', fontWeight: 800 }}>PAID</span>
+          </div>
+          <div className="kpi-value mono" style={{ color: '#10B981' }}>
+            {loading ? '...' : `₹${((analytics?.collectedRevenue ?? analytics?.revenue) || 0).toLocaleString('en-IN')}`}
+          </div>
+        </div>
+
+        <div className="kpi" style={{ color: 'var(--t0)', borderLeft: '3px solid #EF4444' }}>
+          <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>Pending Due</span>
+            <span style={{ fontSize: '9.5px', background: 'rgba(239,68,68,0.15)', color: '#EF4444', padding: '1px 5px', borderRadius: '4px', fontWeight: 800 }}>DUE</span>
+          </div>
+          <div className="kpi-value mono" style={{ color: (analytics?.totalDue || analytics?.paymentBreakdown?.due || 0) > 0 ? '#EF4444' : 'var(--t0)' }}>
+            {loading ? '...' : `₹${((analytics?.totalDue ?? analytics?.paymentBreakdown?.due) || 0).toLocaleString('en-IN')}`}
+          </div>
         </div>
 
         <div className="kpi" style={{ color: 'var(--t0)' }}>
@@ -285,21 +311,61 @@ export default function SalesPage() {
       {/* Charts Row */}
       <div className="charts-equal-row">
         <div className="card chart-box">
-          <div className="chart-info"><Zap size={16} style={{ color: 'var(--a)' }} /><span>Revenue Growth</span></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+            <div className="chart-info" style={{ margin: 0 }}>
+              <Zap size={16} style={{ color: 'var(--a)' }} />
+              <span>Revenue Growth</span>
+            </div>
+            <div className="unified-pill-box" style={{ padding: '2px 4px', gap: 4 }}>
+              <button
+                type="button"
+                className={`f-pill ${chartMetric === 'all' ? 'active' : ''}`}
+                style={{ fontSize: '11px', padding: '3px 8px' }}
+                onClick={() => setChartMetric('all')}
+              >
+                Both
+              </button>
+              <button
+                type="button"
+                className={`f-pill ${chartMetric === 'gross' ? 'active' : ''}`}
+                style={{ fontSize: '11px', padding: '3px 8px' }}
+                onClick={() => setChartMetric('gross')}
+              >
+                Incl. Due
+              </button>
+              <button
+                type="button"
+                className={`f-pill ${chartMetric === 'collected' ? 'active' : ''}`}
+                style={{ fontSize: '11px', padding: '3px 8px' }}
+                onClick={() => setChartMetric('collected')}
+              >
+                Collected
+              </button>
+            </div>
+          </div>
           <ResponsiveContainer width="100%" height={280}>
             {loading ? <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t2)' }}>Loading...</div> : (
               <AreaChart data={analytics.dailyData} margin={{ left: 10, right: 10, top: 10, bottom: 0 }}>
                 <defs>
-                  <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--a)" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="var(--a)" stopOpacity={0} />
+                  <linearGradient id="areaGradGross" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--a)" stopOpacity={0.35} />
+                    <stop offset="95%" stopColor="var(--a)" stopOpacity={0.02} />
+                  </linearGradient>
+                  <linearGradient id="areaGradCollected" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.35} />
+                    <stop offset="95%" stopColor="#10B981" stopOpacity={0.02} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--b1)" />
                 <XAxis dataKey="name" tick={{ fill: 'var(--t1)', fontSize: 10 }} axisLine={{ stroke: 'var(--b2)' }} />
                 <YAxis tick={{ fill: 'var(--t1)', fontSize: 10 }} axisLine={{ stroke: 'var(--b2)' }} />
                 <Tooltip content={<Tip />} cursor={{ stroke: 'var(--a)', strokeWidth: 1 }} />
-                <Area type="monotone" dataKey="sales" name="Sales" stroke="var(--a)" strokeWidth={2.5} fill="url(#areaGrad)" />
+                {(chartMetric === 'all' || chartMetric === 'gross') && (
+                  <Area type="monotone" dataKey="grossSales" name="Total (incl. Due)" stroke="var(--a)" strokeWidth={2.5} fill="url(#areaGradGross)" />
+                )}
+                {(chartMetric === 'all' || chartMetric === 'collected') && (
+                  <Area type="monotone" dataKey="sales" name="Collected" stroke="#10B981" strokeWidth={2.2} fill={chartMetric === 'all' ? 'none' : 'url(#areaGradCollected)'} />
+                )}
               </AreaChart>
             )}
           </ResponsiveContainer>

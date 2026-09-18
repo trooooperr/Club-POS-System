@@ -402,9 +402,14 @@ router.post('/', async (req, res) => {
     const subtotalVal = typeof orderData.subtotal === 'number' ? orderData.subtotal : (parseFloat(orderData.subtotal) || 0);
     let discountPercentVal = 0;
     if (orderData.discountPercent !== undefined && orderData.discountPercent !== null) {
-      discountPercentVal = parseFloat(orderData.discountPercent) || 0;
-    } else if (discountAmount > 0 && subtotalVal > 0) {
-      discountPercentVal = Math.round((discountAmount / subtotalVal) * 100);
+      discountPercentVal = Math.min(100, parseFloat(orderData.discountPercent) || 0);
+    } else if (discountAmount > 0) {
+      const baseVal = (orderData.grandTotal !== undefined && orderData.grandTotal > 0)
+        ? (orderData.grandTotal + discountAmount)
+        : (subtotalVal > 0 ? subtotalVal : 0);
+      discountPercentVal = (orderData.grandTotal <= 1 && discountAmount > 0)
+        ? 100
+        : (baseVal > 0 ? Math.min(100, Math.round((discountAmount / baseVal) * 100)) : 0);
     }
 
     // New KOT workflow: don't deduct inventory yet, only create order if items empty
@@ -535,9 +540,15 @@ router.patch('/:id/finalize-bill', async (req, res) => {
       order.serviceTaxRate = Number(((order.serviceTax / order.subtotal) * 100).toFixed(2));
     }
     order.discount = typeof discount === 'number' ? discount : (parseFloat(discount) || 0);
-    order.discountPercent = discountPercent !== undefined && discountPercent !== null
-      ? (parseFloat(discountPercent) || 0)
-      : (order.subtotal > 0 && order.discount > 0 ? Math.round((order.discount / order.subtotal) * 100) : 0);
+    const totalBeforeDisc = (order.subtotal || 0) + (order.sgst || 0) + (order.cgst || 0) + (order.serviceTax || 0);
+    if ((order.grandTotal <= 1 || discountPercent >= 100) && order.discount > 0) {
+      order.discountPercent = 100;
+    } else if (discountPercent !== undefined && discountPercent !== null) {
+      order.discountPercent = Math.min(100, parseFloat(discountPercent) || 0);
+    } else {
+      const baseForPct = totalBeforeDisc > 0 ? totalBeforeDisc : (order.subtotal || 0);
+      order.discountPercent = baseForPct > 0 && order.discount > 0 ? Math.min(100, Math.round((order.discount / baseForPct) * 100)) : 0;
+    }
     order.roundOff = roundOff;
     order.grandTotal = grandTotal;
     order.orderStatus = 'COMPLETED';
@@ -855,13 +866,24 @@ router.patch('/:id/discount', async (req, res) => {
       return res.status(400).json({ message: 'Invalid discount amount' });
     }
 
-    order.discount = discountVal;
+    let finalDiscount = discountVal;
+    let rawTotal = subtotalAndTax - finalDiscount;
+    let rounded = Math.round(rawTotal);
 
-    // Recalculate grandTotal and roundOff
-    const rawTotal = subtotalAndTax - discountVal;
-    const rounded = Math.round(rawTotal);
+    if (subtotalAndTax > 1 && (discountVal >= Math.round(subtotalAndTax) || rounded <= 0)) {
+      rounded = 1;
+      finalDiscount = Math.round(subtotalAndTax) - 1;
+      rawTotal = subtotalAndTax - finalDiscount;
+    }
+
+    order.discount = finalDiscount;
     order.roundOff = rounded - rawTotal;
     order.grandTotal = rounded;
+
+    const baseForPct = subtotalAndTax > 0 ? subtotalAndTax : (order.subtotal || 0);
+    order.discountPercent = (rounded <= 1 && finalDiscount > 0)
+      ? 100
+      : (baseForPct > 0 && finalDiscount > 0 ? Math.min(100, Math.round((finalDiscount / baseForPct) * 100)) : 0);
 
     // Adjust payments if paid
     if (order.dueAmount <= 0) {

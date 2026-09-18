@@ -49,10 +49,26 @@ async function recalculateOrderTotals(order) {
   const cgst = (subtotal * cgstRate) / 100;
   const serviceTax = (subtotal * serviceTaxRate) / 100;
 
-  const discount = Math.min(order.discount || 0, subtotal);
-  const rawTotal = subtotal + sgst + cgst + serviceTax - discount;
-  const grandTotal = Math.round(rawTotal);
-  const roundOff = grandTotal - rawTotal;
+  const totalBeforeDisc = subtotal + sgst + cgst + serviceTax;
+  let discount = Math.min(order.discount || 0, totalBeforeDisc);
+  let rawTotal = totalBeforeDisc - discount;
+  let grandTotal = Math.round(rawTotal);
+  let roundOff = grandTotal - rawTotal;
+
+  if (order.discountPercent >= 100 || (order.discount > 0 && order.grandTotal <= 1)) {
+    const roundedBefore = Math.round(totalBeforeDisc);
+    if (roundedBefore > 1) {
+      grandTotal = 1;
+      discount = roundedBefore - 1;
+      rawTotal = totalBeforeDisc - discount;
+      roundOff = grandTotal - rawTotal;
+    }
+  } else if (order.discountPercent > 0) {
+    discount = Math.round(totalBeforeDisc * (order.discountPercent / 100));
+    rawTotal = totalBeforeDisc - discount;
+    grandTotal = Math.max(1, Math.round(rawTotal));
+    roundOff = grandTotal - rawTotal;
+  }
 
   order.items = updatedItems;
   order.subtotal = subtotal;

@@ -50,7 +50,21 @@ export default function BillPreviewModal({ bill, table, tableNo, settings, onClo
   const subtotal = bill?.subtotal || 0;
   const totalBeforeDiscount = Number((subtotal + gst + serviceTax).toFixed(2));
   const discountVal = typeof bill?.discount === 'number' ? bill.discount : (parseFloat(bill?.discount) || 0);
-  const discountPercent = subtotal > 0 && discountVal > 0 ? Math.round((discountVal / subtotal) * 100) : 0;
+  let discountPercent = 0;
+  const isOneRupeeOrFullDiscount = ((bill?.grandTotal !== undefined && bill?.grandTotal <= 1) || (bill?.totalAmount !== undefined && bill?.totalAmount <= 1)) && discountVal > 0;
+  if (isOneRupeeOrFullDiscount) {
+    discountPercent = 100;
+  } else if (bill?.discountPercent !== undefined && bill?.discountPercent !== null && !isNaN(parseFloat(bill?.discountPercent)) && parseFloat(bill?.discountPercent) > 0) {
+    discountPercent = Math.min(100, Math.round(parseFloat(bill.discountPercent)));
+  } else if (discountVal > 0) {
+    if (totalBeforeDiscount > 0) {
+      discountPercent = Math.min(100, Math.round((discountVal / totalBeforeDiscount) * 100));
+    } else if (subtotal > 0) {
+      const base = ((bill?.grandTotal || bill?.totalAmount || 0) + discountVal) || subtotal;
+      discountPercent = Math.min(100, Math.round((discountVal / base) * 100));
+    }
+  }
+  discountPercent = Math.min(100, Math.max(0, discountPercent));
 
   return (
     <div className="moverlay" style={{ background: 'rgba(0,0,0,0.7)', zIndex: 1000 }}>

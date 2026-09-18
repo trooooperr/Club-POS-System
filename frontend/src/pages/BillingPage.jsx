@@ -683,10 +683,29 @@ export default function BillingPage() {
     const serviceTax = isServiceTaxOn ? subtotal * (effectiveServiceTaxRate / 100) : 0;
     const totalBeforeDiscount = subtotal + gst + serviceTax;
     const discountVal = parseFloat((table.discount || '').replace(/[^0-9.]/g, '')) || 0;
-    const discountAmount = Math.round(subtotal * (discountVal / 100));
-    const rawTotal = totalBeforeDiscount - discountAmount;
-    const grandTotal = Math.max(0, Math.round(rawTotal));
-    const roundOff = grandTotal - rawTotal;
+    let discountAmount = 0;
+    let rawTotal = totalBeforeDiscount;
+    let grandTotal = Math.max(0, Math.round(totalBeforeDiscount));
+    let roundOff = grandTotal - totalBeforeDiscount;
+
+    if (discountVal >= 100) {
+      const roundedBeforeDiscount = Math.round(totalBeforeDiscount);
+      if (roundedBeforeDiscount > 1) {
+        grandTotal = 1;
+        discountAmount = roundedBeforeDiscount - 1;
+        rawTotal = totalBeforeDiscount - discountAmount;
+        roundOff = grandTotal - rawTotal;
+      } else {
+        grandTotal = Math.max(1, roundedBeforeDiscount);
+        discountAmount = 0;
+        roundOff = grandTotal - totalBeforeDiscount;
+      }
+    } else if (discountVal > 0) {
+      discountAmount = Math.round(totalBeforeDiscount * (discountVal / 100));
+      rawTotal = totalBeforeDiscount - discountAmount;
+      grandTotal = Math.max(1, Math.round(rawTotal));
+      roundOff = grandTotal - rawTotal;
+    }
     return { subtotal, gst, gstRate, sgst, cgst, serviceTax, effectiveServiceTaxRate, isServiceTaxOn, totalBeforeDiscount, discountVal, discountAmount, grandTotal, roundOff };
   }, [combinedItems.all, table.discount, table.serviceTaxEnabled, table.serviceTaxRate, activeSessions, activeTableId, settings]);
 
@@ -803,10 +822,14 @@ export default function BillingPage() {
           let serviceTaxEnabledVal = undefined;
           let serviceTaxRateVal = undefined;
           if (actOrder) {
-            if (actOrder.discountPercent !== undefined && actOrder.discountPercent !== null && actOrder.discountPercent > 0) {
-              discountPctStr = String(Math.round(actOrder.discountPercent));
-            } else if (actOrder.discount && actOrder.subtotal > 0) {
-              discountPctStr = String(Math.round((actOrder.discount / actOrder.subtotal) * 100));
+            if (actOrder.grandTotal <= 1 && (actOrder.discount || 0) > 0) {
+              discountPctStr = '100';
+            } else if (actOrder.discountPercent !== undefined && actOrder.discountPercent !== null && actOrder.discountPercent > 0) {
+              discountPctStr = String(Math.min(100, Math.round(actOrder.discountPercent)));
+            } else if (actOrder.discount) {
+              const totalBeforeDisc = (actOrder.subtotal || 0) + (actOrder.sgst || 0) + (actOrder.cgst || 0) + (actOrder.serviceTax || 0);
+              const base = totalBeforeDisc > 0 ? totalBeforeDisc : (actOrder.subtotal || 0);
+              discountPctStr = base > 0 ? String(Math.min(100, Math.round((actOrder.discount / base) * 100))) : '';
             } else {
               discountPctStr = '';
             }
@@ -1120,7 +1143,7 @@ export default function BillingPage() {
         isCreditPay,
         paidVal,
         dueVal,
-        discountVal,
+        (discountVal >= 100 || (discountAmount > 0 && grandTotal <= 1)) ? 100 : Math.min(100, Math.max(0, discountVal || (totalBeforeDiscount > 0 && discountAmount > 0 ? Math.round((discountAmount / totalBeforeDiscount) * 100) : 0))),
         effectiveServiceTaxRate
       );
 
@@ -1139,7 +1162,7 @@ export default function BillingPage() {
           serviceTaxRate: effectiveServiceTaxRate,
           serviceTaxEnabled: isServiceTaxOn,
           discountAmount,
-          discountPercent: discountVal,
+          discountPercent: (discountVal >= 100 || (discountAmount > 0 && grandTotal <= 1)) ? 100 : Math.min(100, Math.max(0, discountVal || (totalBeforeDiscount > 0 && discountAmount > 0 ? Math.round((discountAmount / totalBeforeDiscount) * 100) : 0))),
           roundOff,
           grandTotal,
           date: finalizedDate,
@@ -1730,7 +1753,10 @@ export default function BillingPage() {
                       const maxLimit = settings?.maxDiscountLimit !== undefined ? settings.maxDiscountLimit : 30;
                       const raw = e.target.value.replace(/[^0-9.]/g, '');
                       const val = parseFloat(raw) || 0;
-                      if (role !== 'admin' && val > maxLimit) {
+                      if (val > 100) {
+                        showToast('Discount cannot exceed 100%', 'amber');
+                        setTableField(activeTableId, 'discount', '100');
+                      } else if (role !== 'admin' && val > maxLimit) {
                         showToast(`Discount limit exceeded! Maximum allowed for staff/manager is ${maxLimit}%`, 'amber');
                         setTableField(activeTableId, 'discount', String(maxLimit));
                       } else {
@@ -1742,7 +1768,7 @@ export default function BillingPage() {
                 </div>
                 {discountAmount > 0 && (
                   <div className="s-row" style={{ color: '#ef4444' }}>
-                    <span>Discount Amount ({Math.round(discountVal)}%)</span>
+                    <span>Discount Amount ({discountVal >= 100 ? 100 : Math.min(100, Math.round(discountVal || 0))}%)</span>
                     <span>-{c}{discountAmount.toFixed(2)}</span>
                   </div>
                 )}

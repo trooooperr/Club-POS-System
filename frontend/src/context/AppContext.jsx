@@ -515,28 +515,39 @@ export function AppProvider({ children }) {
       ? table.serviceTax
       : (isServiceTaxOn ? subtotal * (effectiveServiceTaxRate / 100) : 0);
 
+    const totalBeforeDiscount = subtotal + gst + serviceTax;
     let discountAmount = 0;
     let discountPercent = 0;
     if (typeof table.discountPercent === 'number' && table.discountPercent > 0) {
-      discountPercent = Math.round(table.discountPercent);
-      discountAmount = typeof table.discountAmount === 'number' ? table.discountAmount : Math.round(subtotal * (discountPercent / 100));
+      discountPercent = Math.min(100, Math.round(table.discountPercent));
+      discountAmount = typeof table.discountAmount === 'number' ? table.discountAmount : Math.round(totalBeforeDiscount * (discountPercent / 100));
     } else {
       const dv = typeof table.discount === 'string' ? table.discount.trim() : (typeof table.discount === 'number' ? String(table.discount) : '');
       if (dv.endsWith('%')) {
-        discountPercent = Math.round(parseFloat(dv) || 0);
-        discountAmount = Math.round(subtotal * (discountPercent / 100));
+        discountPercent = Math.min(100, Math.round(parseFloat(dv) || 0));
+        discountAmount = Math.round(totalBeforeDiscount * (discountPercent / 100));
       } else if (parseFloat(dv) > 0) {
-        discountPercent = Math.round(parseFloat(dv));
-        discountAmount = typeof table.discountAmount === 'number' ? table.discountAmount : Math.round(subtotal * (discountPercent / 100));
+        discountPercent = Math.min(100, Math.round(parseFloat(dv)));
+        discountAmount = typeof table.discountAmount === 'number' ? table.discountAmount : Math.round(totalBeforeDiscount * (discountPercent / 100));
       } else if (typeof table.discountAmount === 'number' && table.discountAmount > 0) {
         discountAmount = table.discountAmount;
-        discountPercent = subtotal > 0 ? Math.round((discountAmount / subtotal) * 100) : 0;
+        discountPercent = totalBeforeDiscount > 0 ? Math.min(100, Math.round((discountAmount / totalBeforeDiscount) * 100)) : 0;
       }
     }
 
-    const totalBeforeDiscount = subtotal + gst + serviceTax;
+    if (discountPercent >= 100) {
+      const roundedBeforeDiscount = Math.round(totalBeforeDiscount);
+      if (roundedBeforeDiscount > 1) {
+        discountAmount = typeof table.discountAmount === 'number' && table.discountAmount > 0 ? table.discountAmount : (roundedBeforeDiscount - 1);
+      }
+      discountPercent = 100;
+    } else if ((((table?.grandTotal !== undefined && table.grandTotal <= 1) || (total !== undefined && total <= 1)) && discountAmount > 0) || discountPercent >= 100) {
+      discountPercent = 100;
+    }
+    discountPercent = Math.min(100, discountPercent);
+
     const rawTotal = totalBeforeDiscount - discountAmount;
-    const grandTotal = Math.max(0, Math.round(rawTotal));
+    const grandTotal = discountPercent >= 100 && Math.round(totalBeforeDiscount) > 1 ? 1 : Math.max(0, Math.round(rawTotal));
     const roundOff = typeof table.roundOff === 'number'
       ? table.roundOff
       : grandTotal - rawTotal;
@@ -614,7 +625,7 @@ export function AppProvider({ children }) {
               ${gst > 0 ? `<div class="row"><span>GST (${gstRate}%)</span><span>${gst.toFixed(2)}</span></div>` : ''}
               ${serviceTax > 0 ? `<div class="row"><span>Service Tax (${stRate}%)</span><span>${serviceTax.toFixed(2)}</span></div>` : ''}
               <div class="row" style="border-top: 1px dashed #000; padding-top: 2px; margin-top: 2px;"><span>Total</span><span>${totalBeforeDiscount.toFixed(2)}</span></div>
-              ${discountAmount > 0 ? `<div class="row"><span>Discount (${Math.round(discountPercent)}%)</span><span>-${discountAmount.toFixed(2)}</span></div>` : ''}
+              ${discountAmount > 0 ? `<div class="row"><span>Discount (${Math.min(100, Math.round(discountPercent))}%)</span><span>-${discountAmount.toFixed(2)}</span></div>` : ''}
               ${roundOff !== 0 ? `<div class="row"><span>Round Off</span><span>${roundOff > 0 ? '+' : ''}${roundOff.toFixed(2)}</span></div>` : ''}
             `;
           })()}
@@ -1148,11 +1159,12 @@ export function AppProvider({ children }) {
       ? table.serviceTaxRate
       : (settings.serviceTaxRate || 0);
     const serviceTax = isServiceTaxOn ? subtotal * ((effectiveServiceTaxRate || 0) / 100) : 0;
+    const totalBeforeDiscount = subtotal + sgst + cgst + serviceTax;
     const dv       = (table.discount || '').trim();
     const discountAmount = Math.round(dv.endsWith('%')
-      ? subtotal * (parseFloat(dv)/100) || 0
+      ? totalBeforeDiscount * (parseFloat(dv)/100) || 0
       : parseFloat(dv) || 0);
-    const rawTotal = subtotal + sgst + cgst + serviceTax - discountAmount;
+    const rawTotal = totalBeforeDiscount - discountAmount;
     const grandTotal = Math.round(Math.max(0, rawTotal));
     const roundOff = (grandTotal - rawTotal);
     return { subtotal, sgst, cgst, serviceTax, discountAmount, grandTotal, roundOff };

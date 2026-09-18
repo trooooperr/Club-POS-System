@@ -347,7 +347,11 @@ router.get('/today-discounts', requireRole(['admin', 'manager', 'staff']), async
       waiterName: o.waiterName || '',
       subtotal: o.subtotal || 0,
       discount: o.discount || 0,
-      discountPercent: (o.subtotal || 0) > 0 ? Math.round((o.discount / o.subtotal) * 100) : 0,
+      discountPercent: (o.grandTotal <= 1 && (o.discount || 0) > 0)
+        ? 100
+        : (o.discountPercent !== undefined && o.discountPercent !== null
+            ? Math.min(100, Math.round(o.discountPercent))
+            : ((o.subtotal || 0) > 0 ? Math.min(100, Math.round(((o.discount || 0) / (((o.grandTotal || 0) + (o.discount || 0)) || o.subtotal)) * 100)) : 0)),
       sgst: o.sgst || 0,
       cgst: o.cgst || 0,
       totalGst: Number(((o.sgst || 0) + (o.cgst || 0)).toFixed(2)),
@@ -428,7 +432,11 @@ router.get('/discounts', requireRole(['admin', 'manager', 'staff']), async (req,
       waiterName: o.waiterName || '',
       subtotal: o.subtotal || 0,
       discount: o.discount || 0,
-      discountPercent: (o.subtotal || 0) > 0 ? Math.round((o.discount / o.subtotal) * 100) : 0,
+      discountPercent: (o.grandTotal <= 1 && (o.discount || 0) > 0)
+        ? 100
+        : (o.discountPercent !== undefined && o.discountPercent !== null
+            ? Math.min(100, Math.round(o.discountPercent))
+            : ((o.subtotal || 0) > 0 ? Math.min(100, Math.round(((o.discount || 0) / (((o.grandTotal || 0) + (o.discount || 0)) || o.subtotal)) * 100)) : 0)),
       sgst: o.sgst || 0,
       cgst: o.cgst || 0,
       totalGst: Number(((o.sgst || 0) + (o.cgst || 0)).toFixed(2)),
@@ -465,9 +473,30 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
     // 1. Order Stats & Event Stats
     const statsResult = await Order.aggregate([
       { $match: orderMatch },
-      { $group: { _id: null, revenue: { $sum: { $ifNull: ["$paidAmount", 0] } }, discount: { $sum: "$discount" }, count: { $sum: 1 } } }
+      { $group: { 
+          _id: null, 
+          revenue: { 
+            $sum: {
+              $cond: [
+                { $gt: ["$paidAmount", 0] },
+                "$paidAmount",
+                {
+                  $cond: [
+                    { $gt: ["$dueAmount", 0] },
+                    { $max: [0, { $subtract: ["$grandTotal", "$dueAmount"] }] },
+                    "$grandTotal"
+                  ]
+                }
+              ]
+            }
+          }, 
+          grossRevenue: { $sum: "$grandTotal" },
+          dueAmount: { $sum: { $ifNull: ["$dueAmount", 0] } },
+          discount: { $sum: "$discount" }, 
+          count: { $sum: 1 } 
+      } }
     ]);
-    const orderStats = statsResult[0] || { revenue: 0, discount: 0, count: 0 };
+    const orderStats = statsResult[0] || { revenue: 0, grossRevenue: 0, dueAmount: 0, discount: 0, count: 0 };
 
     const eventStatsResult = await Event.aggregate([
       { $match: eventMatch },
@@ -484,7 +513,26 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
     // 2. Daily Data Merged (Orders + Events)
     const dailyOrderResult = await Order.aggregate([
       { $match: orderMatch },
-      { $group: { _id: "$businessDate", sales: { $sum: { $ifNull: ["$paidAmount", 0] } } } },
+      { $group: { 
+          _id: "$businessDate", 
+          sales: { 
+            $sum: {
+              $cond: [
+                { $gt: ["$paidAmount", 0] },
+                "$paidAmount",
+                {
+                  $cond: [
+                    { $gt: ["$dueAmount", 0] },
+                    { $max: [0, { $subtract: ["$grandTotal", "$dueAmount"] }] },
+                    "$grandTotal"
+                  ]
+                }
+              ]
+            }
+          },
+          grossSales: { $sum: "$grandTotal" },
+          due: { $sum: { $ifNull: ["$dueAmount", 0] } }
+      } },
       { $sort: { _id: 1 } }
     ]);
 
@@ -496,10 +544,18 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
 
     const dailyMap = {};
     dailyOrderResult.forEach(d => {
-      dailyMap[d._id] = (dailyMap[d._id] || 0) + d.sales;
+      dailyMap[d._id] = {
+        sales: (dailyMap[d._id]?.sales || 0) + (d.sales || 0),
+        grossSales: (dailyMap[d._id]?.grossSales || 0) + (d.grossSales || 0),
+        due: (dailyMap[d._id]?.due || 0) + (d.due || 0)
+      };
     });
     dailyEventResult.forEach(d => {
-      dailyMap[d._id] = (dailyMap[d._id] || 0) + d.sales;
+      dailyMap[d._id] = {
+        sales: (dailyMap[d._id]?.sales || 0) + (d.sales || 0),
+        grossSales: (dailyMap[d._id]?.grossSales || 0) + (d.sales || 0),
+        due: (dailyMap[d._id]?.due || 0)
+      };
     });
 
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -522,12 +578,15 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
       }
       const day = dateParts[2];
       const month = months[parseInt(dateParts[1], 10) - 1] || dateParts[1];
+      const entry = dailyMap[dateStr] || { sales: 0, grossSales: 0, due: 0 };
       return { 
         name: `${day} ${month}`, 
         date: dateStr,
         dayOfWeek,
         dayShort,
-        sales: dailyMap[dateStr] 
+        sales: entry.sales,
+        grossSales: entry.grossSales,
+        due: entry.due
       };
     });
 
@@ -637,11 +696,18 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
 
     const shotsBreakdown = Object.values(shotItemsMap).sort((a, b) => b.quantity - a.quantity);
 
-    const combinedRevenue = (orderStats.revenue || 0) + (eventStats.revenue || 0);
+    const combinedCollectedRevenue = (orderStats.revenue || 0) + (eventStats.revenue || 0);
+    const combinedGrossRevenue = (orderStats.grossRevenue || 0) + (eventStats.revenue || 0);
+    const totalDueAmount = dueTotal > 0 ? dueTotal : (orderStats.dueAmount || 0);
 
     res.json({
-      revenue: combinedRevenue,
+      revenue: combinedCollectedRevenue,           // Collected (Cash + UPI received)
+      collectedRevenue: combinedCollectedRevenue,  // Explicit alias
+      grossRevenue: combinedGrossRevenue,         // Total including due bills
+      totalSalesWithDue: combinedGrossRevenue,    // Clear alias for total sales incl due
+      totalDue: totalDueAmount,                   // Total pending due amount
       orderRevenue: orderStats.revenue || 0,
+      orderGrossRevenue: orderStats.grossRevenue || 0,
       eventRevenue: eventStats.revenue || 0,
       eventExpenses: eventStats.expenses || 0,
       netEventRevenue: eventStats.net || 0,
@@ -650,7 +716,7 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
       orderCount: orderStats.count || 0,
       eventCount: eventStats.count || 0,
       dailyData,
-      paymentBreakdown: { cash: cashTotal, upi: upiTotal, due: dueTotal },
+      paymentBreakdown: { cash: cashTotal, upi: upiTotal, due: totalDueAmount },
       shotsStats: {
         totalShots: totalShotsCount,
         totalRevenue: totalShotsRevenue,

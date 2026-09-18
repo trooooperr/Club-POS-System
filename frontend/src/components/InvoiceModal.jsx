@@ -65,7 +65,20 @@ export default function InvoiceModal() {
   const gst = typeof o.gst === 'number' ? o.gst : Number(((o.cgst || 0) + (o.sgst || 0)).toFixed(2));
   const totalBeforeDiscount = Number(((o.subtotal || 0) + gst + (o.serviceTax || 0)).toFixed(2));
   const discountVal = typeof o.discount === 'number' ? o.discount : (parseFloat(o.discount) || 0);
-  const discountPercent = (o.subtotal || 0) > 0 && discountVal > 0 ? Math.round((discountVal / o.subtotal) * 100) : 0;
+  let discountPercent = 0;
+  if ((o.grandTotal !== undefined && o.grandTotal <= 1) && discountVal > 0) {
+    discountPercent = 100;
+  } else if (o.discountPercent !== undefined && o.discountPercent !== null && !isNaN(parseFloat(o.discountPercent)) && parseFloat(o.discountPercent) > 0) {
+    discountPercent = Math.min(100, Math.round(parseFloat(o.discountPercent)));
+  } else if (discountVal > 0) {
+    if (totalBeforeDiscount > 0) {
+      discountPercent = Math.min(100, Math.round((discountVal / totalBeforeDiscount) * 100));
+    } else if ((o.subtotal || 0) > 0) {
+      const base = ((o.grandTotal || 0) + discountVal) || o.subtotal;
+      discountPercent = Math.min(100, Math.round((discountVal / base) * 100));
+    }
+  }
+  discountPercent = Math.min(100, Math.max(0, discountPercent));
 
   const handlePrint = async () => {
     try {
@@ -293,10 +306,14 @@ ${s.thankYouMsg}
                   }));
 
                   let discountPctStr = '';
-                  if (order.discountPercent !== undefined && order.discountPercent !== null && order.discountPercent > 0) {
-                    discountPctStr = String(Math.round(order.discountPercent));
-                  } else if (order.discount && order.subtotal > 0) {
-                    discountPctStr = String(Math.round((order.discount / order.subtotal) * 100));
+                  if (order.grandTotal <= 1 && (order.discount || 0) > 0) {
+                    discountPctStr = '100';
+                  } else if (order.discountPercent !== undefined && order.discountPercent !== null && order.discountPercent > 0) {
+                    discountPctStr = String(Math.min(100, Math.round(order.discountPercent)));
+                  } else if (order.discount) {
+                    const totalBeforeDisc = (order.subtotal || 0) + (order.sgst || 0) + (order.cgst || 0) + (order.serviceTax || 0);
+                    const base = totalBeforeDisc > 0 ? totalBeforeDisc : (order.subtotal || 0);
+                    discountPctStr = base > 0 ? String(Math.min(100, Math.round((order.discount / base) * 100))) : '';
                   }
 
                   const hasServiceTax = (order.serviceTax && order.serviceTax > 0) || (order.serviceTaxRate && order.serviceTaxRate > 0);

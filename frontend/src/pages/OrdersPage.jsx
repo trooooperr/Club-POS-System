@@ -236,7 +236,11 @@ function OrderEditModal({ order, currency, onSaveDiscount, onSavePayment, onClos
 
   const serviceTaxVal = order.serviceTax || 0;
   const subtotalAndTax = order.subtotal + order.sgst + order.cgst + serviceTaxVal;
-  const newGrandTotal = Math.round(Math.max(0, subtotalAndTax - (parseFloat(discountVal) || 0)));
+  const enteredVal = parseFloat(discountVal) || 0;
+  let newGrandTotal = Math.round(Math.max(0, subtotalAndTax - enteredVal));
+  if (subtotalAndTax > 1 && enteredVal > 0 && (enteredVal >= Math.round(subtotalAndTax) || newGrandTotal <= 0)) {
+    newGrandTotal = 1;
+  }
 
   const handleSaveDiscount = async () => {
     const val = parseFloat(discountVal) || 0;
@@ -245,9 +249,13 @@ function OrderEditModal({ order, currency, onSaveDiscount, onSavePayment, onClos
       return;
     }
 
+    const finalVal = (subtotalAndTax > 1 && val >= Math.round(subtotalAndTax))
+      ? Math.round(subtotalAndTax) - 1
+      : val;
+
     setSaving(true);
     try {
-      await onSaveDiscount(order._id, val);
+      await onSaveDiscount(order._id, finalVal);
       onClose();
     } catch (err) {
       console.error(err);
@@ -464,10 +472,14 @@ export default function OrdersPage() {
         }));
 
         let discountPctStr = '';
-        if (order.discountPercent !== undefined && order.discountPercent !== null && order.discountPercent > 0) {
-          discountPctStr = String(Math.round(order.discountPercent));
-        } else if (order.discount && order.subtotal > 0) {
-          discountPctStr = String(Math.round((order.discount / order.subtotal) * 100));
+        if (order.grandTotal <= 1 && (order.discount || 0) > 0) {
+          discountPctStr = '100';
+        } else if (order.discountPercent !== undefined && order.discountPercent !== null && order.discountPercent > 0) {
+          discountPctStr = String(Math.min(100, Math.round(order.discountPercent)));
+        } else if (order.discount) {
+          const totalBeforeDisc = (order.subtotal || 0) + (order.sgst || 0) + (order.cgst || 0) + (order.serviceTax || 0);
+          const base = totalBeforeDisc > 0 ? totalBeforeDisc : (order.subtotal || 0);
+          discountPctStr = base > 0 ? String(Math.min(100, Math.round((order.discount / base) * 100))) : '';
         }
 
         const hasServiceTax = (order.serviceTax && order.serviceTax > 0) || (order.serviceTaxRate && order.serviceTaxRate > 0);
