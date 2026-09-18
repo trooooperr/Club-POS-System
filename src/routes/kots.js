@@ -346,13 +346,20 @@ router.patch('/:id/print', async (req, res) => {
   }
 });
 
-// ── GET KITCHEN DISPLAY (Full KOT History for Today) ─────────────
+// ── GET KITCHEN DISPLAY (Full KOT History for Today or Selected Date) ─────────────
 router.get('/kitchen/display', async (req, res) => {
   try {
-    const { getBusinessDayBoundary } = require('../lib/businessDay');
-    const start = getBusinessDayBoundary();
+    const { getBusinessDayBoundsForDate, getBusinessDayBoundary } = require('../lib/businessDay');
+    let query = {};
+    if (req.query.date) {
+      const { start, end } = getBusinessDayBoundsForDate(req.query.date);
+      query.createdAt = { $gte: start, $lt: end };
+    } else {
+      const start = getBusinessDayBoundary();
+      query.createdAt = { $gte: start };
+    }
 
-    const kots = await KOT.find({ createdAt: { $gte: start } })
+    const kots = await KOT.find(query)
       .sort({ createdAt: -1 })
       .populate('items.menuItemId');
     

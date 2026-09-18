@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { Volume2, VolumeX, Clock, ChefHat, AlertCircle, RefreshCw, Search } from 'lucide-react';
+import { Volume2, VolumeX, Clock, ChefHat, AlertCircle, RefreshCw, Search, CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import { apiUrl, authFetch } from '../lib/api';
 // --- UI configuration ---
 const TOTAL_TABLES = 21;
@@ -201,13 +201,75 @@ export default function KitchenDisplay({ department = 'kitchen' }) {
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [selectedTable, setSelectedTable] = useState(null);
   const [tableSearch, setTableSearch] = useState('');
-  const loadKOTs = async () => {
+
+  const getBusinessTodayStr = () => {
+    const d = new Date();
+    const istTime = new Date(d.getTime() + 19800000);
+    let year = istTime.getUTCFullYear();
+    let month = istTime.getUTCMonth();
+    let dateVal = istTime.getUTCDate();
+    let hour = istTime.getUTCHours();
+
+    if (hour < 5) {
+      const prevDay = new Date(Date.UTC(year, month, dateVal - 1));
+      year = prevDay.getUTCFullYear();
+      month = prevDay.getUTCMonth();
+      dateVal = prevDay.getUTCDate();
+    }
+
+    const yyyy = year;
+    const mm = String(month + 1).padStart(2, '0');
+    const dd = String(dateVal).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const todayStr = getBusinessTodayStr();
+  const [selectedDate, setSelectedDate] = useState(todayStr);
+  const dateInputRef = useRef(null);
+
+  const formattedDateName = useMemo(() => {
+    const [y, m, d] = selectedDate.split('-').map(Number);
+    const dateObj = new Date(Date.UTC(y, m - 1, d));
+    return dateObj.toLocaleDateString('en-IN', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC'
+    });
+  }, [selectedDate]);
+
+  const handleStepDate = (offset) => {
+    const addDays = (dateStr, days) => {
+      const [y, m, d] = dateStr.split('-').map(Number);
+      const date = new Date(Date.UTC(y, m - 1, d));
+      date.setUTCDate(date.getUTCDate() + days);
+      const yyyy = date.getUTCFullYear();
+      const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const dd = String(date.getUTCDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    };
+
+    if (offset > 0 && selectedDate >= todayStr) return;
+
+    const nextDate = addDays(selectedDate, offset);
+    if (offset > 0 && nextDate > todayStr) return;
+
+    setSelectedDate(nextDate);
+  };
+
+  const isNextDisabled = selectedDate >= todayStr;
+
+  const loadKOTs = async (dateToLoad = selectedDate) => {
     try {
-      const res = await authFetch(apiUrl('/api/kots/kitchen/display'));
+      const res = await authFetch(apiUrl(`/api/kots/kitchen/display?date=${dateToLoad}`));
       if (!res.ok) throw new Error('Failed to load KOTs');
       const data = await res.json();
-      const activeKOTs = data.filter(kot => !['COMPLETED', 'SERVED'].includes(kot.status));
-      setKots(activeKOTs);
+      const isToday = dateToLoad === todayStr;
+      const displayKots = isToday
+        ? data.filter(kot => !['COMPLETED', 'SERVED'].includes(kot.status))
+        : data;
+      setKots(displayKots);
     } catch (err) {
       console.error('Failed to load KOTs:', err);
     } finally {
@@ -245,12 +307,17 @@ export default function KitchenDisplay({ department = 'kitchen' }) {
   };
 
   useEffect(() => {
-    loadKOTs();
+    setLoading(true);
+    setSelectedTable(null);
+    loadKOTs(selectedDate);
+  }, [selectedDate]);
 
+  useEffect(() => {
     if (socket) {
       socket.emit('join-kitchen');
 
       socket.on('NEW_KOT', (data) => {
+        if (selectedDate !== todayStr) return;
         if (!['COMPLETED', 'SERVED'].includes(data.status)) {
           setKots(prev => {
             if (prev.some(k => k._id === data._id)) return prev;
@@ -261,6 +328,7 @@ export default function KitchenDisplay({ department = 'kitchen' }) {
       });
 
       socket.on('KOT_UPDATED', (data) => {
+        if (selectedDate !== todayStr) return;
         if (['COMPLETED', 'SERVED'].includes(data.status)) {
           setKots(prev => prev.filter(k => k._id !== data._id));
         } else {
@@ -269,12 +337,14 @@ export default function KitchenDisplay({ department = 'kitchen' }) {
       });
 
       socket.on('KOT_DELETED', (data) => {
+        if (selectedDate !== todayStr) return;
         if (data.kotId) {
           setKots(prev => prev.filter(k => k._id !== data.kotId));
         }
       });
 
       socket.on('ORDER_COMPLETED', (data) => {
+        if (selectedDate !== todayStr) return;
         if (data.tableNo) {
           setKots(prev => prev.filter(k => k.tableNo !== parseInt(data.tableNo)));
         }
@@ -287,7 +357,7 @@ export default function KitchenDisplay({ department = 'kitchen' }) {
         socket.off('ORDER_COMPLETED');
       };
     }
-  }, [socket, soundEnabled]);
+  }, [socket, soundEnabled, selectedDate, todayStr]);
 
   // Group KOTs by table number, filtering items by the specified department
   const kotsByTable = (kots || []).reduce((acc, kot) => {
@@ -331,9 +401,9 @@ export default function KitchenDisplay({ department = 'kitchen' }) {
 
   return (
     <div className="kitchen-display">
-      {/* Page Header: Search + Refresh */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12 }}>
-        <div className="kot-search-wrapper">
+      {/* Page Header: Search + Date Navigation + Refresh */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, gap: 12, flexWrap: 'wrap' }}>
+        <div className="kot-search-wrapper" style={{ flex: '1 1 200px', maxWidth: '320px' }}>
           <Search size={15} className="kot-search-icon" />
           <input
             type="text"
@@ -343,8 +413,145 @@ export default function KitchenDisplay({ department = 'kitchen' }) {
             className="kot-search-input"
           />
         </div>
+
+        {/* Date Selector Pill (Matches Attendance / Image 2 style) */}
+        <div
+          className="kot-date-navigator"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            background: 'var(--s2)',
+            border: '1px solid var(--b2)',
+            borderRadius: 10,
+            padding: '3px 6px',
+            gap: 6
+          }}
+        >
+          {/* Previous Day Arrow */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleStepDate(-1);
+            }}
+            className="btn btn-ghost date-nav-btn"
+            style={{
+              padding: '6px 8px',
+              borderRadius: 6,
+              border: '1px solid var(--b2)',
+              background: 'var(--s1)',
+              color: 'var(--t0)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              height: 30,
+              width: 30,
+              flexShrink: 0
+            }}
+            title="Previous Day"
+          >
+            <ChevronLeft size={16} />
+          </button>
+
+          {/* Formatted Date Display */}
+          <div
+            style={{
+              fontWeight: 800,
+              fontSize: 13,
+              color: 'var(--t0)',
+              padding: '0 6px',
+              userSelect: 'none',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            {formattedDateName}
+          </div>
+
+          {/* Dedicated Calendar Icon Button */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (dateInputRef.current) {
+                if (typeof dateInputRef.current.showPicker === 'function') {
+                  dateInputRef.current.showPicker();
+                } else {
+                  dateInputRef.current.focus();
+                }
+              }
+            }}
+            className="btn btn-ghost"
+            style={{
+              padding: '5px 7px',
+              borderRadius: 6,
+              border: '1px solid var(--b2)',
+              background: 'var(--s1)',
+              color: 'var(--a)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              height: 30,
+              width: 30,
+              flexShrink: 0
+            }}
+            title="Choose Date"
+          >
+            <CalendarDays size={15} />
+          </button>
+
+          {/* Hidden Date Input */}
+          <input
+            ref={dateInputRef}
+            type="date"
+            value={selectedDate}
+            max={todayStr}
+            onChange={e => {
+              const val = e.target.value;
+              if (val && val <= todayStr) setSelectedDate(val);
+            }}
+            style={{
+              position: 'absolute',
+              opacity: 0,
+              pointerEvents: 'none',
+              width: 0,
+              height: 0
+            }}
+          />
+
+          {/* Next Day Arrow (Disabled on Today or Future) */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleStepDate(1);
+            }}
+            disabled={isNextDisabled}
+            className="btn btn-ghost date-nav-btn"
+            style={{
+              padding: '6px 8px',
+              borderRadius: 6,
+              border: '1px solid var(--b2)',
+              background: 'var(--s1)',
+              color: 'var(--t0)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: 30,
+              width: 30,
+              flexShrink: 0,
+              opacity: isNextDisabled ? 0.25 : 1,
+              cursor: isNextDisabled ? 'not-allowed' : 'pointer'
+            }}
+            title={isNextDisabled ? "Cannot select future dates" : "Next Day"}
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+
         <button
-          onClick={() => { setRefreshing(true); loadKOTs().finally(() => setRefreshing(false)); }}
+          onClick={() => { setRefreshing(true); loadKOTs(selectedDate).finally(() => setRefreshing(false)); }}
           className="refresh-button"
           aria-label="Refresh KOTs"
         >
@@ -357,7 +564,7 @@ export default function KitchenDisplay({ department = 'kitchen' }) {
         ) : Object.keys(kotsByTable).length === 0 ? (
           <div style={{ textAlign: 'center', padding: 60, color: 'var(--t2)' }}>
             <ChefHat size={56} style={{ margin: '0 auto 16px', opacity: 0.3 }} />
-            <p style={{ fontSize: 16 }}>{tableSearch ? `No KOTs for table "${tableSearch}"` : 'No active KOTs'}</p>
+            <p style={{ fontSize: 16 }}>{tableSearch ? `No KOTs for table "${tableSearch}"` : `No KOTs on ${formattedDateName}`}</p>
           </div>
         ) : (
         <>
@@ -397,6 +604,21 @@ export default function KitchenDisplay({ department = 'kitchen' }) {
             )}
         </>
       )}
+
+      <style>{`
+        .date-nav-btn {
+          transition: all 0.2s var(--ease);
+        }
+        .date-nav-btn:hover:not(:disabled) {
+          background: var(--s2) !important;
+          color: var(--a) !important;
+          border-color: var(--a) !important;
+        }
+        .date-nav-btn:disabled {
+          opacity: 0.25 !important;
+          cursor: not-allowed !important;
+        }
+      `}</style>
     </div>
   );
 }

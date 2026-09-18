@@ -1,9 +1,9 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { apiUrl, authFetch } from '../lib/api';
-import { Tag, TrendingUp, CalendarDays, Search, Percent, CheckCircle2, User, Clock, ArrowLeft } from 'lucide-react';
+import { Tag, TrendingUp, CalendarDays, Search, Percent, CheckCircle2, User, Clock, ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 
-function DateField({ value, onChange, inputRef, label }) {
+function DateField({ value, onChange, inputRef, label, max }) {
   const triggerPicker = () => {
     if (inputRef?.current) {
       if (typeof inputRef.current.showPicker === 'function') {
@@ -39,6 +39,7 @@ function DateField({ value, onChange, inputRef, label }) {
         ref={inputRef}
         type="date"
         value={value}
+        max={max}
         onChange={e => onChange(e.target.value)}
         style={{
           position: 'absolute',
@@ -141,11 +142,96 @@ export default function DiscountsPage() {
       });
   }, [range, startDate, endDate, todayStr]);
 
-  const handleDateChange = (type, val) => {
-    setRange('custom');
-    if (type === 'start') setStartDate(val);
-    else setEndDate(val);
+  const handleRangeSelect = (f) => {
+    setRange(f);
+    const now = new Date();
+    const formatDateStr = (d) => {
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    };
+
+    if (f === 'today') {
+      setStartDate(todayStr);
+      setEndDate(todayStr);
+    } else if (f === 'week') {
+      const weekAgo = new Date();
+      weekAgo.setDate(now.getDate() - 7);
+      setStartDate(formatDateStr(weekAgo));
+      setEndDate(todayStr);
+    } else if (f === 'month') {
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      setStartDate(formatDateStr(firstDay));
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      const lastDayStr = formatDateStr(lastDay);
+      setEndDate(lastDayStr > todayStr ? todayStr : lastDayStr);
+    } else if (f === 'all') {
+      setStartDate('2020-01-01');
+      setEndDate(todayStr);
+    }
   };
+
+  const handleDateChange = (type, val) => {
+    if (!val) return;
+    const clampedVal = val > todayStr ? todayStr : val;
+    let newStart = type === 'start' ? clampedVal : startDate;
+    let newEnd = type === 'end' ? clampedVal : endDate;
+
+    if (newStart > newEnd) {
+      if (type === 'start') newEnd = newStart;
+      else newStart = newEnd;
+    }
+
+    setStartDate(newStart);
+    setEndDate(newEnd);
+
+    if (newStart === todayStr && newEnd === todayStr) {
+      setRange('today');
+    } else {
+      setRange('custom');
+    }
+  };
+
+  // Step backward or forward by offset (e.g. -1 for previous day, +1 for next day)
+  const handleStepDate = (offset) => {
+    const addDays = (dateStr, days) => {
+      const [y, m, d] = dateStr.split('-').map(Number);
+      const date = new Date(Date.UTC(y, m - 1, d));
+      date.setUTCDate(date.getUTCDate() + days);
+      const yyyy = date.getUTCFullYear();
+      const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const dd = String(date.getUTCDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    };
+
+    let curStart = startDate;
+    let curEnd = endDate;
+
+    if (range === 'today') {
+      curStart = todayStr;
+      curEnd = todayStr;
+    }
+
+    // Never advance into future beyond today
+    if (offset > 0 && curEnd >= todayStr) return;
+
+    const nextStart = addDays(curStart, offset);
+    const nextEnd = addDays(curEnd, offset);
+
+    if (offset > 0 && nextEnd > todayStr) return;
+
+    setStartDate(nextStart);
+    setEndDate(nextEnd);
+
+    if (nextStart === todayStr && nextEnd === todayStr) {
+      setRange('today');
+    } else {
+      setRange('custom');
+    }
+  };
+
+  const isNextDisabled = range === 'today' || endDate >= todayStr;
 
   const filteredOrders = useMemo(() => {
     if (!searchTerm.trim()) return data.orders || [];
@@ -174,7 +260,7 @@ export default function DiscountsPage() {
             ].map(tab => (
               <button
                 key={tab.id}
-                onClick={() => setRange(tab.id)}
+                onClick={() => handleRangeSelect(tab.id)}
                 style={{
                   background: range === tab.id ? 'var(--a)' : 'transparent',
                   color: range === tab.id ? '#000000' : 'var(--t1)',
@@ -193,9 +279,65 @@ export default function DiscountsPage() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <DateField label="From" value={startDate} onChange={val => handleDateChange('start', val)} inputRef={startInputRef} />
+            {/* Left arrow: Previous Day */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleStepDate(-1);
+              }}
+              className="btn btn-ghost date-nav-btn"
+              style={{
+                padding: '6px 8px',
+                borderRadius: '8px',
+                border: '1px solid var(--b2)',
+                background: 'var(--s2)',
+                color: 'var(--t0)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                height: '32px',
+                width: '32px',
+                flexShrink: 0
+              }}
+              title="Previous Day"
+            >
+              <ChevronLeft size={16} />
+            </button>
+
+            <DateField label="From" value={startDate} onChange={val => handleDateChange('start', val)} max={todayStr} inputRef={startInputRef} />
             <span style={{ color: 'var(--t2)', fontSize: '12px' }}>to</span>
-            <DateField label="To" value={endDate} onChange={val => handleDateChange('end', val)} inputRef={endInputRef} />
+            <DateField label="To" value={endDate} onChange={val => handleDateChange('end', val)} max={todayStr} inputRef={endInputRef} />
+
+            {/* Right arrow: Next Day */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleStepDate(1);
+              }}
+              disabled={isNextDisabled}
+              className="btn btn-ghost date-nav-btn"
+              style={{
+                padding: '6px 8px',
+                borderRadius: '8px',
+                border: '1px solid var(--b2)',
+                background: 'var(--s2)',
+                color: 'var(--t0)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '32px',
+                width: '32px',
+                flexShrink: 0,
+                opacity: isNextDisabled ? 0.25 : 1,
+                cursor: isNextDisabled ? 'not-allowed' : 'pointer'
+              }}
+              title={isNextDisabled ? "Cannot select future dates" : "Next Day"}
+            >
+              <ChevronRight size={16} />
+            </button>
           </div>
         </div>
       </div>
@@ -356,6 +498,21 @@ export default function DiscountsPage() {
           </table>
         </div>
       </div>
+
+      <style>{`
+        .date-nav-btn {
+          transition: all 0.2s var(--ease);
+        }
+        .date-nav-btn:hover:not(:disabled) {
+          background: var(--s3) !important;
+          color: var(--a) !important;
+          border-color: var(--a) !important;
+        }
+        .date-nav-btn:disabled {
+          opacity: 0.25 !important;
+          cursor: not-allowed !important;
+        }
+      `}</style>
     </div>
   );
 }

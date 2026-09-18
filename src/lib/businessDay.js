@@ -84,5 +84,13 @@ function getBusinessDateString(date = new Date()) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-module.exports = { getBusinessDayBoundary, getBusinessDayBounds, getISTHour, getBusinessDateString };
+function getBusinessDayBoundsForDate(dateStr) {
+  if (!dateStr) return getBusinessDayBounds();
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const start = new Date(Date.UTC(year, month - 1, day, 5, 0, 0, 0) - IST_OFFSET_MS);
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+  return { start, end };
+}
+
+module.exports = { getBusinessDayBoundary, getBusinessDayBounds, getBusinessDayBoundsForDate, getISTHour, getBusinessDateString };
 
