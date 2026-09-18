@@ -333,8 +333,13 @@ router.get('/today-discounts', requireRole(['admin', 'manager', 'staff']), async
       discount: { $gt: 0 }
     }).sort({ updatedAt: -1, date: -1 });
 
-    // Exclude ₹1 unpaid bills & pending credit bills
-    const ordersWithDiscount = rawOrders.filter(o => o.grandTotal > 1 && o.paidAmount !== 1 && !o.isCredit && (o.dueAmount || 0) === 0);
+    // Exclude 100% discount bills (even if fine added), ₹1 unpaid bills, & pending credit bills
+    const ordersWithDiscount = rawOrders.filter(o => {
+      const is100Pct = (o.discountPercent !== undefined && o.discountPercent !== null && o.discountPercent >= 100) ||
+        (((o.grandTotal || 0) - (o.fine || 0)) <= 1 && (o.discount || 0) > 0);
+      if (is100Pct) return false;
+      return o.grandTotal > 1 && o.paidAmount !== 1 && !o.isCredit && (o.dueAmount || 0) === 0;
+    });
 
     const totalDiscount = ordersWithDiscount.reduce((sum, o) => sum + (o.discount || 0), 0);
 
@@ -384,8 +389,13 @@ router.get('/discounts', requireRole(['admin', 'manager', 'staff']), async (req,
 
     const rawOrders = await Order.find(matchQuery).sort({ updatedAt: -1, date: -1 });
 
-    // Exclude ₹1 unpaid bills & pending credit bills
-    const ordersWithDiscount = rawOrders.filter(o => o.grandTotal > 1 && o.paidAmount !== 1 && !o.isCredit && (o.dueAmount || 0) === 0);
+    // Exclude 100% discount bills (even if fine added), ₹1 unpaid bills, & pending credit bills
+    const ordersWithDiscount = rawOrders.filter(o => {
+      const is100Pct = (o.discountPercent !== undefined && o.discountPercent !== null && o.discountPercent >= 100) ||
+        (((o.grandTotal || 0) - (o.fine || 0)) <= 1 && (o.discount || 0) > 0);
+      if (is100Pct) return false;
+      return o.grandTotal > 1 && o.paidAmount !== 1 && !o.isCredit && (o.dueAmount || 0) === 0;
+    });
 
     const totalDiscount = ordersWithDiscount.reduce((sum, o) => sum + (o.discount || 0), 0);
     const count = ordersWithDiscount.length;

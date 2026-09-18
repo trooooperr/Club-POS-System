@@ -132,7 +132,23 @@ export default function DiscountsPage() {
       .then(res => res.json())
       .then(resData => {
         if (resData.totalDiscount !== undefined) {
-          setData(resData);
+          const non100Orders = (resData.orders || []).filter(o => {
+            const is100Pct = (o.discountPercent !== undefined && o.discountPercent !== null && o.discountPercent >= 100) ||
+              (((o.grandTotal || 0) - (o.fine || 0)) <= 1 && (o.discount || 0) > 0);
+            return !is100Pct;
+          });
+          const totalDiscount = non100Orders.reduce((sum, o) => sum + (o.discount || 0), 0);
+          const count = non100Orders.length;
+          const avgDiscount = count > 0 ? Math.round(totalDiscount / count) : 0;
+          const maxDiscount = non100Orders.reduce((max, o) => Math.max(max, o.discount || 0), 0);
+          setData({
+            ...resData,
+            totalDiscount,
+            count,
+            avgDiscount,
+            maxDiscount,
+            orders: non100Orders
+          });
         }
         setLoading(false);
       })
