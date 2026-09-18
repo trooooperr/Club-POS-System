@@ -63,16 +63,13 @@ export default function InvoiceModal() {
   const totalBeforeDiscount = Number(((o.subtotal || 0) + gst + (o.serviceTax || 0)).toFixed(2));
   const discountVal = typeof o.discount === 'number' ? o.discount : (parseFloat(o.discount) || 0);
   let discountPercent = 0;
-  if ((o.grandTotal !== undefined && o.grandTotal <= 1) && discountVal > 0) {
-    discountPercent = 100;
-  } else if (o.discountPercent !== undefined && o.discountPercent !== null && !isNaN(parseFloat(o.discountPercent)) && parseFloat(o.discountPercent) > 0) {
+  if (o.discountPercent !== undefined && o.discountPercent !== null && !isNaN(parseFloat(o.discountPercent)) && parseFloat(o.discountPercent) > 0) {
     discountPercent = Math.min(100, Math.round(parseFloat(o.discountPercent)));
-  } else if (discountVal > 0) {
-    if (totalBeforeDiscount > 0) {
+  } else if (totalBeforeDiscount > 0 && discountVal > 0) {
+    if ((o.grandTotal !== undefined && (o.grandTotal - (o.fine || 0)) <= 1) && discountVal >= (totalBeforeDiscount - 1)) {
+      discountPercent = 100;
+    } else {
       discountPercent = Math.min(100, Math.round((discountVal / totalBeforeDiscount) * 100));
-    } else if ((o.subtotal || 0) > 0) {
-      const base = ((o.grandTotal || 0) + discountVal) || o.subtotal;
-      discountPercent = Math.min(100, Math.round((discountVal / base) * 100));
     }
   }
   discountPercent = Math.min(100, Math.max(0, discountPercent));

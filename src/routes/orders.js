@@ -323,7 +323,7 @@ router.get('/table/:tableNo/session', async (req, res) => {
 router.put('/table/:tableNo/session', async (req, res) => {
   try {
     const { tableNo } = req.params;
-    const { pendingItems, totalAmount, waiterName, orderType } = req.body;
+    const { pendingItems, totalAmount, waiterName, orderType, customerName, customerPhone } = req.body;
 
     const sessions = await TableSession.find({ tableNo: parseInt(tableNo), status: { $ne: 'COMPLETED' } });
     let activeSession = null;
@@ -525,20 +525,22 @@ router.patch('/:id/finalize-bill', async (req, res) => {
       order.serviceTaxRate = Number(((order.serviceTax / order.subtotal) * 100).toFixed(2));
     }
     order.discount = typeof discount === 'number' ? discount : (parseFloat(discount) || 0);
-    const totalBeforeDisc = (order.subtotal || 0) + (order.sgst || 0) + (order.cgst || 0) + (order.serviceTax || 0);
-    if ((order.grandTotal <= 1 || discountPercent >= 100) && order.discount > 0) {
-      order.discountPercent = 100;
-    } else if (discountPercent !== undefined && discountPercent !== null) {
-      order.discountPercent = Math.min(100, parseFloat(discountPercent) || 0);
-    } else {
-      const baseForPct = totalBeforeDisc > 0 ? totalBeforeDisc : (order.subtotal || 0);
-      order.discountPercent = baseForPct > 0 && order.discount > 0 ? Math.min(100, Math.round((order.discount / baseForPct) * 100)) : 0;
-    }
     order.fine = typeof fine === 'number' ? fine : (parseFloat(fine) || 0);
     order.roundOff = roundOff;
     order.grandTotal = grandTotal;
     order.orderStatus = 'COMPLETED';
     order.isActive = false;
+
+    const totalBeforeDisc = (order.subtotal || 0) + (order.sgst || 0) + (order.cgst || 0) + (order.serviceTax || 0);
+    const effectiveDiscountPercent = discountPercent !== undefined && discountPercent !== null
+      ? parseFloat(discountPercent)
+      : (totalBeforeDisc > 0 && order.discount > 0 ? (order.discount / totalBeforeDisc) * 100 : 0);
+
+    if (effectiveDiscountPercent >= 100 || (totalBeforeDisc > 1 && (grandTotal - order.fine) <= 1 && order.discount >= (totalBeforeDisc - 1))) {
+      order.discountPercent = 100;
+    } else {
+      order.discountPercent = Math.min(100, Math.max(0, Math.round(effectiveDiscountPercent || 0)));
+    }
     if (waiterName !== undefined) order.waiterName = waiterName;
     if (orderType !== undefined) order.orderType = orderType;
     if (customerName !== undefined) order.customerName = customerName;
