@@ -1776,11 +1776,18 @@ export default function BillingPage() {
                     <span>-{c}{discountAmount.toFixed(2)}</span>
                   </div>
                 )}
-                <div className="s-row">
-                  <span>Fine</span>
+                <div className="s-row" style={{ color: '#ef4444' }}>
+                  <span style={{ color: '#ef4444', fontWeight: 700 }}>Fine</span>
                   <input
                     className="mini-input"
-                    style={{ width: 60, textAlign: 'right' }}
+                    style={{
+                      width: 60,
+                      textAlign: 'right',
+                      borderColor: 'rgba(239, 68, 68, 0.5)',
+                      color: '#ef4444',
+                      fontWeight: 700,
+                      background: 'rgba(239, 68, 68, 0.08)'
+                    }}
                     value={table.fine || ''}
                     onChange={e => {
                       const raw = e.target.value.replace(/[^0-9.]/g, '');

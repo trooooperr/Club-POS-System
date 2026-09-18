@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { X, Printer, Phone, Send, Check, Download, Share2 } from 'lucide-react';
+import { X, Printer, Download } from 'lucide-react';
 import { apiUrl, authFetch } from '../lib/api';
 import { formatBillDateTime } from '../lib/formatDate';
 import QRCode from 'qrcode';
@@ -8,9 +8,6 @@ const qz = typeof window !== 'undefined' ? window.qz : null;
 
 export default function InvoiceModal() {
   const { invoiceOrder, setInvoiceOrder, settings, showToast, workers, role, deleteKOT, removeKOTItem, printBillDocument, loadData, setActiveSection, selectTable, setTableBills } = useApp();
-  const [phone, setPhone] = useState(invoiceOrder?.customerPhone || '');
-  const [sent, setSent] = useState(false);
-  const [tab, setTab] = useState('whatsapp');
 
   if (!invoiceOrder) return null;
   const o = invoiceOrder;
@@ -118,53 +115,6 @@ export default function InvoiceModal() {
 
   const stRate = o.serviceTaxRate || (s.serviceTaxRate > 0 ? s.serviceTaxRate : ((o.subtotal || 0) > 0 && (o.serviceTax || 0) > 0 ? parseFloat(((o.serviceTax / o.subtotal) * 100).toFixed(1)) : 5));
 
-  const sendBill = () => {
-    if (!phone || phone.length < 10) return;
-
-    const itemsText = o.items
-      .map(
-        (item) =>
-          `• ${item.name}  x${item.quantity}  = ${s.currency}${(
-            item.price * item.quantity
-          ).toFixed(0)}`
-      )
-      .join("\n");
-
-    const message = `
-*${s.restaurantName.toUpperCase()}*
-${s.address ? s.address + '\n' : ''}${s.phone ? 'Ph: ' + s.phone + '\n' : ''}${s.gstin ? 'GSTIN: ' + s.gstin + '\n' : ''}
-━━━━━━━━━━━━━━━━━━━━
-*BILL NO:* HTB-${(o.billNo || '').split('-').pop()}
-*TABLE:* ${o.tableNo}
-*DATE:* ${formattedDate}
-${o.waiterName ? '*WAITER:* ' + o.waiterName.toUpperCase() + '\n' : ''}━━━━━━━━━━━━━━━━━━━━
-
-${itemsText}
-
-━━━━━━━━━━━━━━━━━━━━
-Subtotal: ${s.currency}${o.subtotal.toFixed(2)}
-${gst > 0 ? `GST (${gstRate}%): ${s.currency}${gst.toFixed(2)}\n` : ''}${(o.serviceTax || 0) > 0 ? `Service Tax (${stRate}%): ${s.currency}${o.serviceTax.toFixed(2)}\n` : ''}Total: ${s.currency}${totalBeforeDiscount.toFixed(2)}
-${
-  discountVal > 0
-    ? `Discount (${discountPercent}%): -${s.currency}${discountVal.toFixed(2)}\n`
-    : ""
-}${(o.fine || 0) > 0 ? `Fine: ${s.currency}${o.fine.toFixed(2)}\n` : ""}${(o.roundOff || 0) !== 0 ? `Round Off: ${(o.roundOff > 0 ? '+' : '')}${o.roundOff.toFixed(2)}\n` : ""}
-
-*TOTAL: ${s.currency}${Math.round(o.grandTotal)}*
-━━━━━━━━━━━━━━━━━━━━
-
-Paid via: ${o.paymentMode?.toUpperCase()}
-${s.thankYouMsg}
-`;
-
-    const encoded = encodeURIComponent(message);
-
-    window.open(`https://wa.me/91${phone}?text=${encoded}`, "_blank");
-
-    setSent(true);
-    setTimeout(() => setSent(false), 1000);
-  };
-
   return (
     <div className="moverlay">
       <div className="mbox invoice-premium-modal">
@@ -228,7 +178,7 @@ ${s.thankYouMsg}
                   <span>Total</span><span>{s.currency}{totalBeforeDiscount.toFixed(2)}</span>
                 </div>
                 {discountVal > 0 && <div className="sum-row discount"><span>Discount ({discountPercent}%)</span><span>-{s.currency}{discountVal.toFixed(2)}</span></div>}
-                {(o.fine || 0) > 0 && <div className="sum-row"><span>Fine</span><span>+{s.currency}{o.fine.toFixed(2)}</span></div>}
+                {(o.fine || 0) > 0 && <div className="sum-row" style={{ color: '#ef4444', fontWeight: 700 }}><span>Fine</span><span>+{s.currency}{o.fine.toFixed(2)}</span></div>}
                 {(o.roundOff || 0) !== 0 && <div className="sum-row"> <span>Round-Off</span><span>{o.roundOff > 0 ? '+' : ''}{o.roundOff.toFixed(2)}</span></div>}
                 <div className="grand-total-box">
                   <div className="grand-label">AMOUNT PAYABLE</div>
@@ -257,24 +207,6 @@ ${s.thankYouMsg}
                 <br />
                 <strong>Note:</strong> Contact us for parties & group gatherings{(s.phone || s.contact) ? `: ${s.phone || s.contact}` : ''}
               </div>
-            </div>
-          </div>
-
-
-
-          {/* SEND SECTION */}
-          <div className="share-section-card">
-            <div className="share-header"><Share2 size={12}/> SHARE INVOICE</div>
-            <div className="tab-segment-control">
-              <button className={`segment ${tab === 'whatsapp' ? 'active' : ''}`} onClick={() => setTab('whatsapp')}>WhatsApp</button>
-              <button className={`segment ${tab === 'sms' ? 'active' : ''}`} onClick={() => setTab('sms')}>SMS</button>
-            </div>
-            
-            <div className="share-input-row">
-                <input maxLength={10} type={role === 'admin' ? 'text' : 'password'} value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone Number" title={role !== 'admin' ? 'Customer phone number is hidden for privacy' : 'Phone Number'} />
-              <button className="send-circle-btn" onClick={sendBill} disabled={!phone || phone.length < 10}>
-                {sent ? <Check size={12} /> : <Send size={18} />}
-              </button>
             </div>
           </div>
         </div>
