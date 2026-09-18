@@ -241,38 +241,29 @@ export default function SalesPage() {
 
       {/* KPI Cards Row */}
       <div className="kpi-row-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
-        <div className="kpi" style={{ color: 'var(--t0)', borderLeft: '3px solid var(--a)' }}>
-          <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span>Total Sales (incl. Due)</span>
-            <span style={{ fontSize: '9.5px', background: 'rgba(245,158,11,0.15)', color: 'var(--a)', padding: '1px 5px', borderRadius: '4px', fontWeight: 800 }}>GROSS</span>
-          </div>
+        <div className="kpi" style={{ color: 'var(--t0)' }}>
+          <div className="kpi-label">Total Sales</div>
           <div className="kpi-value mono" style={{ color: 'var(--a)' }}>
             {loading ? '...' : `₹${((analytics?.grossRevenue ?? analytics?.totalSalesWithDue) || 0).toLocaleString('en-IN')}`}
           </div>
         </div>
 
-        <div className="kpi" style={{ color: 'var(--t0)', borderLeft: '3px solid #10B981' }}>
-          <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span>Collected Revenue</span>
-            <span style={{ fontSize: '9.5px', background: 'rgba(16,185,129,0.15)', color: '#10B981', padding: '1px 5px', borderRadius: '4px', fontWeight: 800 }}>PAID</span>
-          </div>
+        <div className="kpi" style={{ color: 'var(--t0)' }}>
+          <div className="kpi-label">Collected Revenue</div>
           <div className="kpi-value mono" style={{ color: '#10B981' }}>
             {loading ? '...' : `₹${((analytics?.collectedRevenue ?? analytics?.revenue) || 0).toLocaleString('en-IN')}`}
           </div>
         </div>
 
-        <div className="kpi" style={{ color: 'var(--t0)', borderLeft: '3px solid #EF4444' }}>
-          <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span>Pending Due</span>
-            <span style={{ fontSize: '9.5px', background: 'rgba(239,68,68,0.15)', color: '#EF4444', padding: '1px 5px', borderRadius: '4px', fontWeight: 800 }}>DUE</span>
-          </div>
+        <div className="kpi" style={{ color: 'var(--t0)' }}>
+          <div className="kpi-label">Pending Due</div>
           <div className="kpi-value mono" style={{ color: (analytics?.totalDue || analytics?.paymentBreakdown?.due || 0) > 0 ? '#EF4444' : 'var(--t0)' }}>
             {loading ? '...' : `₹${((analytics?.totalDue ?? analytics?.paymentBreakdown?.due) || 0).toLocaleString('en-IN')}`}
           </div>
         </div>
 
         <div className="kpi" style={{ color: 'var(--t0)' }}>
-          <div className="kpi-label">POS Orders</div>
+          <div className="kpi-label">{range === 'today' ? 'Today Orders' : 'POS Orders'}</div>
           <div className="kpi-value mono">{loading ? '...' : (analytics?.orderCount ?? (analytics?.count || 0))}</div>
         </div>
 
@@ -331,7 +322,7 @@ export default function SalesPage() {
                 style={{ fontSize: '11px', padding: '3px 8px' }}
                 onClick={() => setChartMetric('gross')}
               >
-                Incl. Due
+                Total
               </button>
               <button
                 type="button"
@@ -361,7 +352,7 @@ export default function SalesPage() {
                 <YAxis tick={{ fill: 'var(--t1)', fontSize: 10 }} axisLine={{ stroke: 'var(--b2)' }} />
                 <Tooltip content={<Tip />} cursor={{ stroke: 'var(--a)', strokeWidth: 1 }} />
                 {(chartMetric === 'all' || chartMetric === 'gross') && (
-                  <Area type="monotone" dataKey="grossSales" name="Total (incl. Due)" stroke="var(--a)" strokeWidth={2.5} fill="url(#areaGradGross)" />
+                  <Area type="monotone" dataKey="grossSales" name="Total Sales" stroke="var(--a)" strokeWidth={2.5} fill="url(#areaGradGross)" />
                 )}
                 {(chartMetric === 'all' || chartMetric === 'collected') && (
                   <Area type="monotone" dataKey="sales" name="Collected" stroke="#10B981" strokeWidth={2.2} fill={chartMetric === 'all' ? 'none' : 'url(#areaGradCollected)'} />
