@@ -820,10 +820,12 @@ export default function BillingPage() {
       if (timeSinceLastEdit >= 2500) {
         setTableBills(prev => {
           const actOrder = session?.activeOrderId;
-          let discountPctStr = '';
+          let discountPctStr = prev[targetTableId]?.discount || '';
+          let fineStr = prev[targetTableId]?.fine || (actOrder?.fine ? String(actOrder.fine) : '');
           let serviceTaxEnabledVal = undefined;
           let serviceTaxRateVal = undefined;
-          if (actOrder) {
+
+          if (!discountPctStr && actOrder) {
             if (actOrder.grandTotal <= 1 && (actOrder.discount || 0) > 0) {
               discountPctStr = '100';
             } else if (actOrder.discountPercent !== undefined && actOrder.discountPercent !== null && actOrder.discountPercent > 0) {
@@ -832,10 +834,10 @@ export default function BillingPage() {
               const totalBeforeDisc = (actOrder.subtotal || 0) + (actOrder.sgst || 0) + (actOrder.cgst || 0) + (actOrder.serviceTax || 0);
               const base = totalBeforeDisc > 0 ? totalBeforeDisc : (actOrder.subtotal || 0);
               discountPctStr = base > 0 ? String(Math.min(100, Math.round((actOrder.discount / base) * 100))) : '';
-            } else {
-              discountPctStr = '';
             }
+          }
 
+          if (actOrder) {
             const orderHasST = (actOrder.serviceTax && actOrder.serviceTax > 0) || (actOrder.serviceTaxRate && actOrder.serviceTaxRate > 0);
             if (orderHasST) {
               serviceTaxEnabledVal = true;
@@ -843,8 +845,6 @@ export default function BillingPage() {
                 ? actOrder.serviceTaxRate
                 : (actOrder.subtotal > 0 && actOrder.serviceTax > 0 ? Number(((actOrder.serviceTax / actOrder.subtotal) * 100).toFixed(2)) : (settings?.serviceTaxRate || 5));
             }
-          } else {
-            discountPctStr = prev[targetTableId]?.discount || '';
           }
 
           return {
@@ -855,6 +855,7 @@ export default function BillingPage() {
               customerName: session?.activeOrderId?.customerName || prev[targetTableId]?.customerName || '',
               customerPhone: session?.activeOrderId?.customerPhone || prev[targetTableId]?.customerPhone || '',
               discount: discountPctStr,
+              fine: fineStr,
               ...(serviceTaxEnabledVal !== undefined ? { serviceTaxEnabled: serviceTaxEnabledVal } : {}),
               ...(serviceTaxRateVal !== undefined ? { serviceTaxRate: serviceTaxRateVal } : {})
             }
@@ -1754,6 +1755,7 @@ export default function BillingPage() {
                     style={{ width: 60, textAlign: 'right' }}
                     value={table.discount || ''}
                     onChange={e => {
+                      recordLocalEdit(activeTableId);
                       const maxLimit = settings?.maxDiscountLimit !== undefined ? settings.maxDiscountLimit : 30;
                       const raw = e.target.value.replace(/[^0-9.]/g, '');
                       const val = parseFloat(raw) || 0;
@@ -1790,6 +1792,7 @@ export default function BillingPage() {
                     }}
                     value={table.fine || ''}
                     onChange={e => {
+                      recordLocalEdit(activeTableId);
                       const raw = e.target.value.replace(/[^0-9.]/g, '');
                       setTableField(activeTableId, 'fine', raw);
                     }}
