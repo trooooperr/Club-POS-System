@@ -235,11 +235,12 @@ function OrderEditModal({ order, currency, onSaveDiscount, onSavePayment, onClos
   const [saving, setSaving] = useState(false);
 
   const serviceTaxVal = order.serviceTax || 0;
+  const fineVal = order.fine || 0;
   const subtotalAndTax = order.subtotal + order.sgst + order.cgst + serviceTaxVal;
   const enteredVal = parseFloat(discountVal) || 0;
-  let newGrandTotal = Math.round(Math.max(0, subtotalAndTax - enteredVal));
+  let newGrandTotal = Math.round(Math.max(0, subtotalAndTax - enteredVal + fineVal));
   if (subtotalAndTax > 1 && enteredVal > 0 && (enteredVal >= Math.round(subtotalAndTax) || newGrandTotal <= 0)) {
-    newGrandTotal = 1;
+    newGrandTotal = 1 + fineVal;
   }
 
   const handleSaveDiscount = async () => {
@@ -494,6 +495,7 @@ export default function OrdersPage() {
             customerName: order.customerName || '',
             customerPhone: order.customerPhone || '',
             discount: discountPctStr,
+            fine: order.fine ? String(order.fine) : '',
             isCreditPay: order.isCredit || false,
             paidAmount: order.paidAmount !== undefined ? String(order.paidAmount) : '',
             serviceTaxEnabled: hasServiceTax,

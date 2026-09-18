@@ -94,6 +94,7 @@ export default function InvoiceModal() {
           serviceTax: o.serviceTax || 0,
           discountAmount: discountVal,
           discountPercent,
+          fine: o.fine || 0,
           roundOff: o.roundOff || 0,
           grandTotal: o.grandTotal,
           date: billDate,
@@ -147,7 +148,7 @@ ${
   discountVal > 0
     ? `Discount (${discountPercent}%): -${s.currency}${discountVal.toFixed(2)}\n`
     : ""
-}${(o.roundOff || 0) !== 0 ? `Round Off: ${(o.roundOff > 0 ? '+' : '')}${o.roundOff.toFixed(2)}\n` : ""}
+}${(o.fine || 0) > 0 ? `Fine: ${s.currency}${o.fine.toFixed(2)}\n` : ""}${(o.roundOff || 0) !== 0 ? `Round Off: ${(o.roundOff > 0 ? '+' : '')}${o.roundOff.toFixed(2)}\n` : ""}
 
 *TOTAL: ${s.currency}${Math.round(o.grandTotal)}*
 ━━━━━━━━━━━━━━━━━━━━
@@ -227,6 +228,7 @@ ${s.thankYouMsg}
                   <span>Total</span><span>{s.currency}{totalBeforeDiscount.toFixed(2)}</span>
                 </div>
                 {discountVal > 0 && <div className="sum-row discount"><span>Discount ({discountPercent}%)</span><span>-{s.currency}{discountVal.toFixed(2)}</span></div>}
+                {(o.fine || 0) > 0 && <div className="sum-row"><span>Fine</span><span>+{s.currency}{o.fine.toFixed(2)}</span></div>}
                 {(o.roundOff || 0) !== 0 && <div className="sum-row"> <span>Round-Off</span><span>{o.roundOff > 0 ? '+' : ''}{o.roundOff.toFixed(2)}</span></div>}
                 <div className="grand-total-box">
                   <div className="grand-label">AMOUNT PAYABLE</div>

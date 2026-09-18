@@ -415,6 +415,7 @@ router.post('/', async (req, res) => {
     // New KOT workflow: don't deduct inventory yet, only create order if items empty
     const order = new Order({
       ...orderData,
+      fine: typeof orderData.fine === 'number' ? orderData.fine : (parseFloat(orderData.fine) || 0),
       discount: discountAmount,
       discountPercent: discountPercentVal,
       date: targetDate,
@@ -496,7 +497,7 @@ router.post('/', async (req, res) => {
 // ── FINALIZE BILL (called when printing final bill) ─────────────
 router.patch('/:id/finalize-bill', async (req, res) => {
   try {
-    const { items, subtotal, sgst, cgst, serviceTax, serviceTaxRate, discount, discountPercent, roundOff, grandTotal, waiterName, orderType, customerName, customerPhone, paymentMode, cashAmount, upiAmount, isCredit, paidAmount, dueAmount } = req.body;
+    const { items, subtotal, sgst, cgst, serviceTax, serviceTaxRate, discount, discountPercent, fine, roundOff, grandTotal, waiterName, orderType, customerName, customerPhone, paymentMode, cashAmount, upiAmount, isCredit, paidAmount, dueAmount } = req.body;
 
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ message: 'Order not found' });
@@ -549,6 +550,7 @@ router.patch('/:id/finalize-bill', async (req, res) => {
       const baseForPct = totalBeforeDisc > 0 ? totalBeforeDisc : (order.subtotal || 0);
       order.discountPercent = baseForPct > 0 && order.discount > 0 ? Math.min(100, Math.round((order.discount / baseForPct) * 100)) : 0;
     }
+    order.fine = typeof fine === 'number' ? fine : (parseFloat(fine) || 0);
     order.roundOff = roundOff;
     order.grandTotal = grandTotal;
     order.orderStatus = 'COMPLETED';
@@ -876,14 +878,15 @@ router.patch('/:id/discount', async (req, res) => {
       return res.status(400).json({ message: 'Invalid discount amount' });
     }
 
+    const fineVal = order.fine || 0;
     let finalDiscount = discountVal;
-    let rawTotal = subtotalAndTax - finalDiscount;
+    let rawTotal = subtotalAndTax - finalDiscount + fineVal;
     let rounded = Math.round(rawTotal);
 
     if (subtotalAndTax > 1 && (discountVal >= Math.round(subtotalAndTax) || rounded <= 0)) {
-      rounded = 1;
+      rounded = 1 + fineVal;
       finalDiscount = Math.round(subtotalAndTax) - 1;
-      rawTotal = subtotalAndTax - finalDiscount;
+      rawTotal = subtotalAndTax - finalDiscount + fineVal;
     }
 
     order.discount = finalDiscount;

@@ -683,33 +683,35 @@ export default function BillingPage() {
     const serviceTax = isServiceTaxOn ? subtotal * (effectiveServiceTaxRate / 100) : 0;
     const totalBeforeDiscount = subtotal + gst + serviceTax;
     const discountVal = parseFloat((table.discount || '').replace(/[^0-9.]/g, '')) || 0;
+    const fine = parseFloat((table.fine || '').toString().replace(/[^0-9.]/g, '')) || 0;
     let discountAmount = 0;
-    let rawTotal = totalBeforeDiscount;
-    let grandTotal = Math.max(0, Math.round(totalBeforeDiscount));
-    let roundOff = grandTotal - totalBeforeDiscount;
+    let rawTotal = totalBeforeDiscount + fine;
+    let grandTotal = Math.max(0, Math.round(rawTotal));
+    let roundOff = grandTotal - rawTotal;
 
     if (discountVal >= 100) {
       const roundedBeforeDiscount = Math.round(totalBeforeDiscount);
       if (roundedBeforeDiscount > 1) {
-        grandTotal = 1;
+        grandTotal = 1 + fine;
         discountAmount = roundedBeforeDiscount - 1;
-        rawTotal = totalBeforeDiscount - discountAmount;
+        rawTotal = totalBeforeDiscount - discountAmount + fine;
         roundOff = grandTotal - rawTotal;
       } else {
-        grandTotal = Math.max(1, roundedBeforeDiscount);
+        grandTotal = Math.max(1, roundedBeforeDiscount) + fine;
         discountAmount = 0;
-        roundOff = grandTotal - totalBeforeDiscount;
+        rawTotal = totalBeforeDiscount + fine;
+        roundOff = grandTotal - rawTotal;
       }
     } else if (discountVal > 0) {
       discountAmount = Math.round(totalBeforeDiscount * (discountVal / 100));
-      rawTotal = totalBeforeDiscount - discountAmount;
+      rawTotal = totalBeforeDiscount - discountAmount + fine;
       grandTotal = Math.max(1, Math.round(rawTotal));
       roundOff = grandTotal - rawTotal;
     }
-    return { subtotal, gst, gstRate, sgst, cgst, serviceTax, effectiveServiceTaxRate, isServiceTaxOn, totalBeforeDiscount, discountVal, discountAmount, grandTotal, roundOff };
-  }, [combinedItems.all, table.discount, table.serviceTaxEnabled, table.serviceTaxRate, activeSessions, activeTableId, settings]);
+    return { subtotal, gst, gstRate, sgst, cgst, serviceTax, effectiveServiceTaxRate, isServiceTaxOn, totalBeforeDiscount, discountVal, discountAmount, fine, grandTotal, roundOff };
+  }, [combinedItems.all, table.discount, table.fine, table.serviceTaxEnabled, table.serviceTaxRate, activeSessions, activeTableId, settings]);
 
-  const { subtotal, gst, gstRate, sgst, cgst, serviceTax, effectiveServiceTaxRate, isServiceTaxOn, totalBeforeDiscount, discountVal, discountAmount, grandTotal, roundOff } = totals;
+  const { subtotal, gst, gstRate, sgst, cgst, serviceTax, effectiveServiceTaxRate, isServiceTaxOn, totalBeforeDiscount, discountVal, discountAmount, fine, grandTotal, roundOff } = totals;
 
   const tableList = Array.from({ length: NUM_TABLES }, (_, i) => {
     const id = `t${i + 1}`;
@@ -1144,7 +1146,8 @@ export default function BillingPage() {
         paidVal,
         dueVal,
         (discountVal >= 100 || (discountAmount > 0 && grandTotal <= 1)) ? 100 : Math.min(100, Math.max(0, discountVal || (totalBeforeDiscount > 0 && discountAmount > 0 ? Math.round((discountAmount / totalBeforeDiscount) * 100) : 0))),
-        effectiveServiceTaxRate
+        effectiveServiceTaxRate,
+        fine
       );
 
       // Print bill
@@ -1163,6 +1166,7 @@ export default function BillingPage() {
           serviceTaxEnabled: isServiceTaxOn,
           discountAmount,
           discountPercent: (discountVal >= 100 || (discountAmount > 0 && grandTotal <= 1)) ? 100 : Math.min(100, Math.max(0, discountVal || (totalBeforeDiscount > 0 && discountAmount > 0 ? Math.round((discountAmount / totalBeforeDiscount) * 100) : 0))),
+          fine,
           roundOff,
           grandTotal,
           date: finalizedDate,
@@ -1772,6 +1776,19 @@ export default function BillingPage() {
                     <span>-{c}{discountAmount.toFixed(2)}</span>
                   </div>
                 )}
+                <div className="s-row">
+                  <span>Fine</span>
+                  <input
+                    className="mini-input"
+                    style={{ width: 60, textAlign: 'right' }}
+                    value={table.fine || ''}
+                    onChange={e => {
+                      const raw = e.target.value.replace(/[^0-9.]/g, '');
+                      setTableField(activeTableId, 'fine', raw);
+                    }}
+                    placeholder="0"
+                  />
+                </div>
                 {roundOff !== 0 && (
                   <div className="s-row" style={{ color: 'var(--t3)', fontSize: '12px', fontStyle: 'italic' }}>
                     <span>Round Off</span>

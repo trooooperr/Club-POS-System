@@ -19,6 +19,7 @@ const orderSchema = new mongoose.Schema({
   serviceTaxRate:{ type: Number, default: 0 },
   discount:      { type: Number, default: 0 },
   discountPercent:{ type: Number, default: 0 },
+  fine:          { type: Number, default: 0 },
   roundOff:      { type: Number, default: 0 },
   customerPhone: { type: String, default: '' },
   customerName:  { type: String, default: '' },

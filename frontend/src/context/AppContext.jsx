@@ -544,10 +544,9 @@ export function AppProvider({ children }) {
     } else if ((((table?.grandTotal !== undefined && table.grandTotal <= 1) || (total !== undefined && total <= 1)) && discountAmount > 0) || discountPercent >= 100) {
       discountPercent = 100;
     }
-    discountPercent = Math.min(100, discountPercent);
-
-    const rawTotal = totalBeforeDiscount - discountAmount;
-    const grandTotal = discountPercent >= 100 && Math.round(totalBeforeDiscount) > 1 ? 1 : Math.max(0, Math.round(rawTotal));
+    const fine = typeof table?.fine === 'number' ? table.fine : (parseFloat(table?.fine) || 0);
+    const rawTotal = totalBeforeDiscount - discountAmount + fine;
+    const grandTotal = discountPercent >= 100 && Math.round(totalBeforeDiscount) > 1 ? (1 + fine) : Math.max(0, Math.round(rawTotal));
     const roundOff = typeof table.roundOff === 'number'
       ? table.roundOff
       : grandTotal - rawTotal;
@@ -626,6 +625,7 @@ export function AppProvider({ children }) {
               ${serviceTax > 0 ? `<div class="row"><span>Service Tax (${stRate}%)</span><span>${serviceTax.toFixed(2)}</span></div>` : ''}
               <div class="row" style="border-top: 1px dashed #000; padding-top: 2px; margin-top: 2px;"><span>Total</span><span>${totalBeforeDiscount.toFixed(2)}</span></div>
               ${discountAmount > 0 ? `<div class="row"><span>Discount (${Math.min(100, Math.round(discountPercent))}%)</span><span>-${discountAmount.toFixed(2)}</span></div>` : ''}
+              ${fine > 0 ? `<div class="row"><span>Fine</span><span>${fine.toFixed(2)}</span></div>` : ''}
               ${roundOff !== 0 ? `<div class="row"><span>Round Off</span><span>${roundOff > 0 ? '+' : ''}${roundOff.toFixed(2)}</span></div>` : ''}
             `;
           })()}
@@ -1125,7 +1125,7 @@ export function AppProvider({ children }) {
   const clearTable = useCallback((tableId) => {
     setTableBills(prev => ({
       ...prev,
-      [tableId]: { items:[], discount:'', customerPhone:'', customerName:'', startTime:null, dueAmount:0 }
+      [tableId]: { items:[], discount:'', fine:'', customerPhone:'', customerName:'', startTime:null, dueAmount:0 }
     }));
   }, [setTableBills]);
 
@@ -1164,10 +1164,11 @@ export function AppProvider({ children }) {
     const discountAmount = Math.round(dv.endsWith('%')
       ? totalBeforeDiscount * (parseFloat(dv)/100) || 0
       : parseFloat(dv) || 0);
-    const rawTotal = totalBeforeDiscount - discountAmount;
+    const fine = typeof table?.fine === 'number' ? table.fine : (parseFloat(table?.fine) || 0);
+    const rawTotal = totalBeforeDiscount - discountAmount + fine;
     const grandTotal = Math.round(Math.max(0, rawTotal));
     const roundOff = (grandTotal - rawTotal);
-    return { subtotal, sgst, cgst, serviceTax, discountAmount, grandTotal, roundOff };
+    return { subtotal, sgst, cgst, serviceTax, discountAmount, fine, grandTotal, roundOff };
   }, [tableBills, activeTableId, settings]);
 
 
@@ -1678,12 +1679,12 @@ export function AppProvider({ children }) {
     }
   }, [socket, applyInventoryUpdate, setOrderHistory, setInvoiceOrder]);
 
-  const finalizeBill = useCallback(async (orderId, items, subtotal, sgst, cgst, serviceTax, discount, roundOff, grandTotal, waiterName = '', orderType = 'dine-in', customerName = '', customerPhone = '', paymentMode = 'cash', cashAmount = 0, upiAmount = 0, isCredit = false, paidAmount = undefined, dueAmount = undefined, discountPercent = undefined, serviceTaxRate = undefined) => {
+  const finalizeBill = useCallback(async (orderId, items, subtotal, sgst, cgst, serviceTax, discount, roundOff, grandTotal, waiterName = '', orderType = 'dine-in', customerName = '', customerPhone = '', paymentMode = 'cash', cashAmount = 0, upiAmount = 0, isCredit = false, paidAmount = undefined, dueAmount = undefined, discountPercent = undefined, serviceTaxRate = undefined, fine = 0) => {
     try {
       const res = await authFetch(apiUrl(`/api/orders/${orderId}/finalize-bill`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items, subtotal, sgst, cgst, serviceTax, serviceTaxRate, discount, discountPercent, roundOff, grandTotal, waiterName, orderType, customerName, customerPhone, paymentMode, cashAmount, upiAmount, isCredit, paidAmount, dueAmount })
+        body: JSON.stringify({ items, subtotal, sgst, cgst, serviceTax, serviceTaxRate, discount, discountPercent, fine, roundOff, grandTotal, waiterName, orderType, customerName, customerPhone, paymentMode, cashAmount, upiAmount, isCredit, paidAmount, dueAmount })
       });
       if (!res.ok) throw new Error('Failed to finalize bill');
       const orderResponse = await res.json();
