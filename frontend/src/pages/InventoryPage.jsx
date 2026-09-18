@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, X, ChevronDown, ChevronUp, Search, Trash2 } from 'lucide-react';
+import { Plus, X, ChevronDown, ChevronUp, Search, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { apiUrl, authFetch } from '../lib/api';
 import TopNavBar from '../components/TopNavBar';
@@ -17,7 +17,7 @@ const getStatus = (i) => {
 
 /* MODAL */
 
-function DateField({ value, onChange, inputRef, label }) {
+function DateField({ value, onChange, inputRef, label, max }) {
   const triggerPicker = () => {
     if (inputRef?.current) {
       if (typeof inputRef.current.showPicker === 'function') {
@@ -35,6 +35,7 @@ function DateField({ value, onChange, inputRef, label }) {
         type="date"
         value={value}
         onChange={onChange}
+        max={max}
         className="date-picker-clean unified-date-input"
         ref={inputRef}
       />
@@ -335,12 +336,57 @@ export default function InventoryPage() {
   const [modal, setModal] = useState(null);
   const [expanded, setExpanded] = useState(null);
   const [search, setSearch] = useState('');
-  const [startDate, setStartDate] = useState(getTodayLocalDate);
-  const [endDate, setEndDate] = useState(getTodayLocalDate);
+  const todayStr = getTodayLocalDate();
+  const [startDate, setStartDate] = useState(todayStr);
+  const [endDate, setEndDate] = useState(todayStr);
   const startInputRef = useRef(null);
   const endInputRef = useRef(null);
   const [cat, setCat] = useState('All');
   const [confirmDelete, setConfirmDelete] = useState(null);
+
+  const handleDateChange = (type, val) => {
+    if (!val) return;
+    const clampedVal = val > todayStr ? todayStr : val;
+    let newStart = type === 'start' ? clampedVal : startDate;
+    let newEnd = type === 'end' ? clampedVal : endDate;
+
+    if (newStart > newEnd) {
+      if (type === 'start') newEnd = newStart;
+      else newStart = newEnd;
+    }
+
+    setStartDate(newStart);
+    setEndDate(newEnd);
+  };
+
+  // Step backward or forward by offset (e.g. -1 for previous day, +1 for next day)
+  const handleStepDate = (offset) => {
+    const addDays = (dateStr, days) => {
+      const [y, m, d] = dateStr.split('-').map(Number);
+      const date = new Date(Date.UTC(y, m - 1, d));
+      date.setUTCDate(date.getUTCDate() + days);
+      const yyyy = date.getUTCFullYear();
+      const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const dd = String(date.getUTCDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    };
+
+    let curStart = startDate || todayStr;
+    let curEnd = endDate || todayStr;
+
+    // Never advance into future beyond today
+    if (offset > 0 && curEnd >= todayStr) return;
+
+    const nextStart = addDays(curStart, offset);
+    const nextEnd = addDays(curEnd, offset);
+
+    if (offset > 0 && nextEnd > todayStr) return;
+
+    setStartDate(nextStart);
+    setEndDate(nextEnd);
+  };
+
+  const isNextDisabled = !endDate || endDate >= todayStr;
 
   // Daily Stock Report States
   const [activeTab, setActiveTab] = useState('stock'); // 'stock' | 'report'
@@ -877,21 +923,78 @@ export default function InventoryPage() {
                   </button>
                 )}
               </div>
-              <div style={{ flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                {/* Left arrow: Previous Day */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleStepDate(-1);
+                  }}
+                  className="btn btn-ghost date-nav-btn"
+                  style={{
+                    padding: '6px 8px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--b2)',
+                    background: 'var(--s2)',
+                    color: 'var(--t0)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    height: '36px',
+                    width: '36px',
+                    flexShrink: 0
+                  }}
+                  title="Previous Day"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+
                 <DateField
                   label="From Date"
                   value={startDate}
-                  onChange={e => setStartDate(e.target.value)}
+                  onChange={e => handleDateChange('start', e.target.value)}
+                  max={todayStr}
                   inputRef={startInputRef}
                 />
-              </div>
-              <div style={{ flexShrink: 0 }}>
+
                 <DateField
                   label="To Date"
                   value={endDate}
-                  onChange={e => setEndDate(e.target.value)}
+                  onChange={e => handleDateChange('end', e.target.value)}
+                  max={todayStr}
                   inputRef={endInputRef}
                 />
+
+                {/* Right arrow: Next Day */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleStepDate(1);
+                  }}
+                  disabled={isNextDisabled}
+                  className="btn btn-ghost date-nav-btn"
+                  style={{
+                    padding: '6px 8px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--b2)',
+                    background: 'var(--s2)',
+                    color: 'var(--t0)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: '36px',
+                    width: '36px',
+                    flexShrink: 0,
+                    opacity: isNextDisabled ? 0.25 : 1,
+                    cursor: isNextDisabled ? 'not-allowed' : 'pointer'
+                  }}
+                  title={isNextDisabled ? "Cannot select future dates" : "Next Day"}
+                >
+                  <ChevronRight size={16} />
+                </button>
               </div>
               <div className="select-wrapper-unified" style={{ width: '150px', flexShrink: 0 }}>
                 <select value={reportCat} onChange={e => setReportCat(e.target.value)} style={{ paddingLeft: '14px' }}>
@@ -1056,6 +1159,21 @@ export default function InventoryPage() {
           </div>
         </div>
       )}
+
+      <style>{`
+        .date-nav-btn {
+          transition: all 0.2s var(--ease);
+        }
+        .date-nav-btn:hover:not(:disabled) {
+          background: var(--s3) !important;
+          color: var(--a) !important;
+          border-color: var(--a) !important;
+        }
+        .date-nav-btn:disabled {
+          opacity: 0.25 !important;
+          cursor: not-allowed !important;
+        }
+      `}</style>
     </div>
   );
 }
