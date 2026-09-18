@@ -467,7 +467,7 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
     const { startDate, endDate } = req.query;
     if (!startDate || !endDate) return res.status(400).json({ message: 'startDate and endDate required' });
 
-    const orderMatch = { businessDate: { $gte: startDate, $lte: endDate }, grandTotal: { $gt: 0 }, isManualDue: { $ne: true } };
+    const orderMatch = { businessDate: { $gte: startDate, $lte: endDate }, grandTotal: { $gt: 0 } };
     const eventMatch = { date: { $gte: startDate, $lte: endDate } };
 
     // 1. Order Stats & Event Stats
@@ -664,7 +664,7 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
       return shooterCategoryItems.has(itemName.trim().toLowerCase());
     };
 
-    const fullOrdersForShots = await Order.find({ ...orderMatch, isActive: false }).select('items businessDate date').lean();
+    const fullOrdersForShots = await Order.find({ ...orderMatch, isActive: false, isManualDue: { $ne: true } }).select('items businessDate date').lean();
 
     const shotItemsMap = {};
     let totalShotsCount = 0;

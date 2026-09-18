@@ -1245,11 +1245,55 @@ export function AppProvider({ children }) {
       });
     }
 
+    const subtotal = kotTotal + pendingTotal;
+    if (subtotal <= 0) {
+      return {
+        itemsCount: 0,
+        subtotal: 0,
+        totalAmount: 0
+      };
+    }
+
+    const gstRate = settings?.gstRate !== undefined 
+      ? settings.gstRate 
+      : Number(((settings?.cgstRate || 0) + (settings?.sgstRate || 0)).toFixed(2));
+    const gst = subtotal * (gstRate / 100);
+
+    const actOrder = session?.activeOrderId;
+    const orderHasST = actOrder ? ((actOrder.serviceTax && actOrder.serviceTax > 0) || (actOrder.serviceTaxRate && actOrder.serviceTaxRate > 0)) : false;
+    const orderSTRate = actOrder ? ((actOrder.serviceTaxRate && actOrder.serviceTaxRate > 0)
+      ? actOrder.serviceTaxRate
+      : (actOrder.subtotal > 0 && actOrder.serviceTax > 0 ? Number(((actOrder.serviceTax / actOrder.subtotal) * 100).toFixed(2)) : (settings?.serviceTaxRate || 5))) : undefined;
+
+    const isServiceTaxOn = localBill?.serviceTaxEnabled !== undefined 
+      ? localBill.serviceTaxEnabled 
+      : (orderHasST ? true : !!settings?.serviceTaxEnabled);
+    const effectiveServiceTaxRate = (localBill?.serviceTaxRate !== undefined && localBill.serviceTaxRate > 0)
+      ? localBill.serviceTaxRate
+      : (orderSTRate !== undefined && orderSTRate > 0
+          ? orderSTRate
+          : (settings?.serviceTaxRate || 0));
+    const serviceTax = isServiceTaxOn ? subtotal * ((effectiveServiceTaxRate || 0) / 100) : 0;
+    const totalBeforeDiscount = subtotal + gst + serviceTax;
+
+    const discountVal = parseFloat(String(localBill?.discount || (actOrder?.discount ? actOrder.discount : '') || '').replace(/[^0-9.]/g, '')) || 0;
+    let discountAmount = 0;
+    let grandTotal = Math.max(0, Math.round(totalBeforeDiscount));
+
+    if (discountVal >= 100) {
+      const roundedBeforeDiscount = Math.round(totalBeforeDiscount);
+      grandTotal = roundedBeforeDiscount > 1 ? 1 : Math.max(1, roundedBeforeDiscount);
+    } else if (discountVal > 0) {
+      discountAmount = Math.round(totalBeforeDiscount * (discountVal / 100));
+      grandTotal = Math.max(1, Math.round(totalBeforeDiscount - discountAmount));
+    }
+
     return {
       itemsCount: kotItemsCount + pendingItemsCount,
-      totalAmount: kotTotal + pendingTotal
+      subtotal,
+      totalAmount: grandTotal
     };
-  }, [tableBills, activeSessions]);
+  }, [tableBills, activeSessions, settings]);
 
   // ── Generate bill (with proper error handling) ──────────────────
   const generateBill = useCallback(async (paymentMode, paidAmount) => {

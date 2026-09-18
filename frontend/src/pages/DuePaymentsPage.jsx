@@ -19,12 +19,31 @@ export default function DuePaymentsPage() {
   const [notes, setNotes] = useState('');
 
   // Add New Due Record Modal State
+  const getTodayDateStr = () => {
+    const d = new Date();
+    const istTime = new Date(d.getTime() + 19800000);
+    let year = istTime.getUTCFullYear();
+    let month = istTime.getUTCMonth();
+    let dateVal = istTime.getUTCDate();
+    let hour = istTime.getUTCHours();
+    if (hour < 5) {
+      const prevDay = new Date(Date.UTC(year, month, dateVal - 1));
+      year = prevDay.getUTCFullYear();
+      month = prevDay.getUTCMonth();
+      dateVal = prevDay.getUTCDate();
+    }
+    const mm = String(month + 1).padStart(2, '0');
+    const dd = String(dateVal).padStart(2, '0');
+    return `${year}-${mm}-${dd}`;
+  };
+
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [addCustName, setAddCustName] = useState('');
   const [addCustPhone, setAddCustPhone] = useState('');
   const [addDueAmount, setAddDueAmount] = useState('');
   const [addTableNo, setAddTableNo] = useState('');
   const [addNotes, setAddNotes] = useState('');
+  const [addDate, setAddDate] = useState(getTodayDateStr());
 
   const [saving, setSaving] = useState(false);
 
@@ -113,6 +132,7 @@ export default function DuePaymentsPage() {
     setAddDueAmount('');
     setAddTableNo('');
     setAddNotes('');
+    setAddDate(getTodayDateStr());
     setAddModalOpen(true);
   };
 
@@ -138,7 +158,9 @@ export default function DuePaymentsPage() {
           customerPhone: addCustPhone.trim(),
           dueAmount: amt,
           tableNo: addTableNo,
-          notes: addNotes.trim()
+          notes: addNotes.trim(),
+          businessDate: addDate || getTodayDateStr(),
+          date: addDate || getTodayDateStr()
         })
       });
 
@@ -512,15 +534,28 @@ export default function DuePaymentsPage() {
                 </div>
               </div>
 
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--t2)', display: 'block', marginBottom: 4 }}>Table No. (Optional)</label>
-                <input
-                  type="number"
-                  placeholder="e.g. 4"
-                  value={addTableNo}
-                  onChange={e => setAddTableNo(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)', fontSize: 13 }}
-                />
+              <div style={{ display: 'flex', gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--t2)', display: 'block', marginBottom: 4 }}>Date *</label>
+                  <input
+                    type="date"
+                    value={addDate}
+                    onChange={e => setAddDate(e.target.value)}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)', fontSize: 13, fontWeight: 600, colorScheme: 'dark' }}
+                    required
+                  />
+                </div>
+
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--t2)', display: 'block', marginBottom: 4 }}>Table No. (Optional)</label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 4"
+                    value={addTableNo}
+                    onChange={e => setAddTableNo(e.target.value)}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)', fontSize: 13 }}
+                  />
+                </div>
               </div>
 
               <div>

@@ -732,7 +732,7 @@ router.patch('/:id/settle', async (req, res) => {
 // ── CREATE NEW DUE / CREDIT PAYMENT RECORD ─────────────────────────────
 router.post('/due', requireRole(['admin', 'manager', 'staff']), async (req, res) => {
   try {
-    const { customerName, customerPhone, dueAmount, notes, tableNo, businessDate } = req.body;
+    const { customerName, customerPhone, dueAmount, notes, tableNo, businessDate, date } = req.body;
     const amount = parseFloat(dueAmount);
     if (!customerName || !customerName.trim()) {
       return res.status(400).json({ message: 'Customer name is required' });
@@ -741,13 +741,14 @@ router.post('/due', requireRole(['admin', 'manager', 'staff']), async (req, res)
       return res.status(400).json({ message: 'Valid due amount is required' });
     }
 
-    const bDate = businessDate || getBusinessDateString(new Date());
+    const bDate = businessDate || (date ? String(date).substring(0, 10) : getBusinessDateString(new Date()));
+    const recordDate = date ? new Date(date) : (businessDate ? new Date(businessDate) : new Date());
     const dueCount = await Order.countDocuments({ businessDate: bDate, isManualDue: true });
     const billNo = `HTB-D${(dueCount + 1).toString().padStart(2, '0')}`;
 
     const newDueOrder = new Order({
       billNo,
-      date: new Date(),
+      date: recordDate,
       businessDate: bDate,
       tableNo: parseInt(tableNo, 10) || 0,
       customerName: customerName.trim(),
@@ -807,10 +808,19 @@ router.patch('/:id/payment-status', requireRole(['admin', 'manager', 'staff']), 
       const newDue = dueAmount !== undefined ? Math.max(0, parseFloat(dueAmount) || 0) : (order.dueAmount > 0 ? order.dueAmount : order.grandTotal);
       order.dueAmount = newDue;
       order.paidAmount = Math.max(0, order.grandTotal - newDue);
-      order.cashAmount = 0;
-      order.upiAmount = 0;
-      order.isCredit = true;
-      order.paymentStatus = order.paidAmount > 0 ? 'partial' : 'pending';
+      if (newDue === 0) {
+        order.isCredit = false;
+        order.paymentStatus = 'paid';
+        if (!order.paymentMode || order.paymentMode === 'due') {
+          order.paymentMode = 'cash';
+          order.paymentMethod = 'cash';
+        }
+      } else {
+        order.cashAmount = 0;
+        order.upiAmount = 0;
+        order.isCredit = true;
+        order.paymentStatus = order.paidAmount > 0 ? 'partial' : 'pending';
+      }
     } else if (dueAmount !== undefined) {
       const newDue = Math.max(0, parseFloat(dueAmount) || 0);
       order.dueAmount = newDue;
