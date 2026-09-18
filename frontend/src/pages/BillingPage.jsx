@@ -1750,34 +1750,35 @@ export default function BillingPage() {
                 </div>
                 <div className="s-row">
                   <span>Discount (%)</span>
-                  <input
-                    className="mini-input"
-                    style={{ width: 60, textAlign: 'right' }}
-                    value={table.discount || ''}
-                    onChange={e => {
-                      recordLocalEdit(activeTableId);
-                      const maxLimit = settings?.maxDiscountLimit !== undefined ? settings.maxDiscountLimit : 30;
-                      const raw = e.target.value.replace(/[^0-9.]/g, '');
-                      const val = parseFloat(raw) || 0;
-                      if (val > 100) {
-                        showToast('Discount cannot exceed 100%', 'amber');
-                        setTableField(activeTableId, 'discount', '100');
-                      } else if (role !== 'admin' && val > maxLimit) {
-                        showToast(`Discount limit exceeded! Maximum allowed for staff/manager is ${maxLimit}%`, 'amber');
-                        setTableField(activeTableId, 'discount', String(maxLimit));
-                      } else {
-                        setTableField(activeTableId, 'discount', raw);
-                      }
-                    }}
-                    placeholder="0"
-                  />
-                </div>
-                {discountAmount > 0 && (
-                  <div className="s-row" style={{ color: '#ef4444' }}>
-                    <span>Discount Amount ({discountVal >= 100 ? 100 : Math.min(100, Math.round(discountVal || 0))}%)</span>
-                    <span>-{c}{discountAmount.toFixed(2)}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {discountAmount > 0 && (
+                      <span style={{ color: '#ef4444', fontWeight: 700, fontSize: '12px' }}>
+                        -{c}{discountAmount.toFixed(2)}
+                      </span>
+                    )}
+                    <input
+                      className="mini-input"
+                      style={{ width: 60, textAlign: 'right' }}
+                      value={table.discount || ''}
+                      onChange={e => {
+                        recordLocalEdit(activeTableId);
+                        const maxLimit = settings?.maxDiscountLimit !== undefined ? settings.maxDiscountLimit : 30;
+                        const raw = e.target.value.replace(/[^0-9.]/g, '');
+                        const val = parseFloat(raw) || 0;
+                        if (val > 100) {
+                          showToast('Discount cannot exceed 100%', 'amber');
+                          setTableField(activeTableId, 'discount', '100');
+                        } else if (role !== 'admin' && val > maxLimit) {
+                          showToast(`Discount limit exceeded! Maximum allowed for staff/manager is ${maxLimit}%`, 'amber');
+                          setTableField(activeTableId, 'discount', String(maxLimit));
+                        } else {
+                          setTableField(activeTableId, 'discount', raw);
+                        }
+                      }}
+                      placeholder="0"
+                    />
                   </div>
-                )}
+                </div>
                 <div className="s-row" style={{ color: '#ef4444' }}>
                   <span style={{ color: '#ef4444', fontWeight: 700 }}>Fine</span>
                   <input
