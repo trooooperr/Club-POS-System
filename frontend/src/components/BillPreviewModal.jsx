@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Share2, MessageCircle, Download, Printer } from 'lucide-react';
 import { formatBillDateTime } from '../lib/formatDate';
+import { BILL_LOGO_BASE64 } from '../lib/billLogoBase64';
 
 export default function BillPreviewModal({ bill, table, tableNo, settings, onClose, onPrint }) {
   const [customerPhone, setCustomerPhone] = useState(table?.customerPhone || '');
@@ -85,7 +86,7 @@ export default function BillPreviewModal({ bill, table, tableNo, settings, onClo
           {/* Header */}
           <div style={{ textAlign: 'center', marginBottom: 16 }}>
             <img
-              src="/bill-logo.png"
+              src={BILL_LOGO_BASE64}
               alt="HUMTUM"
               style={{
                 maxHeight: '60px',

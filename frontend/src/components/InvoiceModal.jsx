@@ -4,6 +4,7 @@ import { X, Printer, Download } from 'lucide-react';
 import { apiUrl, authFetch } from '../lib/api';
 import { formatBillDateTime } from '../lib/formatDate';
 import QRCode from 'qrcode';
+import { BILL_LOGO_BASE64 } from '../lib/billLogoBase64';
 const qz = typeof window !== 'undefined' ? window.qz : null;
 
 export default function InvoiceModal() {
@@ -130,7 +131,7 @@ export default function InvoiceModal() {
             <div className="bill-inner">
               <div className="bill-top-center">
                 <img
-                  src="/bill-logo.png"
+                  src={BILL_LOGO_BASE64}
                   alt="HUMTUM"
                   style={{
                     maxHeight: '60px',

@@ -3,6 +3,7 @@ import { API_BASE, apiUrl, authFetch } from '../lib/api';
 import { formatBillDateTime } from '../lib/formatDate';
 import io from 'socket.io-client';
 import QRCode from 'qrcode';
+import { BILL_LOGO_BASE64 } from '../lib/billLogoBase64';
 
 
 const playAlarmChime = () => {
@@ -585,7 +586,7 @@ export function AppProvider({ children }) {
         </head>
         <body>
           <div class="center">
-            <img src="/bill-logo.png" alt="HUMTUM" style="max-height: 55px; max-width: 120px; width: auto; height: auto; object-fit: contain; margin: 0 auto 4px; display: block;" />
+            <img src="${BILL_LOGO_BASE64}" alt="HUMTUM" style="max-height: 55px; max-width: 120px; width: auto; height: auto; object-fit: contain; margin: 0 auto 4px; display: block;" />
             <div class="brand">${restName}</div>
             ${settings.address ? `<div class="address">${settings.address}</div>` : ''}
             ${restPhone ? `<div class="address" style="margin-top:-4px">Contact: ${restPhone}</div>` : ''}
