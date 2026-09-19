@@ -129,7 +129,19 @@ export default function InvoiceModal() {
           <div className="bill-paper-wrap" id="printable-bill-area">
             <div className="bill-inner">
               <div className="bill-top-center">
-                <div className="bill-name-heavy">{s.restaurantName}</div>
+                <img
+                  src="/logo.webp"
+                  alt="HUMTUM"
+                  style={{
+                    maxHeight: '65px',
+                    maxWidth: '180px',
+                    width: 'auto',
+                    height: 'auto',
+                    objectFit: 'contain',
+                    display: 'block',
+                    margin: '0 auto 6px'
+                  }}
+                />
                 {s.address && <div className="bill-sub-info">{s.address}</div>}
                 {(s.phone || s.contact) && <div className="bill-sub-info">Contact: {s.phone || s.contact}</div>}
                 {s.gstin && <div className="bill-sub-info">GSTIN: {s.gstin}</div>}

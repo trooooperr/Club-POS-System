@@ -39,20 +39,19 @@ export default function Sidebar() {
       {/* Sidebar */}
       <aside className={`sbar${sidebarOpen ? ' open' : ''}`}>
         {/* Logo */}
-        <div className="logo-wrap" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', padding: '16px 14px' }}>
-          <img
-            src="/logo.webp"
-            alt="HUMTUM"
-            style={{
-              maxHeight: '56px',
-              maxWidth: '170px',
-              width: 'auto',
-              height: 'auto',
-              objectFit: 'contain',
-              display: 'block'
-            }}
-          />
-          <button className="iBtn sbar-close" style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', padding: 4 }} onClick={()=>setSidebarOpen(false)}><X size={12}/></button>
+        <div className="logo-wrap">
+          <div className="logo-box" style={{ background: 'none', boxShadow: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <img src="/favicon.ico" alt="Logo" style={{ width: '32px', height: '32px', objectFit: 'contain' }} />
+          </div>
+          <div style={{ flex:1 }}>
+            <div className="logo-name" style={{ fontFamily: "'Cinzel', serif", fontWeight: 900, letterSpacing: '1px', color: 'var(--a)', fontSize: 22, textTransform: 'uppercase', textShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>
+              HUMTUM
+            </div>
+            <div className="logo-sub" style={{ color: 'var(--t2)', fontSize: 11, letterSpacing: '0.02em', marginTop: '-2px' }}>
+              The BAR & Restaurant
+            </div>
+          </div>
+          <button className="iBtn sbar-close" style={{ padding:4 }} onClick={()=>setSidebarOpen(false)}><X size={12}/></button>
         </div>
 
         {/* User */}
