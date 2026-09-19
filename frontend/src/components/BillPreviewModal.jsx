@@ -85,11 +85,11 @@ export default function BillPreviewModal({ bill, table, tableNo, settings, onClo
           {/* Header */}
           <div style={{ textAlign: 'center', marginBottom: 16 }}>
             <img
-              src="/logo.webp"
+              src="/bill-logo.png"
               alt="HUMTUM"
               style={{
-                maxHeight: '65px',
-                maxWidth: '180px',
+                maxHeight: '60px',
+                maxWidth: '120px',
                 width: 'auto',
                 height: 'auto',
                 objectFit: 'contain',
@@ -97,6 +97,7 @@ export default function BillPreviewModal({ bill, table, tableNo, settings, onClo
                 margin: '0 auto 6px'
               }}
             />
+            <div style={{ fontSize: 18, fontWeight: 900, letterSpacing: '1px' }}>{settings.restaurantName || 'HumTum'}</div>
             {settings.address && (
               <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>{settings.address}</div>
             )}

@@ -130,11 +130,11 @@ export default function InvoiceModal() {
             <div className="bill-inner">
               <div className="bill-top-center">
                 <img
-                  src="/logo.webp"
+                  src="/bill-logo.png"
                   alt="HUMTUM"
                   style={{
-                    maxHeight: '65px',
-                    maxWidth: '180px',
+                    maxHeight: '60px',
+                    maxWidth: '120px',
                     width: 'auto',
                     height: 'auto',
                     objectFit: 'contain',
@@ -142,6 +142,7 @@ export default function InvoiceModal() {
                     margin: '0 auto 6px'
                   }}
                 />
+                <div className="bill-name-heavy">{s.restaurantName}</div>
                 {s.address && <div className="bill-sub-info">{s.address}</div>}
                 {(s.phone || s.contact) && <div className="bill-sub-info">Contact: {s.phone || s.contact}</div>}
                 {s.gstin && <div className="bill-sub-info">GSTIN: {s.gstin}</div>}
