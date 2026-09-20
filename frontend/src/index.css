@@ -1988,7 +1988,8 @@ input:checked + .slider:before {
 }
 .card-meta {
   font-size: 11px;
-  color: var(--t2);
+  color: var(--t1);
+  font-weight: 600;
   margin-top: 2px;
 }
 .card-total {
@@ -2007,7 +2008,11 @@ input:checked + .slider:before {
 }
 .cust-name-card {
   font-size: 12px;
-  color: var(--t1);
+  color: var(--t0);
+  font-weight: 700;
+}
+.td-date {
+  color: var(--t0) !important;
   font-weight: 600;
 }
 .method-text-fix {
@@ -2938,9 +2943,14 @@ textarea,
   border-color: rgba(0, 0, 0, 0.12) !important;
 }
 
-/* Reduce order page table header height */
+/* Order page table styling - crisp contrast */
 .orders-container .dtable th {
   padding: 8px 18px !important;
+  color: var(--t0) !important;
+  font-weight: 800 !important;
+}
+.orders-container .dtable td {
+  color: var(--t0) !important;
 }
 
 /* Increase font size of staff table data */

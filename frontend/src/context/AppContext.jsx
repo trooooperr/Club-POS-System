@@ -1118,14 +1118,7 @@ export function AppProvider({ children }) {
       return `https://placehold.co/320x320/171921/F59E0B?text=${encodeURIComponent(item.name?.slice(0,1) || 'I')}`;
     };
 
-    const isAlcDrink = (i) => {
-      if (i.isAlcoholic !== undefined) return !!i.isAlcoholic;
-      if (i.isAlcohol !== undefined) return !!i.isAlcohol;
-      const cat = (i.category || '').toLowerCase();
-      const name = (i.name || '').toLowerCase();
-      if (cat.includes('mocktail') || name.includes('soda') || name.includes('water') || name.includes('tonic') || name.includes('red bull')) return false;
-      return cat.includes('beer') || cat.includes('liquor') || cat.includes('whisky') || cat.includes('vodka') || cat.includes('rum') || cat.includes('wine') || cat.includes('gin') || cat.includes('cocktail') || cat.includes('shot') || cat.includes('shooter');
-    };
+    const isAlcDrink = (i) => checkIsAlcoholic(i, menu, inv);
 
     const processedMenu = menu
       .filter(m => {
@@ -1255,15 +1248,7 @@ export function AppProvider({ children }) {
 
   // ── Bill totals ──────────────────────────────────────────────────
   const billTotals = useMemo(() => {
-    const isAlc = (i) => {
-      if (i.isAlcoholic !== undefined) return !!i.isAlcoholic;
-      if (i.isAlcohol !== undefined) return !!i.isAlcohol;
-      const name = (i.name || '').toLowerCase();
-      const cat = (i.category || '').toLowerCase();
-      const dept = (i.department || '').toLowerCase();
-      if (cat.includes('mocktail') || name.includes('soda') || name.includes('water') || name.includes('tonic') || name.includes('red bull')) return false;
-      return cat.includes('beer') || cat.includes('liquor') || cat.includes('whisky') || cat.includes('vodka') || cat.includes('rum') || cat.includes('wine') || cat.includes('gin') || cat.includes('cocktail') || cat.includes('shot') || cat.includes('shooter') || dept === 'bar';
-    };
+    const isAlc = (i) => checkIsAlcoholic(i, allSellableItems, inventory);
 
     const table    = tableBills[activeTableId] || { items:[], discount:'' };
     const foodItems = (table?.items || []).filter(i => !isAlc(i));
@@ -1291,7 +1276,7 @@ export function AppProvider({ children }) {
     const grandTotal = Math.round(Math.max(0, rawTotal));
     const roundOff = (grandTotal - rawTotal);
     return { subtotal, foodSubtotal, alcoholSubtotal, sgst, cgst, serviceTax, discountAmount, fine, grandTotal, roundOff };
-  }, [tableBills, activeTableId, settings]);
+  }, [tableBills, activeTableId, settings, allSellableItems, inventory]);
 
 
   const getTableStatus = useCallback((tableId) => {
@@ -1341,15 +1326,7 @@ export function AppProvider({ children }) {
     const session = (activeSessions || []).find(s => s.tableNo === tableNo);
     const localBill = tableBills[tableId] || { items: [] };
 
-    const isAlcItem = (i) => {
-      if (i.isAlcoholic !== undefined) return !!i.isAlcoholic;
-      if (i.isAlcohol !== undefined) return !!i.isAlcohol;
-      const name = (i.name || '').toLowerCase();
-      const cat = (i.category || '').toLowerCase();
-      const dept = (i.department || '').toLowerCase();
-      if (cat.includes('mocktail') || name.includes('soda') || name.includes('water') || name.includes('tonic') || name.includes('red bull')) return false;
-      return cat.includes('beer') || cat.includes('liquor') || cat.includes('whisky') || cat.includes('vodka') || cat.includes('rum') || cat.includes('wine') || cat.includes('gin') || cat.includes('cocktail') || cat.includes('shot') || cat.includes('shooter') || dept === 'bar';
-    };
+    const isAlcItem = (i) => checkIsAlcoholic(i, allSellableItems, inventory);
 
     let kotItemsCount = 0;
     let kotFoodTotal = 0;
@@ -1441,7 +1418,17 @@ export function AppProvider({ children }) {
 
     const orderData = {
       tableNo: parseInt(activeTableId.substring(1)),
-      items:   table.items.map(i => ({ name:i.name, quantity:i.quantity, price:i.price })),
+      items:   table.items.map(i => {
+        const isAlc = checkIsAlcoholic(i, allSellableItems, inventory);
+        return {
+          name: i.name,
+          quantity: i.quantity,
+          price: i.price,
+          notes: i.notes || i.note || '',
+          isAlcoholic: isAlc,
+          department: isAlc ? 'bar' : (i.department || 'kitchen')
+        };
+      }),
       subtotal, sgst, cgst, serviceTax,
       discount:      discountAmount,
       roundOff,
@@ -1815,10 +1802,18 @@ export function AppProvider({ children }) {
 
   const finalizeBill = useCallback(async (orderId, items, subtotal, sgst, cgst, serviceTax, discount, roundOff, grandTotal, waiterName = '', orderType = 'dine-in', customerName = '', customerPhone = '', paymentMode = 'cash', cashAmount = 0, upiAmount = 0, isCredit = false, paidAmount = undefined, dueAmount = undefined, discountPercent = undefined, serviceTaxRate = undefined, fine = 0, foodSubtotal = 0, alcoholSubtotal = 0) => {
     try {
+      const mappedFinalItems = (items || []).map(i => {
+        const isAlc = checkIsAlcoholic(i, allSellableItems, inventory);
+        return {
+          ...i,
+          isAlcoholic: isAlc,
+          department: isAlc ? 'bar' : (i.department || 'kitchen')
+        };
+      });
       const res = await authFetch(apiUrl(`/api/orders/${orderId}/finalize-bill`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items, subtotal, foodSubtotal, alcoholSubtotal, sgst, cgst, serviceTax, serviceTaxRate, discount, discountPercent, fine, roundOff, grandTotal, waiterName, orderType, customerName, customerPhone, paymentMode, cashAmount, upiAmount, isCredit, paidAmount, dueAmount })
+        body: JSON.stringify({ items: mappedFinalItems, subtotal, foodSubtotal, alcoholSubtotal, sgst, cgst, serviceTax, serviceTaxRate, discount, discountPercent, fine, roundOff, grandTotal, waiterName, orderType, customerName, customerPhone, paymentMode, cashAmount, upiAmount, isCredit, paidAmount, dueAmount })
       });
       if (!res.ok) throw new Error('Failed to finalize bill');
       const orderResponse = await res.json();
@@ -1854,7 +1849,7 @@ export function AppProvider({ children }) {
       console.error('Finalize bill error:', err);
       throw err;
     }
-  }, [applyInventoryUpdate, socket]);
+  }, [applyInventoryUpdate, socket, allSellableItems, inventory]);
 
   const completeOrder = useCallback(async (orderId) => {
     try {
@@ -1962,7 +1957,7 @@ export function AppProvider({ children }) {
       socket,
       kotSessions, currentSession, kots,
       openTableSession, syncTableSession, createKOT, updateKOTStatus, removeKOTItem, deleteKOT, finalizeBill, completeOrder, cancelTableSession,
-      printKOTDocument, printBillDocument,
+      printKOTDocument, printBillDocument, checkIsAlcoholic,
     }}>
       {children}
     </AppContext.Provider>

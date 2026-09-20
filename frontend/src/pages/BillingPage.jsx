@@ -544,7 +544,7 @@ export default function BillingPage() {
     menuSearch, setMenuSearch, inventory, workers, getTableStatus, getTableInfo, settings, NUM_TABLES, activeTableCount, activeSessions,
     openTableSession, createKOT, finalizeBill, completeOrder, socket, syncTableSession, cancelTableSession,
     setSidebarOpen, showToast, printKOTDocument, printBillDocument,
-    removeKOTItem, deleteKOT, role
+    removeKOTItem, deleteKOT, role, checkIsAlcoholic
   } = useApp();
 
   const [pm] = useState('cash');
@@ -659,16 +659,7 @@ export default function BillingPage() {
 
   // Combined totals
   const totals = useMemo(() => {
-    const isAlcItem = (i) => {
-      if (i.isAlcoholic === true || i.isAlcohol === true) return true;
-      const name = (i.name || '').toLowerCase();
-      const cat = (i.category || '').toLowerCase();
-      const dept = (i.department || '').toLowerCase();
-      if (cat.includes('mocktail') || name === 'water' || name.includes('mineral water') || name.includes('tonic water') || name.includes('red bull')) return false;
-      const alcKeywords = ['beer', 'liquor', 'liqueur', 'whisky', 'whiskey', 'vodka', 'rum', 'wine', 'gin', 'cocktail', 'shot', 'shooter', 'scotch', 'malt', 'tequila', 'brandy', 'cognac'];
-      if (alcKeywords.some(k => cat.includes(k)) || dept === 'bar') return true;
-      return alcKeywords.some(k => name.includes(k)) || name.includes('jager') || name.includes('bomb shot') || name.includes('mix shot');
-    };
+    const isAlcItem = (i) => checkIsAlcoholic ? checkIsAlcoholic(i, allSellableItems, inventory) : !!(i.isAlcoholic || i.isAlcohol);
 
     const foodItems = (combinedItems?.all || []).filter(i => !isAlcItem(i));
     const alcoholItems = (combinedItems?.all || []).filter(i => isAlcItem(i));
@@ -728,7 +719,7 @@ export default function BillingPage() {
       roundOff = grandTotal - rawTotal;
     }
     return { subtotal, foodSubtotal, alcoholSubtotal, foodItems, alcoholItems, gst, gstRate, sgst, cgst, serviceTax, effectiveServiceTaxRate, isServiceTaxOn, totalBeforeDiscount, discountVal, discountAmount, fine, grandTotal, roundOff };
-  }, [combinedItems.all, table.discount, table.fine, table.serviceTaxEnabled, table.serviceTaxRate, activeSessions, activeTableId, settings]);
+  }, [combinedItems.all, table.discount, table.fine, table.serviceTaxEnabled, table.serviceTaxRate, activeSessions, activeTableId, settings, allSellableItems, inventory, checkIsAlcoholic]);
 
   const { subtotal, foodSubtotal, alcoholSubtotal, foodItems, alcoholItems, gst, gstRate, sgst, cgst, serviceTax, effectiveServiceTaxRate, isServiceTaxOn, totalBeforeDiscount, discountVal, discountAmount, fine, grandTotal, roundOff } = totals;
 

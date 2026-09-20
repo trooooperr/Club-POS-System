@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { X, Share2, MessageCircle, Download, Printer } from 'lucide-react';
 import { formatBillDateTime } from '../lib/formatDate';
 import { BILL_LOGO_BASE64 } from '../lib/billLogoBase64';
+import { useApp } from '../context/AppContext';
 
 export default function BillPreviewModal({ bill, table, tableNo, settings, onClose, onPrint }) {
+  const { checkIsAlcoholic, allSellableItems, inventory } = useApp() || {};
   const [customerPhone, setCustomerPhone] = useState(table?.customerPhone || '');
   const [paidAmount] = useState(bill?.totalAmount || 0);
   const [paymentMode] = useState(bill?.paymentMode || 'CASH');
@@ -45,16 +47,7 @@ export default function BillPreviewModal({ bill, table, tableNo, settings, onClo
 
   const billDate = bill?.date || bill?.createdAt || table?.date || table?.createdAt || new Date();
   const formattedDate = formatBillDateTime(billDate);
-  const isAlc = (i) => {
-    if (i.isAlcoholic === true || i.isAlcohol === true) return true;
-    const name = (i.name || '').toLowerCase();
-    const cat = (i.category || '').toLowerCase();
-    const dept = (i.department || '').toLowerCase();
-    if (cat.includes('mocktail') || name === 'water' || name.includes('mineral water') || name.includes('tonic water') || name.includes('red bull')) return false;
-    const alcKeywords = ['beer', 'liquor', 'liqueur', 'whisky', 'whiskey', 'vodka', 'rum', 'wine', 'gin', 'cocktail', 'shot', 'shooter', 'scotch', 'malt', 'tequila', 'brandy', 'cognac'];
-    if (alcKeywords.some(k => cat.includes(k)) || dept === 'bar') return true;
-    return alcKeywords.some(k => name.includes(k)) || name.includes('jager') || name.includes('bomb shot') || name.includes('mix shot');
-  };
+  const isAlc = (i) => checkIsAlcoholic ? checkIsAlcoholic(i, allSellableItems, inventory) : !!(i.isAlcoholic || i.isAlcohol);
 
   const foodItems = (table?.items || []).filter(i => !isAlc(i));
   const alcoholItems = (table?.items || []).filter(i => isAlc(i));
@@ -127,41 +120,41 @@ export default function BillPreviewModal({ bill, table, tableNo, settings, onClo
             />
             <div style={{ fontSize: 18, fontWeight: 900, letterSpacing: '1px' }}>{settings.restaurantName || 'HumTum'}</div>
             {settings.address && (
-              <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>{settings.address}</div>
+              <div style={{ fontSize: 11, color: '#1e293b', fontWeight: 600, marginTop: 4 }}>{settings.address}</div>
             )}
             {(settings.phone || settings.contact) && (
-              <div style={{ fontSize: 11, color: '#666' }}>Contact: {settings.phone || settings.contact}</div>
+              <div style={{ fontSize: 11, color: '#1e293b', fontWeight: 600 }}>Contact: {settings.phone || settings.contact}</div>
             )}
-            <div style={{ fontSize: 11, color: '#666' }}>Email: contact@humtumbar.in</div>
+            <div style={{ fontSize: 11, color: '#1e293b', fontWeight: 600 }}>Email: contact@humtumbar.in</div>
             {settings.gstin && (
-              <div style={{ fontSize: 11, color: '#666' }}>GSTIN: {settings.gstin}</div>
+              <div style={{ fontSize: 11, color: '#1e293b', fontWeight: 600 }}>GSTIN: {settings.gstin}</div>
             )}
           </div>
 
           {/* Separator */}
-          <div style={{ borderBottom: '1px dashed #999', margin: '12px 0' }}></div>
+          <div style={{ borderBottom: '1px dashed #64748b', margin: '12px 0' }}></div>
 
           {/* Bill Info */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 20px', fontSize: 12, marginBottom: 12, color: '#666' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 20px', fontSize: 12, marginBottom: 12, color: '#1e293b' }}>
             <div>
-              <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' }}>BILL NO</div>
+              <div style={{ fontSize: 10, fontWeight: 800, color: '#334155', textTransform: 'uppercase' }}>BILL NO</div>
               <div style={{ fontSize: 14, fontWeight: 900, color: '#000' }}>{bill?.billNo || 'HTB-000'}</div>
             </div>
             <div>
-              <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' }}>TABLE</div>
+              <div style={{ fontSize: 10, fontWeight: 800, color: '#334155', textTransform: 'uppercase' }}>TABLE</div>
               <div style={{ fontSize: 14, fontWeight: 900, color: '#000' }}>T{tableNo}</div>
             </div>
           </div>
 
-          <div style={{ fontSize: 12, color: '#666', marginBottom: 12 }}>
-            <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' }}>DATE</div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#000' }}>
+          <div style={{ fontSize: 12, color: '#1e293b', marginBottom: 12 }}>
+            <div style={{ fontSize: 10, fontWeight: 800, color: '#334155', textTransform: 'uppercase' }}>DATE</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#000' }}>
               {formattedDate}
             </div>
           </div>
 
           {/* Separator */}
-          <div style={{ borderBottom: '1px dashed #999', margin: '12px 0' }}></div>
+          <div style={{ borderBottom: '1px dashed #64748b', margin: '12px 0' }}></div>
 
           {/* ── Items + Inline Totals ───────────────────────────────── */}
           {foodItems.length > 0 && alcoholItems.length > 0 ? (
@@ -179,12 +172,12 @@ export default function BillPreviewModal({ bill, table, tableNo, settings, onClo
                     <div style={{ textAlign: 'right', fontWeight: 700 }}>₹{(item.price * item.quantity).toFixed(0)}</div>
                   </div>
                 ))}
-                <div style={{ borderTop: '1px dashed #ccc', marginTop: 6, paddingTop: 5 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#666', marginBottom: 3 }}>
+                <div style={{ borderTop: '1px dashed #94a3b8', marginTop: 6, paddingTop: 5 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#1e293b', fontWeight: 600, marginBottom: 3 }}>
                     <span>Subtotal</span><span>₹{foodSubtotal.toFixed(2)}</span>
                   </div>
                   {gst > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#666', marginBottom: 3 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#1e293b', fontWeight: 600, marginBottom: 3 }}>
                       <span>GST ({gstRate}%)</span><span>₹{gst.toFixed(2)}</span>
                     </div>
                   )}
@@ -209,12 +202,12 @@ export default function BillPreviewModal({ bill, table, tableNo, settings, onClo
                     <div style={{ textAlign: 'right', fontWeight: 700 }}>₹{(item.price * item.quantity).toFixed(0)}</div>
                   </div>
                 ))}
-                <div style={{ borderTop: '1px dashed #ccc', marginTop: 6, paddingTop: 5 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#666', marginBottom: 3 }}>
+                <div style={{ borderTop: '1px dashed #94a3b8', marginTop: 6, paddingTop: 5 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#1e293b', fontWeight: 600, marginBottom: 3 }}>
                     <span>Subtotal</span><span>₹{alcoholSubtotal.toFixed(2)}</span>
                   </div>
                   {serviceTax > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#666', marginBottom: 3 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#1e293b', fontWeight: 600, marginBottom: 3 }}>
                       <span>Service Tax ({stRate}%)</span><span>₹{serviceTax.toFixed(2)}</span>
                     </div>
                   )}

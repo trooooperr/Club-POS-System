@@ -8,7 +8,7 @@ import { BILL_LOGO_BASE64 } from '../lib/billLogoBase64';
 const qz = typeof window !== 'undefined' ? window.qz : null;
 
 export default function InvoiceModal() {
-  const { invoiceOrder, setInvoiceOrder, settings, showToast, workers, role, deleteKOT, removeKOTItem, printBillDocument, loadData, setActiveSection, selectTable, setTableBills } = useApp();
+  const { invoiceOrder, setInvoiceOrder, settings, showToast, workers, role, deleteKOT, removeKOTItem, printBillDocument, loadData, setActiveSection, selectTable, setTableBills, allSellableItems, inventory, checkIsAlcoholic } = useApp();
 
   if (!invoiceOrder) return null;
   const o = invoiceOrder;
@@ -23,7 +23,7 @@ export default function InvoiceModal() {
     if (!o) return;
     const generateQRs = async () => {
       try {
-        const roundedGrandTotal = Math.round(o.grandTotal);
+        const roundedGrandTotal = Math.round(displayGrandTotal);
         const upiId = s.upiId || 'dummy@upi';
         const merchantName = s.restaurantName || 'HUMTUM';
         const includeAmount = s.includeUpiAmount !== false;
@@ -57,52 +57,64 @@ export default function InvoiceModal() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [setInvoiceOrder]);
 
-  const isAlc = (i) => {
-    // Trust explicit true flag
-    if (i.isAlcoholic === true || i.isAlcohol === true) return true;
-    const name = (i.name || '').toLowerCase();
-    const cat = (i.category || '').toLowerCase();
-    const dept = (i.department || '').toLowerCase();
-    // Explicit non-alcohol overrides (mocktails, water, etc.)
-    if (cat.includes('mocktail') || name === 'water' || name.includes('mineral water') || name.includes('tonic water') || name.includes('red bull')) return false;
-    // Check category or department
-    const alcKeywords = ['beer', 'liquor', 'liqueur', 'whisky', 'whiskey', 'vodka', 'rum', 'wine', 'gin', 'cocktail', 'shot', 'shooter', 'scotch', 'malt', 'tequila', 'brandy', 'cognac'];
-    if (alcKeywords.some(k => cat.includes(k)) || dept === 'bar') return true;
-    // Fallback: check item name (critical when category is undefined in DB)
-    return alcKeywords.some(k => name.includes(k)) || name.includes('jager') || name.includes('bomb shot') || name.includes('mix shot');
-  };
+  const isAlc = (i) => checkIsAlcoholic ? checkIsAlcoholic(i, allSellableItems, inventory) : !!(i.isAlcoholic || i.isAlcohol);
 
   const foodItems = (o.items || []).filter(i => !isAlc(i));
   const alcoholItems = (o.items || []).filter(i => isAlc(i));
 
-  const foodSubtotal = typeof o.foodSubtotal === 'number' && o.foodSubtotal > 0
-    ? o.foodSubtotal
-    : foodItems.reduce((sum, i) => sum + (i.price || 0) * (i.quantity || 0), 0);
+  const calcFoodSubtotal = foodItems.reduce((sum, i) => sum + (i.price || 0) * (i.quantity || 0), 0);
+  const calcAlcoholSubtotal = alcoholItems.reduce((sum, i) => sum + (i.price || 0) * (i.quantity || 0), 0);
 
-  const alcoholSubtotal = typeof o.alcoholSubtotal === 'number' && o.alcoholSubtotal > 0
-    ? o.alcoholSubtotal
-    : alcoholItems.reduce((sum, i) => sum + (i.price || 0) * (i.quantity || 0), 0);
+  // If order was properly saved with alcoholSubtotal > 0 and foodSubtotal > 0, trust it.
+  // BUT if alcoholItems exist and alcoholSubtotal was 0, recalculate accurately
+  const hasSavedSplit = (typeof o.alcoholSubtotal === 'number' && o.alcoholSubtotal > 0) &&
+                        (typeof o.foodSubtotal === 'number' && o.foodSubtotal > 0);
+
+  const foodSubtotal = hasSavedSplit ? o.foodSubtotal : calcFoodSubtotal;
+  const alcoholSubtotal = hasSavedSplit ? o.alcoholSubtotal : calcAlcoholSubtotal;
 
   const billDate = o.date || o.createdAt || new Date();
   const formattedDate = formatBillDateTime(billDate);
   const gstRate = s.gstRate !== undefined ? s.gstRate : Number(((s.cgstRate || 0) + (s.sgstRate || 0)).toFixed(2));
-  const gst = typeof o.gst === 'number' ? o.gst : Number(((o.cgst || 0) + (o.sgst || 0)).toFixed(2));
-  const alcoholTax = o.serviceTax || 0;
+  
+  const effectiveStRate = (s.serviceTaxRate > 0 ? s.serviceTaxRate : (o.serviceTaxRate > 0 ? o.serviceTaxRate : 10));
+  const isServiceTaxOn = o.serviceTax !== undefined && o.serviceTax > 0 
+    ? true 
+    : (s.serviceTaxEnabled !== undefined ? !!s.serviceTaxEnabled : true);
+
+  const alcoholTax = (hasSavedSplit && typeof o.serviceTax === 'number' && o.serviceTax > 0)
+    ? o.serviceTax
+    : (alcoholItems.length > 0 && isServiceTaxOn ? Number((alcoholSubtotal * (effectiveStRate / 100)).toFixed(2)) : 0);
+
+  const gst = (hasSavedSplit && typeof o.gst === 'number')
+    ? o.gst
+    : (hasSavedSplit ? Number(((o.cgst || 0) + (o.sgst || 0)).toFixed(2)) : Number((foodSubtotal * (gstRate / 100)).toFixed(2)));
+
   const foodTotal = foodSubtotal + gst;
   const alcoholTotal = alcoholSubtotal + alcoholTax;
-  const totalBeforeDiscount = Number(((o.subtotal || 0) + gst + (o.serviceTax || 0)).toFixed(2));
-  const discountVal = typeof o.discount === 'number' ? o.discount : (parseFloat(o.discount) || 0);
+  const totalBeforeDiscount = Number((foodTotal + alcoholTotal).toFixed(2));
+
   let discountPercent = 0;
   if (o.discountPercent !== undefined && o.discountPercent !== null && !isNaN(parseFloat(o.discountPercent)) && parseFloat(o.discountPercent) > 0) {
     discountPercent = Math.min(100, Math.round(parseFloat(o.discountPercent)));
-  } else if (totalBeforeDiscount > 0 && discountVal > 0) {
-    if ((o.grandTotal !== undefined && (o.grandTotal - (o.fine || 0)) <= 1) && discountVal >= (totalBeforeDiscount - 1)) {
-      discountPercent = 100;
-    } else {
-      discountPercent = Math.min(100, Math.round((discountVal / totalBeforeDiscount) * 100));
-    }
+  } else if (typeof o.discount === 'number' && o.discount > 0) {
+    const rawDisc = parseFloat(o.discount) || 0;
+    const base = ((o.grandTotal || 0) + rawDisc) || totalBeforeDiscount;
+    discountPercent = base > 0 ? Math.min(100, Math.round((rawDisc / base) * 100)) : 0;
   }
-  discountPercent = Math.min(100, Math.max(0, discountPercent));
+
+  const discountVal = (typeof o.discount === 'number' && o.discount > 0) 
+    ? o.discount 
+    : (discountPercent > 0 ? Math.round(totalBeforeDiscount * (discountPercent / 100)) : (parseFloat(o.discount) || 0));
+
+  const fineVal = typeof o.fine === 'number' ? o.fine : (parseFloat(o.fine) || 0);
+  const rawCalculatedTotal = totalBeforeDiscount - discountVal + fineVal;
+  const displayGrandTotal = (hasSavedSplit && o.grandTotal > 0 && Math.abs(o.grandTotal - rawCalculatedTotal) <= 2)
+    ? o.grandTotal
+    : Math.max(0, Math.round(rawCalculatedTotal));
+  const displayRoundOff = (typeof o.roundOff === 'number' && hasSavedSplit)
+    ? o.roundOff
+    : Number((displayGrandTotal - rawCalculatedTotal).toFixed(2));
 
   const handlePrint = async () => {
     try {
@@ -115,19 +127,21 @@ export default function InvoiceModal() {
           alcoholSubtotal,
           gst,
           gstRate,
-          sgst: o.sgst,
-          cgst: o.cgst,
-          serviceTax: o.serviceTax || 0,
+          sgst: Number((gst / 2).toFixed(2)),
+          cgst: Number((gst / 2).toFixed(2)),
+          serviceTax: alcoholTax,
+          serviceTaxRate: effectiveStRate,
+          serviceTaxEnabled: isServiceTaxOn,
           discountAmount: discountVal,
           discountPercent,
-          fine: o.fine || 0,
-          roundOff: o.roundOff || 0,
-          grandTotal: o.grandTotal,
+          fine: fineVal,
+          roundOff: displayRoundOff,
+          grandTotal: displayGrandTotal,
           date: billDate,
           customerPhone: o.customerPhone || '',
           customerName: o.customerName || ''
         },
-        o.grandTotal,
+        displayGrandTotal,
         o.waiterName || '',
         o.billNo,
         waiterObj,
@@ -142,7 +156,7 @@ export default function InvoiceModal() {
     }
   };
 
-  const stRate = s.serviceTaxRate > 0 ? s.serviceTaxRate : (o.serviceTaxRate || 0);
+  const stRate = effectiveStRate;
 
   return (
     <div className="moverlay">
@@ -258,7 +272,7 @@ export default function InvoiceModal() {
                         <td colSpan="2">Subtotal</td>
                         <td align="right">{s.currency}{alcoholSubtotal.toFixed(2)}</td>
                       </tr>
-                      {s.serviceTaxEnabled && stRate > 0 && alcoholTax > 0 && (
+                      {alcoholTax > 0 && (
                         <tr className="tax-row">
                           <td colSpan="2">Service Tax ({stRate}%)</td>
                           <td align="right">{s.currency}{alcoholTax.toFixed(2)}</td>
@@ -279,11 +293,11 @@ export default function InvoiceModal() {
                       <span>Grand Total</span><span>{s.currency}{(foodTotal + alcoholTotal).toFixed(2)}</span>
                     </div>
                     {discountVal > 0 && <div className="sum-row discount"><span>Discount ({discountPercent}%)</span><span>-{s.currency}{discountVal.toFixed(2)}</span></div>}
-                    {(o.fine || 0) > 0 && <div className="sum-row" style={{ color: '#ef4444', fontWeight: 700 }}><span>Fine</span><span>+{s.currency}{o.fine.toFixed(2)}</span></div>}
-                    {(o.roundOff || 0) !== 0 && <div className="sum-row"><span>Round-Off</span><span>{o.roundOff > 0 ? '+' : ''}{o.roundOff.toFixed(2)}</span></div>}
+                    {fineVal > 0 && <div className="sum-row" style={{ color: '#ef4444', fontWeight: 700 }}><span>Fine</span><span>+{s.currency}{fineVal.toFixed(2)}</span></div>}
+                    {displayRoundOff !== 0 && <div className="sum-row"><span>Round-Off</span><span>{displayRoundOff > 0 ? '+' : ''}{displayRoundOff.toFixed(2)}</span></div>}
                     <div className="grand-total-box">
                       <div className="grand-label">AMOUNT PAYABLE</div>
-                      <div className="grand-value">{s.currency}{o.grandTotal.toFixed(2)}</div>
+                      <div className="grand-value">{s.currency}{displayGrandTotal.toFixed(2)}</div>
                     </div>
                     {o.dueAmount > 0 && <div className="sum-row due-row"><span>DUE AMOUNT</span><span>{s.currency}{o.dueAmount.toFixed(2)}</span></div>}
                   </div>
@@ -334,11 +348,11 @@ export default function InvoiceModal() {
 
                   <div className="bill-summary-stack">
                     {discountVal > 0 && <div className="sum-row discount"><span>Discount ({discountPercent}%)</span><span>-{s.currency}{discountVal.toFixed(2)}</span></div>}
-                    {(o.fine || 0) > 0 && <div className="sum-row" style={{ color: '#ef4444', fontWeight: 700 }}><span>Fine</span><span>+{s.currency}{o.fine.toFixed(2)}</span></div>}
-                    {(o.roundOff || 0) !== 0 && <div className="sum-row"><span>Round-Off</span><span>{o.roundOff > 0 ? '+' : ''}{o.roundOff.toFixed(2)}</span></div>}
+                    {fineVal > 0 && <div className="sum-row" style={{ color: '#ef4444', fontWeight: 700 }}><span>Fine</span><span>+{s.currency}{fineVal.toFixed(2)}</span></div>}
+                    {displayRoundOff !== 0 && <div className="sum-row"><span>Round-Off</span><span>{displayRoundOff > 0 ? '+' : ''}{displayRoundOff.toFixed(2)}</span></div>}
                     <div className="grand-total-box">
                       <div className="grand-label">AMOUNT PAYABLE</div>
-                      <div className="grand-value">{s.currency}{o.grandTotal.toFixed(2)}</div>
+                      <div className="grand-value">{s.currency}{displayGrandTotal.toFixed(2)}</div>
                     </div>
                     {o.dueAmount > 0 && <div className="sum-row due-row"><span>DUE AMOUNT</span><span>{s.currency}{o.dueAmount.toFixed(2)}</span></div>}
                   </div>
@@ -468,64 +482,64 @@ export default function InvoiceModal() {
           background: #ffffff; border-radius: 8px; padding: 2px;
           box-shadow: 0 4px 20px rgba(0,0,0,0.25);
         }
-        .bill-inner { border: 1px dashed #e2e8f0; border-radius: 6px; padding: 12px; color: #1e293b; font-family: 'Courier New', Courier, monospace; }
-        .bill-name-heavy { font-size: 18px; font-weight: 900; text-align: center; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
-        .bill-sub-info { font-size: 10px; text-align: center; color: #64748b; text-transform: uppercase; margin-bottom: 1px; line-height: 1.3; }
-        .bill-zig-zag-sep { border-top: 1px dashed #cbd5e1; margin: 8px 0; }
+        .bill-inner { border: 1px dashed #cbd5e1; border-radius: 6px; padding: 12px; color: #0f172a; font-family: 'Courier New', Courier, monospace; }
+        .bill-name-heavy { font-size: 18px; font-weight: 900; text-align: center; color: #000000; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
+        .bill-sub-info { font-size: 10px; text-align: center; color: #1e293b; font-weight: 700; text-transform: uppercase; margin-bottom: 1px; line-height: 1.3; }
+        .bill-zig-zag-sep { border-top: 1px dashed #94a3b8; margin: 8px 0; }
         
         .bill-meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 11px; }
-        .meta-item span { display: block; color: #94a3b8; font-size: 9px; font-weight: bold; margin-bottom: 1px; }
-        .meta-item strong { color: #334155; }
+        .meta-item span { display: block; color: #334155; font-size: 10px; font-weight: 800; margin-bottom: 1px; letter-spacing: 0.3px; }
+        .meta-item strong { color: #000000; font-weight: 900; font-size: 12px; }
         .full-row { grid-column: span 2; }
 
         .bill-items-table { width: 100%; border-collapse: collapse; margin: 4px 0; font-size: 12px; }
 
         .bill-section-header {
-          font-size: 13px; font-weight: 900; color: #0f172a;
+          font-size: 14px; font-weight: 900; color: #000000;
           text-transform: uppercase; text-align: center;
-          padding: 10px 0 4px; letter-spacing: 1px;
-          border-bottom: 2px solid #1e293b;
+          padding: 10px 0 4px; letter-spacing: 1.5px;
+          border-bottom: 2px solid #000000;
         }
         .bill-col-header-row th {
-          font-size: 10px; color: #64748b; font-weight: 700;
-          padding: 4px 0 3px; border-bottom: 1px dashed #94a3b8;
+          font-size: 11px; color: #0f172a; font-weight: 900;
+          padding: 4px 0 3px; border-bottom: 1px solid #475569;
           text-transform: uppercase; letter-spacing: 0.3px;
         }
-        .bill-items-table td { padding: 3px 0; color: #1e293b; }
-        .item-name-bold { font-weight: 700; font-size: 12px; }
-        .item-qty { font-size: 12px; color: #334155; text-align: center; }
-        .item-amt { font-size: 12px; font-weight: 600; text-align: right; }
+        .bill-items-table td { padding: 3px 0; color: #000000; }
+        .item-name-bold { font-weight: 800; font-size: 12px; color: #000000; }
+        .item-qty { font-size: 12px; color: #0f172a; text-align: center; font-weight: 700; }
+        .item-amt { font-size: 12px; font-weight: 800; text-align: right; color: #000000; }
 
         .subtotal-row td {
-          border-top: 1px dashed #cbd5e1;
+          border-top: 1px dashed #94a3b8;
           padding-top: 5px; padding-bottom: 2px;
-          font-size: 11px; color: #64748b;
+          font-size: 11px; color: #1e293b; font-weight: 700;
         }
         .tax-row td {
-          font-size: 11px; color: #64748b;
+          font-size: 11px; color: #1e293b; font-weight: 700;
           padding-bottom: 2px;
         }
         .section-total-row td {
-          border-top: 2px solid #1e293b;
+          border-top: 2px solid #000000;
           padding-top: 5px; padding-bottom: 5px;
-          font-size: 13px; font-weight: 900; color: #0f172a;
+          font-size: 13px; font-weight: 900; color: #000000;
         }
 
         .bill-summary-stack { display: flex; flex-direction: column; gap: 2px; }
-        .sum-row { display: flex; justify-content: space-between; font-size: 12px; color: #475569; margin-bottom: 2px; }
-        .discount { color: #dc2626; font-weight: bold; }
+        .sum-row { display: flex; justify-content: space-between; font-size: 12px; color: #0f172a; font-weight: 700; margin-bottom: 2px; }
+        .discount { color: #dc2626; font-weight: 900; }
         
         .grand-total-box { 
           display: flex; justify-content: space-between; align-items: center;
-          margin: 2px 0; padding: 4px 6px; background: #f8fafc; border-radius: 4px; 
-          border: 1px solid #e2e8f0;
+          margin: 4px 0; padding: 6px 8px; background: #f1f5f9; border-radius: 4px; 
+          border: 1.5px solid #cbd5e1;
         }
-        .grand-label { font-size: 11px; font-weight: 800; color: #64748b; letter-spacing: 0.2px; }
-        .grand-value { font-size: 14px; font-weight: 900; color: #0f172a; }
+        .grand-label { font-size: 12px; font-weight: 900; color: #0f172a; letter-spacing: 0.5px; }
+        .grand-value { font-size: 15px; font-weight: 900; color: #000000; }
         
         .due-row { color: #dc2626; font-weight: 900; font-size: 12px; margin-top: 2px; }
-        .paid-row { border-top: 1px dashed #e2e8f0; padding-top: 4px; margin-top: 2px; }
-        .bill-footer-note { text-align: center; font-size: 9px; margin-top: 4px; color: #94a3b8; font-weight: bold; text-transform: uppercase; }
+        .paid-row { border-top: 1px dashed #cbd5e1; padding-top: 4px; margin-top: 2px; }
+        .bill-footer-note { text-align: center; font-size: 9.5px; margin-top: 6px; color: #334155; font-weight: 800; text-transform: uppercase; }
 
         /* Share Control Styling */
         .share-section-card { background: #161b22; border-radius: 14px; padding: 8px; border: 1px solid #232830; }

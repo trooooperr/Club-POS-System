@@ -561,13 +561,13 @@ export default function SalesPage() {
                 {totalShotsCount} Shots Total
               </span>
             </h3>
-            <span style={{ fontSize: '11.5px', color: 'var(--t2)' }}>
+            <span style={{ fontSize: '11.5px', color: 'var(--t1)', fontWeight: 600 }}>
               Detailed record of shooter items sold ({range.toUpperCase()})
             </span>
           </div>
 
           <div style={{ position: 'relative', width: '260px' }}>
-            <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--t2)' }} />
+            <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--t1)' }} />
             <input
               type="text"
               placeholder="Search shooter name..."
@@ -581,7 +581,8 @@ export default function SalesPage() {
                 padding: '6px 10px 6px 30px',
                 fontSize: '12px',
                 color: 'var(--t0)',
-                outline: 'none'
+                outline: 'none',
+                fontWeight: 600
               }}
             />
           </div>
@@ -590,7 +591,7 @@ export default function SalesPage() {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px', textAlign: 'left' }}>
             <thead>
-              <tr style={{ borderBottom: '1.5px solid var(--b2)', color: 'var(--t2)', fontSize: '11.5px' }}>
+              <tr style={{ borderBottom: '1.5px solid var(--b2)', color: 'var(--t0)', fontSize: '12px', fontWeight: 800 }}>
                 <th style={{ padding: '8px 10px' }}>Item Name</th>
                 <th style={{ padding: '8px 10px', textAlign: 'right' }}>Price</th>
                 <th style={{ padding: '8px 10px', textAlign: 'right' }}>Shots Sold</th>
@@ -617,7 +618,7 @@ export default function SalesPage() {
                       <td style={{ padding: '10px', fontWeight: 700, color: 'var(--t0)' }}>
                         {item.name}
                       </td>
-                      <td style={{ padding: '10px', textAlign: 'right', fontWeight: 600, color: 'var(--t1)' }}>
+                      <td style={{ padding: '10px', textAlign: 'right', fontWeight: 700, color: 'var(--t0)' }}>
                         ₹{(item.price || 0).toLocaleString('en-IN')}
                       </td>
                       <td style={{ padding: '10px', textAlign: 'right', fontWeight: 800, color: '#F59E0B' }}>
@@ -631,7 +632,7 @@ export default function SalesPage() {
                           <div style={{ flex: 1, background: 'var(--s2)', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
                             <div style={{ width: `${sharePct}%`, background: '#F59E0B', height: '100%', borderRadius: '4px', transition: 'width 0.3s' }} />
                           </div>
-                          <span style={{ fontSize: '11px', color: 'var(--t2)', width: '32px', textAlign: 'right', fontWeight: 600 }}>{sharePct}%</span>
+                          <span style={{ fontSize: '11px', color: 'var(--t0)', width: '32px', textAlign: 'right', fontWeight: 700 }}>{sharePct}%</span>
                         </div>
                       </td>
                     </tr>
@@ -742,6 +743,17 @@ export default function SalesPage() {
         }
 
         .kpi-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .sales-page .kpi-label { color: var(--t0) !important; opacity: 0.95; font-weight: 800; }
+        .sales-page .d-input { color: var(--t0) !important; font-weight: 700; }
+        .sales-page .sales-date-label { color: var(--t0) !important; font-weight: 800; }
+        .sales-page .f-pill { color: var(--t0) !important; opacity: 0.9; font-weight: 700; }
+        .sales-page .f-pill.active { opacity: 1; color: #000 !important; font-weight: 900; }
+        .lm .sales-page .kpi-label { color: #0f172a !important; font-weight: 800; }
+        .lm .sales-page .chart-info { color: #0f172a !important; }
+        .lm .sales-page .sales-date-label { color: #0f172a !important; font-weight: 800; }
+        .lm .sales-page .f-pill { color: #0f172a !important; font-weight: 800; }
+        .lm .sales-page th { color: #0f172a !important; font-weight: 800; }
+        .lm .sales-page td { color: #0f172a !important; font-weight: 600; }
         .charts-equal-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
         .chart-box { padding: 24px; background: var(--s1); border: 1px solid var(--b1); border-radius: var(--rl); min-width: 0; overflow: hidden; }
         .chart-info { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--t0); margin-bottom: 20px; }
