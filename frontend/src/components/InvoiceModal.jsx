@@ -62,59 +62,72 @@ export default function InvoiceModal() {
   const foodItems = (o.items || []).filter(i => !isAlc(i));
   const alcoholItems = (o.items || []).filter(i => isAlc(i));
 
-  const calcFoodSubtotal = foodItems.reduce((sum, i) => sum + (i.price || 0) * (i.quantity || 0), 0);
-  const calcAlcoholSubtotal = alcoholItems.reduce((sum, i) => sum + (i.price || 0) * (i.quantity || 0), 0);
-
-  // If order was properly saved with alcoholSubtotal > 0 and foodSubtotal > 0, trust it.
-  // BUT if alcoholItems exist and alcoholSubtotal was 0, recalculate accurately
-  const hasSavedSplit = (typeof o.alcoholSubtotal === 'number' && o.alcoholSubtotal > 0) &&
-                        (typeof o.foodSubtotal === 'number' && o.foodSubtotal > 0);
-
-  const foodSubtotal = hasSavedSplit ? o.foodSubtotal : calcFoodSubtotal;
-  const alcoholSubtotal = hasSavedSplit ? o.alcoholSubtotal : calcAlcoholSubtotal;
+  // ── Always trust stored DB totals for the final payable amount ──────────
+  // Only use checkIsAlcoholic to visually split items into sections.
+  // This ensures the View Bill modal always matches the Order History list total.
 
   const billDate = o.date || o.createdAt || new Date();
   const formattedDate = formatBillDateTime(billDate);
   const gstRate = s.gstRate !== undefined ? s.gstRate : Number(((s.cgstRate || 0) + (s.sgstRate || 0)).toFixed(2));
-  
   const effectiveStRate = (s.serviceTaxRate > 0 ? s.serviceTaxRate : (o.serviceTaxRate > 0 ? o.serviceTaxRate : 10));
-  const isServiceTaxOn = o.serviceTax !== undefined && o.serviceTax > 0 
-    ? true 
+  const isServiceTaxOn = o.serviceTax !== undefined && o.serviceTax > 0
+    ? true
     : (s.serviceTaxEnabled !== undefined ? !!s.serviceTaxEnabled : true);
 
-  const alcoholTax = (hasSavedSplit && typeof o.serviceTax === 'number' && o.serviceTax > 0)
-    ? o.serviceTax
-    : (alcoholItems.length > 0 && isServiceTaxOn ? Number((alcoholSubtotal * (effectiveStRate / 100)).toFixed(2)) : 0);
+  // ── Stored totals (source of truth for display) ──────────────────────────
+  const storedAmountPayable = typeof o.amountPayable === 'number' && o.amountPayable > 0
+    ? o.amountPayable
+    : (typeof o.grandTotal === 'number' && o.grandTotal > 0 ? o.grandTotal : null);
 
-  const gst = (hasSavedSplit && typeof o.gst === 'number')
+  const storedGrandTotal    = typeof o.grandTotal === 'number' && o.grandTotal > 0 ? o.grandTotal : null;
+  const storedDiscount      = typeof o.discount === 'number' ? o.discount : (parseFloat(o.discount) || 0);
+  const storedRoundOff      = typeof o.roundOff === 'number' ? o.roundOff : 0;
+  const fineVal             = typeof o.fine === 'number' ? o.fine : (parseFloat(o.fine) || 0);
+
+  // ── Section subtotals: use saved split if available, else proportional ───
+  const hasSavedSplit = (typeof o.alcoholSubtotal === 'number' && o.alcoholSubtotal > 0) &&
+                        (typeof o.foodSubtotal === 'number' && o.foodSubtotal > 0);
+
+  const calcFoodSubtotal = foodItems.reduce((sum, i) => sum + (i.price || 0) * (i.quantity || 0), 0);
+  const calcAlcoholSubtotal = alcoholItems.reduce((sum, i) => sum + (i.price || 0) * (i.quantity || 0), 0);
+
+  const foodSubtotal    = hasSavedSplit ? o.foodSubtotal    : calcFoodSubtotal;
+  const alcoholSubtotal = hasSavedSplit ? o.alcoholSubtotal : calcAlcoholSubtotal;
+
+  // Taxes for section display only — read from DB if available
+  const gst = hasSavedSplit && typeof o.gst === 'number' && o.gst > 0
     ? o.gst
-    : (hasSavedSplit ? Number(((o.cgst || 0) + (o.sgst || 0)).toFixed(2)) : Number((foodSubtotal * (gstRate / 100)).toFixed(2)));
+    : (hasSavedSplit
+        ? Number(((o.cgst || 0) + (o.sgst || 0)).toFixed(2))
+        : Number((foodSubtotal * (gstRate / 100)).toFixed(2)));
 
-  const foodTotal = foodSubtotal + gst;
+  const alcoholTax = hasSavedSplit && typeof o.serviceTax === 'number' && o.serviceTax > 0
+    ? o.serviceTax
+    : (alcoholItems.length > 0 && isServiceTaxOn
+        ? Number((alcoholSubtotal * (effectiveStRate / 100)).toFixed(2))
+        : 0);
+
+  const foodTotal    = foodSubtotal + gst;
   const alcoholTotal = alcoholSubtotal + alcoholTax;
   const totalBeforeDiscount = Number((foodTotal + alcoholTotal).toFixed(2));
 
+  // ── discountPercent for display label only ───────────────────────────────
   let discountPercent = 0;
   if (o.discountPercent !== undefined && o.discountPercent !== null && !isNaN(parseFloat(o.discountPercent)) && parseFloat(o.discountPercent) > 0) {
     discountPercent = Math.min(100, Math.round(parseFloat(o.discountPercent)));
-  } else if (typeof o.discount === 'number' && o.discount > 0) {
-    const rawDisc = parseFloat(o.discount) || 0;
-    const base = ((o.grandTotal || 0) + rawDisc) || totalBeforeDiscount;
-    discountPercent = base > 0 ? Math.min(100, Math.round((rawDisc / base) * 100)) : 0;
+  } else if (storedDiscount > 0) {
+    const base = (storedGrandTotal || 0) + storedDiscount || totalBeforeDiscount;
+    discountPercent = base > 0 ? Math.min(100, Math.round((storedDiscount / base) * 100)) : 0;
   }
 
-  const discountVal = (typeof o.discount === 'number' && o.discount > 0) 
-    ? o.discount 
-    : (discountPercent > 0 ? Math.round(totalBeforeDiscount * (discountPercent / 100)) : (parseFloat(o.discount) || 0));
+  const discountVal = storedDiscount;
 
-  const fineVal = typeof o.fine === 'number' ? o.fine : (parseFloat(o.fine) || 0);
-  const rawCalculatedTotal = totalBeforeDiscount - discountVal + fineVal;
-  const displayGrandTotal = (hasSavedSplit && o.grandTotal > 0 && Math.abs(o.grandTotal - rawCalculatedTotal) <= 2)
-    ? o.grandTotal
-    : Math.max(0, Math.round(rawCalculatedTotal));
-  const displayRoundOff = (typeof o.roundOff === 'number' && hasSavedSplit)
-    ? o.roundOff
-    : Number((displayGrandTotal - rawCalculatedTotal).toFixed(2));
+  // ── Final displayed amounts: ALWAYS from stored DB values ────────────────
+  const displayGrandTotal = storedAmountPayable !== null
+    ? storedAmountPayable
+    : Math.max(0, Math.round(totalBeforeDiscount - discountVal + fineVal));
+
+  const displayRoundOff = storedRoundOff;
 
   const handlePrint = async () => {
     try {
