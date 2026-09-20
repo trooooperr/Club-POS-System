@@ -38,8 +38,8 @@ const playAlarmChime = () => {
 
 export const checkIsAlcoholic = (i, sellableList = [], invList = []) => {
   if (!i) return false;
-  if (i.isAlcoholic !== undefined && i.isAlcoholic !== null) return !!i.isAlcoholic;
-  if (i.isAlcohol !== undefined && i.isAlcohol !== null) return !!i.isAlcohol;
+  // Only trust explicit TRUE — don't let false block name-based detection
+  if (i.isAlcoholic === true || i.isAlcohol === true) return true;
 
   const rawName = (i.name || '').trim().toLowerCase();
   const cat = (i.category || '').trim().toLowerCase();

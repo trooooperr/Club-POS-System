@@ -58,13 +58,18 @@ export default function InvoiceModal() {
   }, [setInvoiceOrder]);
 
   const isAlc = (i) => {
-    if (i.isAlcoholic !== undefined) return !!i.isAlcoholic;
-    if (i.isAlcohol !== undefined) return !!i.isAlcohol;
+    // Trust explicit true flag
+    if (i.isAlcoholic === true || i.isAlcohol === true) return true;
     const name = (i.name || '').toLowerCase();
     const cat = (i.category || '').toLowerCase();
     const dept = (i.department || '').toLowerCase();
-    if (cat.includes('mocktail') || name.includes('soda') || name.includes('water') || name.includes('tonic') || name.includes('red bull')) return false;
-    return cat.includes('beer') || cat.includes('liquor') || cat.includes('whisky') || cat.includes('vodka') || cat.includes('rum') || cat.includes('wine') || cat.includes('gin') || cat.includes('cocktail') || cat.includes('shot') || cat.includes('shooter') || dept === 'bar';
+    // Explicit non-alcohol overrides (mocktails, water, etc.)
+    if (cat.includes('mocktail') || name === 'water' || name.includes('mineral water') || name.includes('tonic water') || name.includes('red bull')) return false;
+    // Check category or department
+    const alcKeywords = ['beer', 'liquor', 'liqueur', 'whisky', 'whiskey', 'vodka', 'rum', 'wine', 'gin', 'cocktail', 'shot', 'shooter', 'scotch', 'malt', 'tequila', 'brandy', 'cognac'];
+    if (alcKeywords.some(k => cat.includes(k)) || dept === 'bar') return true;
+    // Fallback: check item name (critical when category is undefined in DB)
+    return alcKeywords.some(k => name.includes(k)) || name.includes('jager') || name.includes('bomb shot') || name.includes('mix shot');
   };
 
   const foodItems = (o.items || []).filter(i => !isAlc(i));
