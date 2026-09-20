@@ -660,13 +660,14 @@ export default function BillingPage() {
   // Combined totals
   const totals = useMemo(() => {
     const isAlcItem = (i) => {
-      if (i.isAlcoholic !== undefined) return !!i.isAlcoholic;
-      if (i.isAlcohol !== undefined) return !!i.isAlcohol;
+      if (i.isAlcoholic === true || i.isAlcohol === true) return true;
       const name = (i.name || '').toLowerCase();
       const cat = (i.category || '').toLowerCase();
       const dept = (i.department || '').toLowerCase();
-      if (cat.includes('mocktail') || name.includes('soda') || name.includes('water') || name.includes('tonic') || name.includes('red bull')) return false;
-      return cat.includes('beer') || cat.includes('liquor') || cat.includes('whisky') || cat.includes('vodka') || cat.includes('rum') || cat.includes('wine') || cat.includes('gin') || cat.includes('cocktail') || cat.includes('shot') || cat.includes('shooter') || dept === 'bar';
+      if (cat.includes('mocktail') || name === 'water' || name.includes('mineral water') || name.includes('tonic water') || name.includes('red bull')) return false;
+      const alcKeywords = ['beer', 'liquor', 'liqueur', 'whisky', 'whiskey', 'vodka', 'rum', 'wine', 'gin', 'cocktail', 'shot', 'shooter', 'scotch', 'malt', 'tequila', 'brandy', 'cognac'];
+      if (alcKeywords.some(k => cat.includes(k)) || dept === 'bar') return true;
+      return alcKeywords.some(k => name.includes(k)) || name.includes('jager') || name.includes('bomb shot') || name.includes('mix shot');
     };
 
     const foodItems = (combinedItems?.all || []).filter(i => !isAlcItem(i));
