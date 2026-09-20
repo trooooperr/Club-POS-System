@@ -233,17 +233,15 @@ describe('KOT Management & Deletion API', () => {
 
     expect(removeRes.statusCode).toBe(200);
 
-    // Verify order items and totals are recalculated
-    // Corona Beer: 3 left (qty = 3, price = 200) -> 600
-    // French Fries: 2 left (qty = 2, price = 150) -> 300
+    // Verify order items and totals are recalculated with split tax
+    // Corona Beer: 3 left (qty = 3, price = 200) -> 600 (alcoholic -> 0% GST)
+    // French Fries: 2 left (qty = 2, price = 150) -> 300 (food -> 2.5% SGST + 2.5% CGST = 15)
     // Subtotal = 900
-    // SGST (2.5%) = 22.5
-    // CGST (2.5%) = 22.5
-    // Total = 945
+    // Total = 915
     const updatedOrder = await Order.findById(activeOrder._id);
     expect(updatedOrder.items.length).toBe(2);
     expect(updatedOrder.subtotal).toBe(900);
-    expect(updatedOrder.grandTotal).toBe(945);
+    expect(updatedOrder.grandTotal).toBe(915);
 
     // Verify inventory stock is correct
     const beer = await Inventory.findOne({ name: 'Corona Beer' });

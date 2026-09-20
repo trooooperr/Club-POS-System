@@ -34,8 +34,34 @@ async function recalculateOrderTotals(order) {
       }
     }
   }
+  const inventoryItems = await Inventory.find({}).select('name isAlcoholic isAlcohol category').lean();
+  const menuItems = await MenuItem.find({}).select('name isAlcoholic department category').lean();
+  const alcoholSet = new Set();
+  (inventoryItems || []).forEach(i => {
+    if (i.isAlcoholic || i.isAlcohol || (i.category && /beer|whisky|vodka|rum|scotch|gin|wine|tequila|cocktail|shooter|shot|liquor/i.test(i.category))) {
+      if (i.name) alcoholSet.add(i.name.trim().toLowerCase());
+    }
+  });
+  (menuItems || []).forEach(m => {
+    if (m.isAlcoholic || (m.department === 'bar' && m.category && /beer|whisky|vodka|rum|scotch|gin|wine|tequila|cocktail|shooter|shot|liquor/i.test(m.category))) {
+      if (m.name) alcoholSet.add(m.name.trim().toLowerCase());
+    }
+  });
+
   const updatedItems = [...itemMap.values()];
-  const subtotal = updatedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  let foodSubtotal = 0;
+  let alcoholSubtotal = 0;
+  for (const item of updatedItems) {
+    const isAlc = item.isAlcoholic !== undefined ? !!item.isAlcoholic : alcoholSet.has(item.name.trim().toLowerCase());
+    item.isAlcoholic = isAlc;
+    const itemTotal = (item.price || 0) * (item.quantity || 0);
+    if (isAlc) {
+      alcoholSubtotal += itemTotal;
+    } else {
+      foodSubtotal += itemTotal;
+    }
+  }
+  const subtotal = foodSubtotal + alcoholSubtotal;
 
   const Settings = require('../models/Settings');
   const settings = await Settings.findOne();
@@ -43,11 +69,11 @@ async function recalculateOrderTotals(order) {
   const cgstRate = settings ? settings.cgstRate : 2.5;
   const serviceTaxRate = (order && order.serviceTaxRate > 0)
     ? order.serviceTaxRate
-    : (order && order.serviceTax > 0 && order.subtotal > 0 ? Number(((order.serviceTax / order.subtotal) * 100).toFixed(2)) : (settings && settings.serviceTaxEnabled ? (settings.serviceTaxRate || 0) : 0));
+    : (order && order.serviceTax > 0 && order.alcoholSubtotal > 0 ? Number(((order.serviceTax / order.alcoholSubtotal) * 100).toFixed(2)) : (settings && settings.serviceTaxEnabled ? (settings.serviceTaxRate || 0) : 0));
 
-  const sgst = (subtotal * sgstRate) / 100;
-  const cgst = (subtotal * cgstRate) / 100;
-  const serviceTax = (subtotal * serviceTaxRate) / 100;
+  const sgst = (foodSubtotal * sgstRate) / 100;
+  const cgst = (foodSubtotal * cgstRate) / 100;
+  const serviceTax = (alcoholSubtotal * serviceTaxRate) / 100;
 
   const totalBeforeDisc = subtotal + sgst + cgst + serviceTax;
   const fine = order.fine || 0;
@@ -73,6 +99,8 @@ async function recalculateOrderTotals(order) {
 
   order.items = updatedItems;
   order.subtotal = subtotal;
+  order.foodSubtotal = foodSubtotal;
+  order.alcoholSubtotal = alcoholSubtotal;
   order.sgst = sgst;
   order.cgst = cgst;
   order.serviceTax = serviceTax;

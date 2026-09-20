@@ -481,7 +481,7 @@ router.post('/', async (req, res) => {
 // ── FINALIZE BILL (called when printing final bill) ─────────────
 router.patch('/:id/finalize-bill', async (req, res) => {
   try {
-    const { items, subtotal, sgst, cgst, serviceTax, serviceTaxRate, discount, discountPercent, fine, roundOff, grandTotal, waiterName, orderType, customerName, customerPhone, paymentMode, cashAmount, upiAmount, isCredit, paidAmount, dueAmount } = req.body;
+    const { items, subtotal, foodSubtotal, alcoholSubtotal, sgst, cgst, serviceTax, serviceTaxRate, discount, discountPercent, fine, roundOff, grandTotal, waiterName, orderType, customerName, customerPhone, paymentMode, cashAmount, upiAmount, isCredit, paidAmount, dueAmount } = req.body;
 
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ message: 'Order not found' });
@@ -516,11 +516,15 @@ router.patch('/:id/finalize-bill', async (req, res) => {
     // Update order with final calculations (combine all KOT items)
     order.items = items;
     order.subtotal = subtotal;
+    if (foodSubtotal !== undefined) order.foodSubtotal = parseFloat(foodSubtotal) || 0;
+    if (alcoholSubtotal !== undefined) order.alcoholSubtotal = parseFloat(alcoholSubtotal) || 0;
     order.sgst = sgst;
     order.cgst = cgst;
     order.serviceTax = typeof serviceTax === 'number' ? serviceTax : 0;
     if (serviceTaxRate !== undefined && serviceTaxRate !== null) {
       order.serviceTaxRate = parseFloat(serviceTaxRate) || 0;
+    } else if (order.serviceTax > 0 && order.alcoholSubtotal > 0 && (!order.serviceTaxRate || order.serviceTaxRate === 0)) {
+      order.serviceTaxRate = Number(((order.serviceTax / order.alcoholSubtotal) * 100).toFixed(2));
     } else if (order.serviceTax > 0 && order.subtotal > 0 && (!order.serviceTaxRate || order.serviceTaxRate === 0)) {
       order.serviceTaxRate = Number(((order.serviceTax / order.subtotal) * 100).toFixed(2));
     }

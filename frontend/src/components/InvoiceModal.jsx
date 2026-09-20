@@ -57,10 +57,34 @@ export default function InvoiceModal() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [setInvoiceOrder]);
 
+  const isAlc = (i) => {
+    if (i.isAlcoholic !== undefined) return !!i.isAlcoholic;
+    if (i.isAlcohol !== undefined) return !!i.isAlcohol;
+    const name = (i.name || '').toLowerCase();
+    const cat = (i.category || '').toLowerCase();
+    const dept = (i.department || '').toLowerCase();
+    if (cat.includes('mocktail') || name.includes('soda') || name.includes('water') || name.includes('tonic') || name.includes('red bull')) return false;
+    return cat.includes('beer') || cat.includes('liquor') || cat.includes('whisky') || cat.includes('vodka') || cat.includes('rum') || cat.includes('wine') || cat.includes('gin') || cat.includes('cocktail') || cat.includes('shot') || cat.includes('shooter') || dept === 'bar';
+  };
+
+  const foodItems = (o.items || []).filter(i => !isAlc(i));
+  const alcoholItems = (o.items || []).filter(i => isAlc(i));
+
+  const foodSubtotal = typeof o.foodSubtotal === 'number' && o.foodSubtotal > 0
+    ? o.foodSubtotal
+    : foodItems.reduce((sum, i) => sum + (i.price || 0) * (i.quantity || 0), 0);
+
+  const alcoholSubtotal = typeof o.alcoholSubtotal === 'number' && o.alcoholSubtotal > 0
+    ? o.alcoholSubtotal
+    : alcoholItems.reduce((sum, i) => sum + (i.price || 0) * (i.quantity || 0), 0);
+
   const billDate = o.date || o.createdAt || new Date();
   const formattedDate = formatBillDateTime(billDate);
   const gstRate = s.gstRate !== undefined ? s.gstRate : Number(((s.cgstRate || 0) + (s.sgstRate || 0)).toFixed(2));
   const gst = typeof o.gst === 'number' ? o.gst : Number(((o.cgst || 0) + (o.sgst || 0)).toFixed(2));
+  const alcoholTax = o.serviceTax || 0;
+  const foodTotal = foodSubtotal + gst;
+  const alcoholTotal = alcoholSubtotal + alcoholTax;
   const totalBeforeDiscount = Number(((o.subtotal || 0) + gst + (o.serviceTax || 0)).toFixed(2));
   const discountVal = typeof o.discount === 'number' ? o.discount : (parseFloat(o.discount) || 0);
   let discountPercent = 0;
@@ -82,6 +106,8 @@ export default function InvoiceModal() {
         {
           items: o.items,
           subtotal: o.subtotal,
+          foodSubtotal,
+          alcoholSubtotal,
           gst,
           gstRate,
           sgst: o.sgst,
@@ -111,7 +137,7 @@ export default function InvoiceModal() {
     }
   };
 
-  const stRate = o.serviceTaxRate || (s.serviceTaxRate > 0 ? s.serviceTaxRate : ((o.subtotal || 0) > 0 && (o.serviceTax || 0) > 0 ? parseFloat(((o.serviceTax / o.subtotal) * 100).toFixed(1)) : 5));
+  const stRate = s.serviceTaxRate > 0 ? s.serviceTaxRate : (o.serviceTaxRate || 0);
 
   return (
     <div className="moverlay">
@@ -146,6 +172,7 @@ export default function InvoiceModal() {
                 <div className="bill-name-heavy">{s.restaurantName}</div>
                 {s.address && <div className="bill-sub-info">{s.address}</div>}
                 {(s.phone || s.contact) && <div className="bill-sub-info">Contact: {s.phone || s.contact}</div>}
+                <div className="bill-sub-info">Email: contact@humtumbar.in</div>
                 {s.gstin && <div className="bill-sub-info">GSTIN: {s.gstin}</div>}
               </div>
 
@@ -160,44 +187,158 @@ export default function InvoiceModal() {
 
               <div className="bill-zig-zag-sep"></div>
 
-              <table className="bill-items-table">
-                <thead>
-                  <tr>
-                    <th align="left">ITEM</th>
-                    <th align="center">QTY</th>
-                    <th align="right">TOTAL</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {o.items.map((item, i) => (
-                    <tr key={i}>
-                      <td className="item-name-bold">{item.name}</td>
-                      <td align="center">x{item.quantity}</td>
-                      <td align="right">{s.currency}{(item.price * item.quantity).toFixed(0)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {/* ── Sectioned bill display ─────────────────────────── */}
+              {foodItems.length > 0 && alcoholItems.length > 0 ? (
+                <>
+                  {/* FOOD SECTION */}
+                  <table className="bill-items-table">
+                    <thead>
+                      <tr>
+                        <th colSpan="3" className="bill-section-header">RESTAURANT</th>
+                      </tr>
+                      <tr className="bill-col-header-row">
+                        <th align="left">ITEM</th>
+                        <th align="center">QTY</th>
+                        <th align="right">AMOUNT</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {foodItems.map((item, i) => (
+                        <tr key={`food-${i}`}>
+                          <td className="item-name-bold">{item.name}</td>
+                          <td align="center" className="item-qty">{item.quantity}</td>
+                          <td align="right" className="item-amt">{s.currency}{(item.price * item.quantity).toFixed(0)}</td>
+                        </tr>
+                      ))}
+                      <tr className="subtotal-row">
+                        <td colSpan="2">Subtotal</td>
+                        <td align="right">{s.currency}{foodSubtotal.toFixed(2)}</td>
+                      </tr>
+                      {gst > 0 && (
+                        <tr className="tax-row">
+                          <td colSpan="2">GST ({gstRate}%)</td>
+                          <td align="right">{s.currency}{gst.toFixed(2)}</td>
+                        </tr>
+                      )}
+                      <tr className="section-total-row">
+                        <td colSpan="2">Restaurant Total</td>
+                        <td align="right">{s.currency}{foodTotal.toFixed(2)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
 
-              <div className="bill-zig-zag-sep"></div>
+                  <div className="bill-zig-zag-sep" style={{ margin: '16px 0' }}></div>
 
-              <div className="bill-summary-stack">
-                <div className="sum-row"><span>Subtotal</span><span>{s.currency}{o.subtotal.toFixed(2)}</span></div>
-                {gst > 0 && <div className="sum-row"><span>GST ({gstRate}%)</span><span>{s.currency}{gst.toFixed(2)}</span></div>}
-                {(o.serviceTax || 0) > 0 && <div className="sum-row"><span>Service Tax ({stRate}%)</span><span>{s.currency}{o.serviceTax.toFixed(2)}</span></div>}
-                <div className="sum-row" style={{ borderTop: '1px dashed #cbd5e1', paddingTop: '4px', marginTop: '2px', fontWeight: 'bold' }}>
-                  <span>Total</span><span>{s.currency}{totalBeforeDiscount.toFixed(2)}</span>
-                </div>
-                {discountVal > 0 && <div className="sum-row discount"><span>Discount ({discountPercent}%)</span><span>-{s.currency}{discountVal.toFixed(2)}</span></div>}
-                {(o.fine || 0) > 0 && <div className="sum-row" style={{ color: '#ef4444', fontWeight: 700 }}><span>Fine</span><span>+{s.currency}{o.fine.toFixed(2)}</span></div>}
-                {(o.roundOff || 0) !== 0 && <div className="sum-row"> <span>Round-Off</span><span>{o.roundOff > 0 ? '+' : ''}{o.roundOff.toFixed(2)}</span></div>}
-                <div className="grand-total-box">
-                  <div className="grand-label">AMOUNT PAYABLE</div>
-                  <div className="grand-value">{s.currency}{o.grandTotal.toFixed(2)}</div>
-                </div>
+                  {/* ALCOHOL SECTION */}
+                  <table className="bill-items-table">
+                    <thead>
+                      <tr>
+                        <th colSpan="3" className="bill-section-header">BAR</th>
+                      </tr>
+                      <tr className="bill-col-header-row">
+                        <th align="left">ITEM</th>
+                        <th align="center">QTY</th>
+                        <th align="right">AMOUNT</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {alcoholItems.map((item, i) => (
+                        <tr key={`alc-${i}`}>
+                          <td className="item-name-bold">{item.name}</td>
+                          <td align="center" className="item-qty">{item.quantity}</td>
+                          <td align="right" className="item-amt">{s.currency}{(item.price * item.quantity).toFixed(0)}</td>
+                        </tr>
+                      ))}
+                      <tr className="subtotal-row">
+                        <td colSpan="2">Subtotal</td>
+                        <td align="right">{s.currency}{alcoholSubtotal.toFixed(2)}</td>
+                      </tr>
+                      {s.serviceTaxEnabled && stRate > 0 && alcoholTax > 0 && (
+                        <tr className="tax-row">
+                          <td colSpan="2">Service Tax ({stRate}%)</td>
+                          <td align="right">{s.currency}{alcoholTax.toFixed(2)}</td>
+                        </tr>
+                      )}
+                      <tr className="section-total-row">
+                        <td colSpan="2">Bar Total</td>
+                        <td align="right">{s.currency}{alcoholTotal.toFixed(2)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
 
-                {o.dueAmount > 0 && <div className="sum-row due-row"><span>DUE AMOUNT</span><span>{s.currency}{o.dueAmount.toFixed(2)}</span></div>}
-              </div>
+                  <div className="bill-zig-zag-sep" style={{ margin: '16px 0' }}></div>
+
+                  {/* GRAND TOTAL BLOCK */}
+                  <div className="bill-summary-stack">
+                    <div className="sum-row" style={{ fontWeight: 'bold', borderBottom: '1px dashed #cbd5e1', paddingBottom: 4, marginBottom: 4 }}>
+                      <span>Grand Total</span><span>{s.currency}{(foodTotal + alcoholTotal).toFixed(2)}</span>
+                    </div>
+                    {discountVal > 0 && <div className="sum-row discount"><span>Discount ({discountPercent}%)</span><span>-{s.currency}{discountVal.toFixed(2)}</span></div>}
+                    {(o.fine || 0) > 0 && <div className="sum-row" style={{ color: '#ef4444', fontWeight: 700 }}><span>Fine</span><span>+{s.currency}{o.fine.toFixed(2)}</span></div>}
+                    {(o.roundOff || 0) !== 0 && <div className="sum-row"><span>Round-Off</span><span>{o.roundOff > 0 ? '+' : ''}{o.roundOff.toFixed(2)}</span></div>}
+                    <div className="grand-total-box">
+                      <div className="grand-label">AMOUNT PAYABLE</div>
+                      <div className="grand-value">{s.currency}{o.grandTotal.toFixed(2)}</div>
+                    </div>
+                    {o.dueAmount > 0 && <div className="sum-row due-row"><span>DUE AMOUNT</span><span>{s.currency}{o.dueAmount.toFixed(2)}</span></div>}
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* SINGLE SECTION (food-only or alcohol-only) */}
+                  <table className="bill-items-table">
+                    <thead>
+                      <tr className="bill-col-header-row">
+                        <th align="left">ITEM</th>
+                        <th align="center">QTY</th>
+                        <th align="right">AMOUNT</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {o.items.map((item, i) => (
+                        <tr key={i}>
+                          <td className="item-name-bold">{item.name}</td>
+                          <td align="center" className="item-qty">{item.quantity}</td>
+                          <td align="right" className="item-amt">{s.currency}{(item.price * item.quantity).toFixed(0)}</td>
+                        </tr>
+                      ))}
+                      <tr className="subtotal-row">
+                        <td colSpan="2">Subtotal</td>
+                        <td align="right">{s.currency}{(o.subtotal || 0).toFixed(2)}</td>
+                      </tr>
+                      {gst > 0 && (
+                        <tr className="tax-row">
+                          <td colSpan="2">GST ({gstRate}%)</td>
+                          <td align="right">{s.currency}{gst.toFixed(2)}</td>
+                        </tr>
+                      )}
+                      {s.serviceTaxEnabled && stRate > 0 && (o.serviceTax || 0) > 0 && (
+                        <tr className="tax-row">
+                          <td colSpan="2">Service Tax ({stRate}%)</td>
+                          <td align="right">{s.currency}{o.serviceTax.toFixed(2)}</td>
+                        </tr>
+                      )}
+                      <tr className="section-total-row">
+                        <td colSpan="2">Total</td>
+                        <td align="right">{s.currency}{totalBeforeDiscount.toFixed(2)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  <div className="bill-zig-zag-sep"></div>
+
+                  <div className="bill-summary-stack">
+                    {discountVal > 0 && <div className="sum-row discount"><span>Discount ({discountPercent}%)</span><span>-{s.currency}{discountVal.toFixed(2)}</span></div>}
+                    {(o.fine || 0) > 0 && <div className="sum-row" style={{ color: '#ef4444', fontWeight: 700 }}><span>Fine</span><span>+{s.currency}{o.fine.toFixed(2)}</span></div>}
+                    {(o.roundOff || 0) !== 0 && <div className="sum-row"><span>Round-Off</span><span>{o.roundOff > 0 ? '+' : ''}{o.roundOff.toFixed(2)}</span></div>}
+                    <div className="grand-total-box">
+                      <div className="grand-label">AMOUNT PAYABLE</div>
+                      <div className="grand-value">{s.currency}{o.grandTotal.toFixed(2)}</div>
+                    </div>
+                    {o.dueAmount > 0 && <div className="sum-row due-row"><span>DUE AMOUNT</span><span>{s.currency}{o.dueAmount.toFixed(2)}</span></div>}
+                  </div>
+                </>
+              )}
 
               {/* QR Code on screen */}
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '12px 0' }}>
@@ -332,13 +473,41 @@ export default function InvoiceModal() {
         .meta-item strong { color: #334155; }
         .full-row { grid-column: span 2; }
 
-        .bill-items-table { width: 100%; border-collapse: collapse; margin: 4px 0; font-size: 11px; }
-        .bill-items-table th { border-bottom: 1px solid #475569; padding-bottom: 2px; font-size: 10px; color: #64748b; font-weight: 900; }
-        .bill-items-table td { padding: 1px 0; color: #334155; }
-        .item-name-bold { font-weight: 700; text-transform: uppercase; }
+        .bill-items-table { width: 100%; border-collapse: collapse; margin: 4px 0; font-size: 12px; }
 
-        .bill-summary-stack { display: flex; flex-direction: column; gap: 1px; }
-        .sum-row { display: flex; justify-content: space-between; font-size: 11px; color: #475569; margin-bottom: 1px; }
+        .bill-section-header {
+          font-size: 13px; font-weight: 900; color: #0f172a;
+          text-transform: uppercase; text-align: center;
+          padding: 10px 0 4px; letter-spacing: 1px;
+          border-bottom: 2px solid #1e293b;
+        }
+        .bill-col-header-row th {
+          font-size: 10px; color: #64748b; font-weight: 700;
+          padding: 4px 0 3px; border-bottom: 1px dashed #94a3b8;
+          text-transform: uppercase; letter-spacing: 0.3px;
+        }
+        .bill-items-table td { padding: 3px 0; color: #1e293b; }
+        .item-name-bold { font-weight: 700; font-size: 12px; }
+        .item-qty { font-size: 12px; color: #334155; text-align: center; }
+        .item-amt { font-size: 12px; font-weight: 600; text-align: right; }
+
+        .subtotal-row td {
+          border-top: 1px dashed #cbd5e1;
+          padding-top: 5px; padding-bottom: 2px;
+          font-size: 11px; color: #64748b;
+        }
+        .tax-row td {
+          font-size: 11px; color: #64748b;
+          padding-bottom: 2px;
+        }
+        .section-total-row td {
+          border-top: 2px solid #1e293b;
+          padding-top: 5px; padding-bottom: 5px;
+          font-size: 13px; font-weight: 900; color: #0f172a;
+        }
+
+        .bill-summary-stack { display: flex; flex-direction: column; gap: 2px; }
+        .sum-row { display: flex; justify-content: space-between; font-size: 12px; color: #475569; margin-bottom: 2px; }
         .discount { color: #dc2626; font-weight: bold; }
         
         .grand-total-box { 

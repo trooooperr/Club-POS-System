@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Share2, MessageCircle, Download, Printer } from 'lucide-react';
 import { formatBillDateTime } from '../lib/formatDate';
 import { BILL_LOGO_BASE64 } from '../lib/billLogoBase64';
@@ -45,10 +45,36 @@ export default function BillPreviewModal({ bill, table, tableNo, settings, onClo
 
   const billDate = bill?.date || bill?.createdAt || table?.date || table?.createdAt || new Date();
   const formattedDate = formatBillDateTime(billDate);
+  const isAlc = (i) => {
+    if (i.isAlcoholic !== undefined) return !!i.isAlcoholic;
+    if (i.isAlcohol !== undefined) return !!i.isAlcohol;
+    const name = (i.name || '').toLowerCase();
+    const cat = (i.category || '').toLowerCase();
+    const dept = (i.department || '').toLowerCase();
+    if (cat.includes('mocktail') || name.includes('soda') || name.includes('water') || name.includes('tonic') || name.includes('red bull')) return false;
+    return cat.includes('beer') || cat.includes('liquor') || cat.includes('whisky') || cat.includes('vodka') || cat.includes('rum') || cat.includes('wine') || cat.includes('gin') || cat.includes('cocktail') || cat.includes('shot') || cat.includes('shooter') || dept === 'bar';
+  };
+
+  const foodItems = (table?.items || []).filter(i => !isAlc(i));
+  const alcoholItems = (table?.items || []).filter(i => isAlc(i));
+
+  const foodSubtotal = typeof bill?.foodSubtotal === 'number'
+    ? bill.foodSubtotal
+    : foodItems.reduce((s, i) => s + (i.price || 0) * (i.quantity || 0), 0);
+
+  const alcoholSubtotal = typeof bill?.alcoholSubtotal === 'number'
+    ? bill.alcoholSubtotal
+    : alcoholItems.reduce((s, i) => s + (i.price || 0) * (i.quantity || 0), 0);
+
   const gstRate = settings?.gstRate !== undefined ? settings.gstRate : Number(((settings?.cgstRate || 0) + (settings?.sgstRate || 0)).toFixed(2));
-  const gst = typeof bill?.gst === 'number' ? bill.gst : Number(((bill?.tax1 || 0) + (bill?.tax2 || 0) + (bill?.cgst || 0) + (bill?.sgst || 0)).toFixed(2));
-  const serviceTax = bill?.serviceTax || 0;
-  const subtotal = bill?.subtotal || 0;
+  const gst = typeof bill?.gst === 'number' ? bill.gst : Number(((bill?.tax1 || 0) + (bill?.tax2 || 0) + (bill?.cgst || 0) + (bill?.sgst || 0)).toFixed(2)) || (foodSubtotal * (gstRate / 100));
+  const stRate = settings?.serviceTaxRate > 0 ? settings.serviceTaxRate : 0;
+  const serviceTax = settings?.serviceTaxEnabled && stRate > 0
+    ? (typeof bill?.serviceTax === 'number' ? bill.serviceTax : (alcoholSubtotal * (stRate / 100)))
+    : 0;
+  const subtotal = typeof bill?.subtotal === 'number' ? bill.subtotal : (foodSubtotal + alcoholSubtotal);
+  const foodTotalCalc = foodSubtotal + gst;
+  const alcoholTotalCalc = alcoholSubtotal + serviceTax;
   const totalBeforeDiscount = Number((subtotal + gst + serviceTax).toFixed(2));
   const discountVal = typeof bill?.discount === 'number' ? bill.discount : (parseFloat(bill?.discount) || 0);
   let discountPercent = 0;
@@ -105,6 +131,7 @@ export default function BillPreviewModal({ bill, table, tableNo, settings, onClo
             {(settings.phone || settings.contact) && (
               <div style={{ fontSize: 11, color: '#666' }}>Contact: {settings.phone || settings.contact}</div>
             )}
+            <div style={{ fontSize: 11, color: '#666' }}>Email: contact@humtumbar.in</div>
             {settings.gstin && (
               <div style={{ fontSize: 11, color: '#666' }}>GSTIN: {settings.gstin}</div>
             )}
@@ -135,60 +162,139 @@ export default function BillPreviewModal({ bill, table, tableNo, settings, onClo
           {/* Separator */}
           <div style={{ borderBottom: '1px dashed #999', margin: '12px 0' }}></div>
 
-          {/* Items */}
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '8px 12px', fontSize: 11, fontWeight: 600, borderBottom: '1px solid #000', paddingBottom: 6, marginBottom: 8 }}>
-              <div style={{ textTransform: 'uppercase' }}>ITEM</div>
-              <div style={{ textAlign: 'center', textTransform: 'uppercase' }}>QTY</div>
-              <div style={{ textAlign: 'right', textTransform: 'uppercase' }}>PRICE</div>
-            </div>
-            {table?.items?.map((item, idx) => (
-              <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '8px 12px', fontSize: 12, marginBottom: 6 }}>
-                <div style={{ fontWeight: 600 }}>{item.name}</div>
-                <div style={{ textAlign: 'center', fontWeight: 700 }}>x{item.quantity}</div>
-                <div style={{ textAlign: 'right', fontWeight: 700 }}>₹{(item.price * item.quantity).toFixed(0)}</div>
+          {/* ── Items + Inline Totals ───────────────────────────────── */}
+          {foodItems.length > 0 && alcoholItems.length > 0 ? (
+            <>
+              {/* FOOD SECTION */}
+              <div style={{ marginBottom: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 900, color: '#0f172a', textTransform: 'uppercase', margin: '4px 0 6px', letterSpacing: '1px', borderBottom: '2px solid #1e293b', paddingBottom: 4, textAlign: 'center' }}>RESTAURANT</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '8px 12px', fontSize: 11, fontWeight: 600, borderBottom: '1px solid #000', paddingBottom: 4, marginBottom: 6 }}>
+                  <div>ITEM</div><div style={{ textAlign: 'center' }}>QTY</div><div style={{ textAlign: 'right' }}>PRICE</div>
+                </div>
+                {foodItems.map((item, idx) => (
+                  <div key={`food-${idx}`} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '8px 12px', fontSize: 12, marginBottom: 5 }}>
+                    <div style={{ fontWeight: 600 }}>{item.name}</div>
+                    <div style={{ textAlign: 'center', fontWeight: 700 }}>x{item.quantity}</div>
+                    <div style={{ textAlign: 'right', fontWeight: 700 }}>₹{(item.price * item.quantity).toFixed(0)}</div>
+                  </div>
+                ))}
+                <div style={{ borderTop: '1px dashed #ccc', marginTop: 6, paddingTop: 5 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#666', marginBottom: 3 }}>
+                    <span>Subtotal</span><span>₹{foodSubtotal.toFixed(2)}</span>
+                  </div>
+                  {gst > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#666', marginBottom: 3 }}>
+                      <span>GST ({gstRate}%)</span><span>₹{gst.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 900, color: '#0f172a', borderTop: '2px solid #1e293b', paddingTop: 5, marginTop: 4 }}>
+                    <span>Restaurant Total</span><span>₹{foodTotalCalc.toFixed(2)}</span>
+                  </div>
+                </div>
               </div>
-            ))}
-          </div>
 
-          {/* Separator */}
-          <div style={{ borderBottom: '1px dashed #999', margin: '12px 0' }}></div>
+              <div style={{ borderBottom: '1px dashed #999', margin: '20px 0' }}></div>
 
-          {/* Totals */}
-          <div style={{ fontSize: 12, marginBottom: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, color: '#666' }}>
-              <span>Subtotal</span>
-              <span>₹{subtotal.toFixed(2)}</span>
-            </div>
-            {gst > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, color: '#666' }}>
-                <span>GST ({gstRate}%)</span>
-                <span>₹{gst.toFixed(2)}</span>
+              {/* ALCOHOL SECTION */}
+              <div style={{ marginBottom: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 900, color: '#0f172a', textTransform: 'uppercase', margin: '4px 0 6px', letterSpacing: '1px', borderBottom: '2px solid #1e293b', paddingBottom: 4, textAlign: 'center' }}>BAR</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '8px 12px', fontSize: 11, fontWeight: 600, borderBottom: '1px solid #000', paddingBottom: 4, marginBottom: 6 }}>
+                  <div>ITEM</div><div style={{ textAlign: 'center' }}>QTY</div><div style={{ textAlign: 'right' }}>PRICE</div>
+                </div>
+                {alcoholItems.map((item, idx) => (
+                  <div key={`alc-${idx}`} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '8px 12px', fontSize: 12, marginBottom: 5 }}>
+                    <div style={{ fontWeight: 600 }}>{item.name}</div>
+                    <div style={{ textAlign: 'center', fontWeight: 700 }}>x{item.quantity}</div>
+                    <div style={{ textAlign: 'right', fontWeight: 700 }}>₹{(item.price * item.quantity).toFixed(0)}</div>
+                  </div>
+                ))}
+                <div style={{ borderTop: '1px dashed #ccc', marginTop: 6, paddingTop: 5 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#666', marginBottom: 3 }}>
+                    <span>Subtotal</span><span>₹{alcoholSubtotal.toFixed(2)}</span>
+                  </div>
+                  {serviceTax > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#666', marginBottom: 3 }}>
+                      <span>Service Tax ({stRate}%)</span><span>₹{serviceTax.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 900, color: '#0f172a', borderTop: '2px solid #1e293b', paddingTop: 5, marginTop: 4 }}>
+                    <span>Bar Total</span><span>₹{alcoholTotalCalc.toFixed(2)}</span>
+                  </div>
+                </div>
               </div>
-            )}
-            {serviceTax > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, color: '#666' }}>
-                <span>Service Tax</span>
-                <span>₹{serviceTax.toFixed(2)}</span>
+
+              <div style={{ borderBottom: '1px dashed #999', margin: '12px 0' }}></div>
+
+              {/* GRAND TOTAL */}
+              <div style={{ fontSize: 12, marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, color: '#000', fontWeight: 700, borderBottom: '1px dashed #ccc', paddingBottom: 4 }}>
+                  <span>Grand Total</span>
+                  <span>₹{(foodTotalCalc + alcoholTotalCalc).toFixed(2)}</span>
+                </div>
+                {discountVal > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, color: '#ef4444' }}>
+                    <span>Discount ({discountPercent}%)</span><span>-₹{discountVal.toFixed(2)}</span>
+                  </div>
+                )}
+                {bill?.roundOff !== 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, color: '#666' }}>
+                    <span>Round-Off</span><span>{bill?.roundOff > 0 ? '+' : ''}₹{bill?.roundOff?.toFixed(2) || '0.00'}</span>
+                  </div>
+                )}
               </div>
-            )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, color: '#000', fontWeight: 600, borderTop: '1px dashed #ccc', paddingTop: 4 }}>
-              <span>Total</span>
-              <span>₹{totalBeforeDiscount.toFixed(2)}</span>
-            </div>
-            {discountVal > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, color: '#ef4444' }}>
-                <span>Discount ({discountPercent}%)</span>
-                <span>-₹{discountVal.toFixed(2)}</span>
+            </>
+          ) : (
+            <>
+              {/* SINGLE SECTION */}
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '8px 12px', fontSize: 11, fontWeight: 600, borderBottom: '1px solid #000', paddingBottom: 6, marginBottom: 8 }}>
+                  <div style={{ textTransform: 'uppercase' }}>ITEM</div>
+                  <div style={{ textAlign: 'center', textTransform: 'uppercase' }}>QTY</div>
+                  <div style={{ textAlign: 'right', textTransform: 'uppercase' }}>PRICE</div>
+                </div>
+                {(table?.items || []).map((item, idx) => (
+                  <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '8px 12px', fontSize: 12, marginBottom: 6 }}>
+                    <div style={{ fontWeight: 600 }}>{item.name}</div>
+                    <div style={{ textAlign: 'center', fontWeight: 700 }}>x{item.quantity}</div>
+                    <div style={{ textAlign: 'right', fontWeight: 700 }}>₹{(item.price * item.quantity).toFixed(0)}</div>
+                  </div>
+                ))}
+                <div style={{ borderTop: '1px dashed #ccc', marginTop: 6, paddingTop: 5 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#666', marginBottom: 3 }}>
+                    <span>Subtotal</span><span>₹{subtotal.toFixed(2)}</span>
+                  </div>
+                  {gst > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#666', marginBottom: 3 }}>
+                      <span>GST ({gstRate}%)</span><span>₹{gst.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {serviceTax > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#666', marginBottom: 3 }}>
+                      <span>Service Tax ({stRate}%)</span><span>₹{serviceTax.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 800, color: '#000', borderTop: '1px solid #000', paddingTop: 3, marginTop: 2 }}>
+                    <span>Total</span><span>₹{totalBeforeDiscount.toFixed(2)}</span>
+                  </div>
+                </div>
               </div>
-            )}
-            {bill?.roundOff !== 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, color: '#666' }}>
-                <span>Round-Off</span>
-                <span>{bill?.roundOff > 0 ? '+' : ''}₹{bill?.roundOff?.toFixed(2) || '0.00'}</span>
+
+              <div style={{ borderBottom: '1px dashed #999', margin: '12px 0' }}></div>
+
+              <div style={{ fontSize: 12, marginBottom: 16 }}>
+                {discountVal > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, color: '#ef4444' }}>
+                    <span>Discount ({discountPercent}%)</span><span>-₹{discountVal.toFixed(2)}</span>
+                  </div>
+                )}
+                {bill?.roundOff !== 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, color: '#666' }}>
+                    <span>Round-Off</span><span>{bill?.roundOff > 0 ? '+' : ''}₹{bill?.roundOff?.toFixed(2) || '0.00'}</span>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </>
+          )}
 
           {/* Amount Payable */}
           <div style={{ background: '#f3f4f6', padding: '12px 16px', borderRadius: 8, marginBottom: 12, textAlign: 'center' }}>

@@ -8,6 +8,7 @@ const menuItemSchema = new mongoose.Schema({
   imageUrl:  { type: String, default: '' },
   department: { type: String, default: 'kitchen', enum: ['kitchen', 'bar', 'dessert', 'other'] },
   shortcut:  { type: String, default: '', lowercase: true, trim: true },
+  isAlcoholic:{ type: Boolean, default: false },
   isVeg:     { type: Boolean, default: true },
   trackDirectStock: { type: Boolean, default: false },
   directStock:      { type: Number, default: 0, min: 0 },

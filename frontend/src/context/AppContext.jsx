@@ -36,6 +36,47 @@ const playAlarmChime = () => {
   }
 };
 
+export const checkIsAlcoholic = (i, sellableList = [], invList = []) => {
+  if (!i) return false;
+  if (i.isAlcoholic !== undefined && i.isAlcoholic !== null) return !!i.isAlcoholic;
+  if (i.isAlcohol !== undefined && i.isAlcohol !== null) return !!i.isAlcohol;
+
+  const rawName = (i.name || '').trim().toLowerCase();
+  const cat = (i.category || '').trim().toLowerCase();
+  const dept = (i.department || '').trim().toLowerCase();
+
+  // 1. Check against loaded inventory or sellable items
+  const matched = (sellableList || []).find(s => (s.name || '').trim().toLowerCase() === rawName)
+               || (invList || []).find(s => (s.name || '').trim().toLowerCase() === rawName);
+  if (matched) {
+    if (matched.isAlcoholic !== undefined && matched.isAlcoholic !== null) return !!matched.isAlcoholic;
+    if (matched.isAlcohol !== undefined && matched.isAlcohol !== null) return !!matched.isAlcohol;
+    if (matched.department === 'bar' && !matched.name?.toLowerCase()?.includes('mocktail') && !matched.category?.toLowerCase()?.includes('mocktail')) return true;
+  }
+
+  // 2. Common non-alcoholic exclusions
+  if (cat.includes('mocktail') || rawName.includes('mocktail') || rawName.includes('soda') || rawName.includes('water') || rawName.includes('tonic') || rawName.includes('red bull') || rawName.includes('shake') || rawName.includes('tea') || rawName.includes('coffee') || rawName.includes('cold drink') || rawName.includes('sprite') || rawName.includes('coke') || rawName.includes('thums up') || rawName.includes('limca') || rawName.includes('fanta') || rawName.includes('frooti') || rawName.includes('juice') || rawName.includes('sparkler') || rawName.includes('candle') || rawName.includes('pencil') || rawName.includes('platter')) {
+    return false;
+  }
+
+  // 3. Alcohol keywords check
+  const alcKeywords = [
+    'beer', 'whisky', 'whiskey', 'vodka', 'rum', 'scotch', 'gin', 'wine', 'tequila', 
+    'cocktail', 'shooter', 'shot', 'liquor', 'liqueur', 'jager', 'jagermeister', 
+    'carlsberg', 'tuborg', 'budweiser', 'kingfisher', 'bira', 'corona', 'heineken', 
+    'breezer', 'smirnoff', 'absolut', 'bacardi', 'old monk', 'jack daniel', 'black dog', 
+    'chivas', 'glenfiddich', 'teachers', 'vat 69', 'ballantine', '100 pipers', 
+    'blenders pride', 'royal challenge', 'signature', 'antiquity', 'royal stag', 
+    'imperial blue', 'mcdowell', 'mc dowell', 'magic moments', 'brandy', 'draught',
+    '30ml', '60ml', '90ml', 'peg'
+  ];
+
+  if (alcKeywords.some(kw => rawName.includes(kw) || cat.includes(kw))) return true;
+  if (dept === 'bar') return true;
+
+  return false;
+};
+
 const AppContext = createContext(null);
 const TABLES_KEY = 'humtum_table_bills_v2';
 const AUTH_KEY   = 'humtum_auth_v2';
@@ -490,19 +531,21 @@ export function AppProvider({ children }) {
       }
     }
 
-    const subtotal = typeof table?.subtotal === 'number'
-      ? table.subtotal
-      : (table?.items || []).reduce((s, i) => s + (i.price || 0) * (i.quantity || 0), 0);
+    const isAlc = (i) => checkIsAlcoholic(i, allSellableItems, inventory);
+
+    const foodItems = (table?.items || []).filter(i => !isAlc(i));
+    const alcoholItems = (table?.items || []).filter(i => isAlc(i));
+
+    const foodSubtotal = foodItems.reduce((s, i) => s + (i.price || 0) * (i.quantity || 0), 0);
+    const alcoholSubtotal = alcoholItems.reduce((s, i) => s + (i.price || 0) * (i.quantity || 0), 0);
+    const subtotal = foodSubtotal + alcoholSubtotal;
 
     const gstRate = typeof table?.gstRate === 'number'
       ? table.gstRate
       : (settings.gstRate !== undefined ? settings.gstRate : Number(((settings.cgstRate || 0) + (settings.sgstRate || 0)).toFixed(2)));
 
-    const gst = typeof table.gst === 'number'
-      ? table.gst
-      : (typeof table.sgst === 'number' && typeof table.cgst === 'number'
-          ? table.sgst + table.cgst
-          : subtotal * (gstRate / 100));
+    const gst = foodSubtotal * (gstRate / 100);
+    const foodTotal = foodSubtotal + gst;
 
     const isServiceTaxOn = table?.serviceTaxEnabled !== undefined
       ? table.serviceTaxEnabled
@@ -512,11 +555,10 @@ export function AppProvider({ children }) {
       ? table.serviceTaxRate
       : (settings.serviceTaxRate || 0);
 
-    const serviceTax = typeof table?.serviceTax === 'number'
-      ? table.serviceTax
-      : (isServiceTaxOn ? subtotal * (effectiveServiceTaxRate / 100) : 0);
+    const serviceTax = isServiceTaxOn ? alcoholSubtotal * (effectiveServiceTaxRate / 100) : 0;
+    const alcoholTotal = alcoholSubtotal + serviceTax;
 
-    const totalBeforeDiscount = subtotal + gst + serviceTax;
+    const totalBeforeDiscount = foodTotal + alcoholTotal;
     let discountAmount = 0;
     let discountPercent = 0;
     if (typeof table.discountPercent === 'number' && table.discountPercent > 0) {
@@ -555,7 +597,8 @@ export function AppProvider({ children }) {
     const itemCount = table.items.length;
     const hasQr = grandTotal > 0 && settings.upiId;
     const hasTipQr = !!waiterTipQrUrl;
-    const pageHeight = 125 + (itemCount * 9) + (hasQr ? 55 : 0) + (hasTipQr ? 45 : 0);
+    const hasBoth = foodItems.length > 0 && alcoholItems.length > 0;
+    const pageHeight = 125 + (itemCount * 9) + (hasBoth ? 45 : 0) + (hasQr ? 55 : 0) + (hasTipQr ? 45 : 0);
 
     const restName = (settings.restaurantName || 'HUMTUM').trim();
     const restPhone = settings.phone || settings.contact || '';
@@ -590,6 +633,7 @@ export function AppProvider({ children }) {
             <div class="brand">${restName}</div>
             ${settings.address ? `<div class="address">${settings.address}</div>` : ''}
             ${restPhone ? `<div class="address" style="margin-top:-4px">Contact: ${restPhone}</div>` : ''}
+            <div class="address" style="margin-top:-4px">Email: contact@humtumbar.in</div>
             ${settings.gstin ? `<div class="address" style="margin-top:-4px">GSTIN: ${settings.gstin}</div>` : ''}
           </div>
 
@@ -601,42 +645,92 @@ export function AppProvider({ children }) {
 
           <div class="dash-line"></div>
 
-          <div class="item-header">
-            <span class="col-name">ITEM</span>
-            <span class="col-qty">QTY</span>
-            <span class="col-amt">AMT</span>
-          </div>
-
-          ${table.items.map(i => `
-            <div class="item-row">
-              <span class="col-name">${i.name}</span>
-              <span class="col-qty">${i.quantity}</span>
-              <span class="col-amt">${(i.price * i.quantity).toFixed(0)}</span>
+          ${hasBoth ? `
+            <div style="font-size: 16px; font-weight: 900; margin: 12px 0 4px; text-transform: uppercase; border-bottom: 2px solid #000; padding-bottom: 3px; letter-spacing: 1px; text-align: center;">RESTAURANT</div>
+            <div class="item-header">
+              <span class="col-name">ITEM</span>
+              <span class="col-qty">QTY</span>
+              <span class="col-amt">AMT</span>
             </div>
-          `).join('')}
+            ${foodItems.map(i => `
+              <div class="item-row">
+                <span class="col-name">${i.name}</span>
+                <span class="col-qty">${i.quantity}</span>
+                <span class="col-amt">${(i.price * i.quantity).toFixed(0)}</span>
+              </div>
+            `).join('')}
+            <div style="border-top: 1px dotted #000; margin: 4px 0 3px;"></div>
+            <div class="row"><span>Subtotal</span><span>${foodSubtotal.toFixed(2)}</span></div>
+            ${gst > 0 ? `<div class="row"><span>GST (${gstRate}%)</span><span>${gst.toFixed(2)}</span></div>` : ''}
+            <div class="row" style="font-weight: 900; border-top: 2px solid #000; padding-top: 3px; font-size: 13px; margin-bottom: 0;"><span>Restaurant Total</span><span>${foodTotal.toFixed(2)}</span></div>
 
-          <div class="dash-line"></div>
+            <div class="dash-line" style="margin: 20px 0 16px;"></div>
 
-          ${(() => {
-            const stRate = typeof table?.serviceTaxRate === 'number' && table.serviceTaxRate > 0
-              ? table.serviceTaxRate
-              : (settings.serviceTaxRate > 0 ? settings.serviceTaxRate : (subtotal > 0 && serviceTax > 0 ? parseFloat(((serviceTax / subtotal) * 100).toFixed(1)) : 5));
-            return `
-              <div class="row"><span>Subtotal</span><span>${subtotal.toFixed(2)}</span></div>
-              ${gst > 0 ? `<div class="row"><span>GST (${gstRate}%)</span><span>${gst.toFixed(2)}</span></div>` : ''}
-              ${serviceTax > 0 ? `<div class="row"><span>Service Tax (${stRate}%)</span><span>${serviceTax.toFixed(2)}</span></div>` : ''}
-              <div class="row" style="border-top: 1px dashed #000; padding-top: 2px; margin-top: 2px;"><span>Total</span><span>${totalBeforeDiscount.toFixed(2)}</span></div>
-              ${discountAmount > 0 ? `<div class="row"><span>Discount (${Math.min(100, Math.round(discountPercent))}%)</span><span>-${discountAmount.toFixed(2)}</span></div>` : ''}
-              ${fine > 0 ? `<div class="row"><span>Fine</span><span>${fine.toFixed(2)}</span></div>` : ''}
-              ${roundOff !== 0 ? `<div class="row"><span>Round Off</span><span>${roundOff > 0 ? '+' : ''}${roundOff.toFixed(2)}</span></div>` : ''}
-            `;
-          })()}
+            <div style="font-size: 16px; font-weight: 900; margin: 10px 0 4px; text-transform: uppercase; border-bottom: 2px solid #000; padding-bottom: 3px; letter-spacing: 1px; text-align: center;">BAR</div>
+            <div class="item-header">
+              <span class="col-name">ITEM</span>
+              <span class="col-qty">QTY</span>
+              <span class="col-amt">AMT</span>
+            </div>
+            ${alcoholItems.map(i => `
+              <div class="item-row">
+                <span class="col-name">${i.name}</span>
+                <span class="col-qty">${i.quantity}</span>
+                <span class="col-amt">${(i.price * i.quantity).toFixed(0)}</span>
+              </div>
+            `).join('')}
+            <div style="border-top: 1px dotted #000; margin: 4px 0 3px;"></div>
+            <div class="row"><span>Subtotal</span><span>${alcoholSubtotal.toFixed(2)}</span></div>
+            ${isServiceTaxOn && effectiveServiceTaxRate > 0 && serviceTax > 0 ? `<div class="row"><span>Service Tax (${effectiveServiceTaxRate}%)</span><span>${serviceTax.toFixed(2)}</span></div>` : ''}
+            <div class="row" style="font-weight: 900; border-top: 2px solid #000; padding-top: 3px; font-size: 13px;"><span>Bar Total</span><span>${alcoholTotal.toFixed(2)}</span></div>
+
+            <div class="dash-line" style="margin: 8px 0;"></div>
+            <div class="row" style="font-weight: 900;"><span>Grand Total</span><span>${(foodTotal + alcoholTotal).toFixed(2)}</span></div>
+          ` : foodItems.length > 0 ? `
+            <div class="item-header">
+              <span class="col-name">ITEM</span>
+              <span class="col-qty">QTY</span>
+              <span class="col-amt">AMT</span>
+            </div>
+            ${foodItems.map(i => `
+              <div class="item-row">
+                <span class="col-name">${i.name}</span>
+                <span class="col-qty">${i.quantity}</span>
+                <span class="col-amt">${(i.price * i.quantity).toFixed(0)}</span>
+              </div>
+            `).join('')}
+            <div style="border-top: 1px dotted #000; margin: 4px 0 3px;"></div>
+            <div class="row"><span>Subtotal</span><span>${foodSubtotal.toFixed(2)}</span></div>
+            ${gst > 0 ? `<div class="row"><span>GST (${gstRate}%)</span><span>${gst.toFixed(2)}</span></div>` : ''}
+            <div class="row" style="font-weight: 900; border-top: 1px solid #000; padding-top: 2px;"><span>Total</span><span>${foodTotal.toFixed(2)}</span></div>
+          ` : `
+            <div class="item-header">
+              <span class="col-name">ITEM</span>
+              <span class="col-qty">QTY</span>
+              <span class="col-amt">AMT</span>
+            </div>
+            ${alcoholItems.map(i => `
+              <div class="item-row">
+                <span class="col-name">${i.name}</span>
+                <span class="col-qty">${i.quantity}</span>
+                <span class="col-amt">${(i.price * i.quantity).toFixed(0)}</span>
+              </div>
+            `).join('')}
+            <div style="border-top: 1px dotted #000; margin: 4px 0 3px;"></div>
+            <div class="row"><span>Subtotal</span><span>${alcoholSubtotal.toFixed(2)}</span></div>
+            ${isServiceTaxOn && effectiveServiceTaxRate > 0 && serviceTax > 0 ? `<div class="row"><span>Service Tax (${effectiveServiceTaxRate}%)</span><span>${serviceTax.toFixed(2)}</span></div>` : ''}
+            <div class="row" style="font-weight: 900; border-top: 1px solid #000; padding-top: 2px;"><span>Total</span><span>${alcoholTotal.toFixed(2)}</span></div>
+          `}
+
+          ${discountAmount > 0 ? `<div class="row" style="margin-top: 4px;"><span>Discount (${Math.min(100, Math.round(discountPercent))}%)</span><span>-${discountAmount.toFixed(2)}</span></div>` : ''}
+          ${fine > 0 ? `<div class="row"><span>Fine</span><span>${fine.toFixed(2)}</span></div>` : ''}
+          ${roundOff !== 0 ? `<div class="row"><span>Round Off</span><span>${roundOff > 0 ? '+' : ''}${roundOff.toFixed(2)}</span></div>` : ''}
 
           <div class="thick-line"></div>
           
           <div class="row" style="font-size: 16px; font-weight: 900; margin: 4px 0;">
             <span>TOTAL PAYABLE</span>
-            <span>Rs. ${total.toFixed(0)}</span>
+            <span>Rs. ${grandTotal.toFixed(0)}</span>
           </div>
 
           <div class="thick-line"></div>
@@ -1024,6 +1118,15 @@ export function AppProvider({ children }) {
       return `https://placehold.co/320x320/171921/F59E0B?text=${encodeURIComponent(item.name?.slice(0,1) || 'I')}`;
     };
 
+    const isAlcDrink = (i) => {
+      if (i.isAlcoholic !== undefined) return !!i.isAlcoholic;
+      if (i.isAlcohol !== undefined) return !!i.isAlcohol;
+      const cat = (i.category || '').toLowerCase();
+      const name = (i.name || '').toLowerCase();
+      if (cat.includes('mocktail') || name.includes('soda') || name.includes('water') || name.includes('tonic') || name.includes('red bull')) return false;
+      return cat.includes('beer') || cat.includes('liquor') || cat.includes('whisky') || cat.includes('vodka') || cat.includes('rum') || cat.includes('wine') || cat.includes('gin') || cat.includes('cocktail') || cat.includes('shot') || cat.includes('shooter');
+    };
+
     const processedMenu = menu
       .filter(m => {
         // Exclude if it exists in inventory, so it's fetched from inventory instead
@@ -1034,7 +1137,8 @@ export function AppProvider({ children }) {
         department: m.department || 'kitchen',
         imageUrl: getImg(m),
         available: m.available !== false,
-        isInventory: false
+        isInventory: false,
+        isAlcoholic: m.isAlcoholic !== undefined ? !!m.isAlcoholic : isAlcDrink(m)
       }));
 
     const inventoryMap = new Map(inv.map(i => [i._id?.toString(), i]));
@@ -1058,7 +1162,8 @@ export function AppProvider({ children }) {
         department: 'bar',
         imageUrl: getImg(i),
         available: avail, 
-        isInventory: true 
+        isInventory: true,
+        isAlcoholic: isAlcDrink(i)
       };
     });
 
@@ -1150,17 +1255,32 @@ export function AppProvider({ children }) {
 
   // ── Bill totals ──────────────────────────────────────────────────
   const billTotals = useMemo(() => {
+    const isAlc = (i) => {
+      if (i.isAlcoholic !== undefined) return !!i.isAlcoholic;
+      if (i.isAlcohol !== undefined) return !!i.isAlcohol;
+      const name = (i.name || '').toLowerCase();
+      const cat = (i.category || '').toLowerCase();
+      const dept = (i.department || '').toLowerCase();
+      if (cat.includes('mocktail') || name.includes('soda') || name.includes('water') || name.includes('tonic') || name.includes('red bull')) return false;
+      return cat.includes('beer') || cat.includes('liquor') || cat.includes('whisky') || cat.includes('vodka') || cat.includes('rum') || cat.includes('wine') || cat.includes('gin') || cat.includes('cocktail') || cat.includes('shot') || cat.includes('shooter') || dept === 'bar';
+    };
+
     const table    = tableBills[activeTableId] || { items:[], discount:'' };
-    const subtotal = (table?.items || []).reduce((s,i) => s + (i.price || 0) * (i.quantity || 0), 0);
-    const sgst     = subtotal * (settings.sgstRate / 100);
-    const cgst     = subtotal * (settings.cgstRate / 100);
+    const foodItems = (table?.items || []).filter(i => !isAlc(i));
+    const alcoholItems = (table?.items || []).filter(i => isAlc(i));
+    const foodSubtotal = foodItems.reduce((s,i) => s + (i.price || 0) * (i.quantity || 0), 0);
+    const alcoholSubtotal = alcoholItems.reduce((s,i) => s + (i.price || 0) * (i.quantity || 0), 0);
+    const subtotal = foodSubtotal + alcoholSubtotal;
+
+    const sgst     = foodSubtotal * (settings.sgstRate / 100);
+    const cgst     = foodSubtotal * (settings.cgstRate / 100);
     const isServiceTaxOn = table?.serviceTaxEnabled !== undefined 
       ? table.serviceTaxEnabled 
       : !!settings.serviceTaxEnabled;
     const effectiveServiceTaxRate = (table?.serviceTaxRate !== undefined && table.serviceTaxRate > 0)
       ? table.serviceTaxRate
       : (settings.serviceTaxRate || 0);
-    const serviceTax = isServiceTaxOn ? subtotal * ((effectiveServiceTaxRate || 0) / 100) : 0;
+    const serviceTax = isServiceTaxOn ? alcoholSubtotal * ((effectiveServiceTaxRate || 0) / 100) : 0;
     const totalBeforeDiscount = subtotal + sgst + cgst + serviceTax;
     const dv       = (table.discount || '').trim();
     const discountAmount = Math.round(dv.endsWith('%')
@@ -1170,7 +1290,7 @@ export function AppProvider({ children }) {
     const rawTotal = totalBeforeDiscount - discountAmount + fine;
     const grandTotal = Math.round(Math.max(0, rawTotal));
     const roundOff = (grandTotal - rawTotal);
-    return { subtotal, sgst, cgst, serviceTax, discountAmount, fine, grandTotal, roundOff };
+    return { subtotal, foodSubtotal, alcoholSubtotal, sgst, cgst, serviceTax, discountAmount, fine, grandTotal, roundOff };
   }, [tableBills, activeTableId, settings]);
 
 
@@ -1221,34 +1341,46 @@ export function AppProvider({ children }) {
     const session = (activeSessions || []).find(s => s.tableNo === tableNo);
     const localBill = tableBills[tableId] || { items: [] };
 
+    const isAlcItem = (i) => {
+      if (i.isAlcoholic !== undefined) return !!i.isAlcoholic;
+      if (i.isAlcohol !== undefined) return !!i.isAlcohol;
+      const name = (i.name || '').toLowerCase();
+      const cat = (i.category || '').toLowerCase();
+      const dept = (i.department || '').toLowerCase();
+      if (cat.includes('mocktail') || name.includes('soda') || name.includes('water') || name.includes('tonic') || name.includes('red bull')) return false;
+      return cat.includes('beer') || cat.includes('liquor') || cat.includes('whisky') || cat.includes('vodka') || cat.includes('rum') || cat.includes('wine') || cat.includes('gin') || cat.includes('cocktail') || cat.includes('shot') || cat.includes('shooter') || dept === 'bar';
+    };
+
     let kotItemsCount = 0;
-    let kotTotal = 0;
+    let kotFoodTotal = 0;
+    let kotAlcTotal = 0;
     if (session && Array.isArray(session.kotIds)) {
       session.kotIds.forEach(kot => {
         if (Array.isArray(kot.items)) {
           kot.items.forEach(item => {
             kotItemsCount += item.quantity;
-            kotTotal += (item.price || 0) * item.quantity;
+            const amt = (item.price || 0) * item.quantity;
+            if (isAlcItem(item)) kotAlcTotal += amt;
+            else kotFoodTotal += amt;
           });
         }
       });
     }
 
     let pendingItemsCount = 0;
-    let pendingTotal = 0;
-    if (localBill.items && localBill.items.length > 0) {
-      localBill.items.forEach(item => {
-        pendingItemsCount += item.quantity;
-        pendingTotal += (item.price || 0) * item.quantity;
-      });
-    } else if (session && Array.isArray(session.pendingItems)) {
-      session.pendingItems.forEach(item => {
-        pendingItemsCount += item.quantity;
-        pendingTotal += (item.price || 0) * item.quantity;
-      });
-    }
+    let pendingFoodTotal = 0;
+    let pendingAlcTotal = 0;
+    const pItems = (localBill.items && localBill.items.length > 0) ? localBill.items : (session && Array.isArray(session.pendingItems) ? session.pendingItems : []);
+    pItems.forEach(item => {
+      pendingItemsCount += item.quantity;
+      const amt = (item.price || 0) * item.quantity;
+      if (isAlcItem(item)) pendingAlcTotal += amt;
+      else pendingFoodTotal += amt;
+    });
 
-    const subtotal = kotTotal + pendingTotal;
+    const foodSubtotal = kotFoodTotal + pendingFoodTotal;
+    const alcoholSubtotal = kotAlcTotal + pendingAlcTotal;
+    const subtotal = foodSubtotal + alcoholSubtotal;
     if (subtotal <= 0) {
       return {
         itemsCount: 0,
@@ -1260,7 +1392,7 @@ export function AppProvider({ children }) {
     const gstRate = settings?.gstRate !== undefined 
       ? settings.gstRate 
       : Number(((settings?.cgstRate || 0) + (settings?.sgstRate || 0)).toFixed(2));
-    const gst = subtotal * (gstRate / 100);
+    const gst = foodSubtotal * (gstRate / 100);
 
     const actOrder = session?.activeOrderId;
     const orderHasST = actOrder ? ((actOrder.serviceTax && actOrder.serviceTax > 0) || (actOrder.serviceTaxRate && actOrder.serviceTaxRate > 0)) : false;
@@ -1276,7 +1408,7 @@ export function AppProvider({ children }) {
       : (orderSTRate !== undefined && orderSTRate > 0
           ? orderSTRate
           : (settings?.serviceTaxRate || 0));
-    const serviceTax = isServiceTaxOn ? subtotal * ((effectiveServiceTaxRate || 0) / 100) : 0;
+    const serviceTax = isServiceTaxOn ? alcoholSubtotal * ((effectiveServiceTaxRate || 0) / 100) : 0;
     const totalBeforeDiscount = subtotal + gst + serviceTax;
 
     const discountVal = parseFloat(String(localBill?.discount || (actOrder?.discount ? actOrder.discount : '') || '').replace(/[^0-9.]/g, '')) || 0;
@@ -1681,12 +1813,12 @@ export function AppProvider({ children }) {
     }
   }, [socket, applyInventoryUpdate, setOrderHistory, setInvoiceOrder]);
 
-  const finalizeBill = useCallback(async (orderId, items, subtotal, sgst, cgst, serviceTax, discount, roundOff, grandTotal, waiterName = '', orderType = 'dine-in', customerName = '', customerPhone = '', paymentMode = 'cash', cashAmount = 0, upiAmount = 0, isCredit = false, paidAmount = undefined, dueAmount = undefined, discountPercent = undefined, serviceTaxRate = undefined, fine = 0) => {
+  const finalizeBill = useCallback(async (orderId, items, subtotal, sgst, cgst, serviceTax, discount, roundOff, grandTotal, waiterName = '', orderType = 'dine-in', customerName = '', customerPhone = '', paymentMode = 'cash', cashAmount = 0, upiAmount = 0, isCredit = false, paidAmount = undefined, dueAmount = undefined, discountPercent = undefined, serviceTaxRate = undefined, fine = 0, foodSubtotal = 0, alcoholSubtotal = 0) => {
     try {
       const res = await authFetch(apiUrl(`/api/orders/${orderId}/finalize-bill`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items, subtotal, sgst, cgst, serviceTax, serviceTaxRate, discount, discountPercent, fine, roundOff, grandTotal, waiterName, orderType, customerName, customerPhone, paymentMode, cashAmount, upiAmount, isCredit, paidAmount, dueAmount })
+        body: JSON.stringify({ items, subtotal, foodSubtotal, alcoholSubtotal, sgst, cgst, serviceTax, serviceTaxRate, discount, discountPercent, fine, roundOff, grandTotal, waiterName, orderType, customerName, customerPhone, paymentMode, cashAmount, upiAmount, isCredit, paidAmount, dueAmount })
       });
       if (!res.ok) throw new Error('Failed to finalize bill');
       const orderResponse = await res.json();

@@ -659,18 +659,36 @@ export default function BillingPage() {
 
   // Combined totals
   const totals = useMemo(() => {
-    const subtotal = (combinedItems?.all || []).reduce((s, i) => s + (i.price || 0) * (i.quantity || 0), 0);
+    const isAlcItem = (i) => {
+      if (i.isAlcoholic !== undefined) return !!i.isAlcoholic;
+      if (i.isAlcohol !== undefined) return !!i.isAlcohol;
+      const name = (i.name || '').toLowerCase();
+      const cat = (i.category || '').toLowerCase();
+      const dept = (i.department || '').toLowerCase();
+      if (cat.includes('mocktail') || name.includes('soda') || name.includes('water') || name.includes('tonic') || name.includes('red bull')) return false;
+      return cat.includes('beer') || cat.includes('liquor') || cat.includes('whisky') || cat.includes('vodka') || cat.includes('rum') || cat.includes('wine') || cat.includes('gin') || cat.includes('cocktail') || cat.includes('shot') || cat.includes('shooter') || dept === 'bar';
+    };
+
+    const foodItems = (combinedItems?.all || []).filter(i => !isAlcItem(i));
+    const alcoholItems = (combinedItems?.all || []).filter(i => isAlcItem(i));
+
+    const foodSubtotal = foodItems.reduce((s, i) => s + (i.price || 0) * (i.quantity || 0), 0);
+    const alcoholSubtotal = alcoholItems.reduce((s, i) => s + (i.price || 0) * (i.quantity || 0), 0);
+    const subtotal = foodSubtotal + alcoholSubtotal;
+
     const gstRate = settings.gstRate !== undefined ? settings.gstRate : Number(((settings.cgstRate || 0) + (settings.sgstRate || 0)).toFixed(2));
-    const gst = subtotal * (gstRate / 100);
-    const sgst = subtotal * ((gstRate / 2) / 100);
-    const cgst = subtotal * ((gstRate / 2) / 100);
+    const gst = foodSubtotal * (gstRate / 100);
+    const sgst = foodSubtotal * ((gstRate / 2) / 100);
+    const cgst = foodSubtotal * ((gstRate / 2) / 100);
     const activeTableNum = parseTableNum(activeTableId);
     const activeSession = activeTableNum ? (activeSessions || []).find(s => s.tableNo === activeTableNum) : null;
     const actOrder = activeSession?.activeOrderId;
     const orderHasST = actOrder ? ((actOrder.serviceTax && actOrder.serviceTax > 0) || (actOrder.serviceTaxRate && actOrder.serviceTaxRate > 0)) : false;
     const orderSTRate = actOrder ? ((actOrder.serviceTaxRate && actOrder.serviceTaxRate > 0)
       ? actOrder.serviceTaxRate
-      : (actOrder.subtotal > 0 && actOrder.serviceTax > 0 ? Number(((actOrder.serviceTax / actOrder.subtotal) * 100).toFixed(2)) : (settings?.serviceTaxRate || 5))) : undefined;
+      : (actOrder.alcoholSubtotal > 0 && actOrder.serviceTax > 0 
+          ? Number(((actOrder.serviceTax / actOrder.alcoholSubtotal) * 100).toFixed(2)) 
+          : (actOrder.subtotal > 0 && actOrder.serviceTax > 0 ? Number(((actOrder.serviceTax / actOrder.subtotal) * 100).toFixed(2)) : (settings?.serviceTaxRate || 5)))) : undefined;
 
     const isServiceTaxOn = table.serviceTaxEnabled !== undefined 
       ? table.serviceTaxEnabled 
@@ -680,7 +698,7 @@ export default function BillingPage() {
       : (orderSTRate !== undefined && orderSTRate > 0
           ? orderSTRate
           : (settings.serviceTaxRate || 0));
-    const serviceTax = isServiceTaxOn ? subtotal * (effectiveServiceTaxRate / 100) : 0;
+    const serviceTax = isServiceTaxOn ? alcoholSubtotal * (effectiveServiceTaxRate / 100) : 0;
     const totalBeforeDiscount = subtotal + gst + serviceTax;
     const discountVal = parseFloat((table.discount || '').replace(/[^0-9.]/g, '')) || 0;
     const fine = parseFloat((table.fine || '').toString().replace(/[^0-9.]/g, '')) || 0;
@@ -708,10 +726,10 @@ export default function BillingPage() {
       grandTotal = Math.max(1, Math.round(rawTotal));
       roundOff = grandTotal - rawTotal;
     }
-    return { subtotal, gst, gstRate, sgst, cgst, serviceTax, effectiveServiceTaxRate, isServiceTaxOn, totalBeforeDiscount, discountVal, discountAmount, fine, grandTotal, roundOff };
+    return { subtotal, foodSubtotal, alcoholSubtotal, foodItems, alcoholItems, gst, gstRate, sgst, cgst, serviceTax, effectiveServiceTaxRate, isServiceTaxOn, totalBeforeDiscount, discountVal, discountAmount, fine, grandTotal, roundOff };
   }, [combinedItems.all, table.discount, table.fine, table.serviceTaxEnabled, table.serviceTaxRate, activeSessions, activeTableId, settings]);
 
-  const { subtotal, gst, gstRate, sgst, cgst, serviceTax, effectiveServiceTaxRate, isServiceTaxOn, totalBeforeDiscount, discountVal, discountAmount, fine, grandTotal, roundOff } = totals;
+  const { subtotal, foodSubtotal, alcoholSubtotal, foodItems, alcoholItems, gst, gstRate, sgst, cgst, serviceTax, effectiveServiceTaxRate, isServiceTaxOn, totalBeforeDiscount, discountVal, discountAmount, fine, grandTotal, roundOff } = totals;
 
   const tableList = Array.from({ length: NUM_TABLES }, (_, i) => {
     const id = `t${i + 1}`;
@@ -1148,7 +1166,9 @@ export default function BillingPage() {
         dueVal,
         (discountVal >= 100 || (discountAmount > 0 && grandTotal <= 1)) ? 100 : Math.min(100, Math.max(0, discountVal || (totalBeforeDiscount > 0 && discountAmount > 0 ? Math.round((discountAmount / totalBeforeDiscount) * 100) : 0))),
         effectiveServiceTaxRate,
-        fine
+        fine,
+        foodSubtotal,
+        alcoholSubtotal
       );
 
       // Print bill
@@ -1158,6 +1178,8 @@ export default function BillingPage() {
         {
           items: combinedItems.all,
           subtotal,
+          foodSubtotal,
+          alcoholSubtotal,
           gst,
           gstRate,
           sgst,
@@ -1735,15 +1757,29 @@ export default function BillingPage() {
             <div className="section-divider" />
             <div className="bill-footer">
               <div className="bill-summary-card">
-                <div className="s-row"><span>Subtotal</span><span>{c}{subtotal.toFixed(0)}</span></div>
-                {gst > 0 && <div className="s-row"><span>GST ({gstRate}%)</span><span>{c}{gst.toFixed(2)}</span></div>}
-                {serviceTax > 0 && (
-                  <div className="s-row">
-                    <span>
-                      Service Tax ({effectiveServiceTaxRate > 0 ? effectiveServiceTaxRate : (settings.serviceTaxRate > 0 ? settings.serviceTaxRate : (subtotal > 0 && serviceTax > 0 ? parseFloat(((serviceTax / subtotal) * 100).toFixed(1)) : 5))}%)
-                    </span>
-                    <span>{c}{serviceTax.toFixed(2)}</span>
-                  </div>
+                {foodSubtotal > 0 && alcoholSubtotal > 0 ? (
+                  <>
+                    <div className="s-row"><span>Food Subtotal</span><span>{c}{foodSubtotal.toFixed(0)}</span></div>
+                    {gst > 0 && <div className="s-row"><span>Food GST ({gstRate}%)</span><span>{c}{gst.toFixed(2)}</span></div>}
+                    <div className="s-row"><span>Bar Subtotal</span><span>{c}{alcoholSubtotal.toFixed(0)}</span></div>
+                    {serviceTax > 0 && (
+                      <div className="s-row">
+                        <span>Service Tax ({effectiveServiceTaxRate > 0 ? effectiveServiceTaxRate : (settings.serviceTaxRate || 5)}%)</span>
+                        <span>{c}{serviceTax.toFixed(2)}</span>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="s-row"><span>Subtotal</span><span>{c}{subtotal.toFixed(0)}</span></div>
+                    {gst > 0 && <div className="s-row"><span>GST ({gstRate}%)</span><span>{c}{gst.toFixed(2)}</span></div>}
+                    {serviceTax > 0 && (
+                      <div className="s-row">
+                        <span>Service Tax ({effectiveServiceTaxRate > 0 ? effectiveServiceTaxRate : (settings.serviceTaxRate || 5)}%)</span>
+                        <span>{c}{serviceTax.toFixed(2)}</span>
+                      </div>
+                    )}
+                  </>
                 )}
                 <div className="s-row" style={{ borderTop: '1px dashed var(--b1)', paddingTop: 4, fontWeight: 'bold' }}>
                   <span>Total</span><span>{c}{totalBeforeDiscount.toFixed(2)}</span>
