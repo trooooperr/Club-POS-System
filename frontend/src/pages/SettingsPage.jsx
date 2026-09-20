@@ -632,10 +632,10 @@ export default function SettingsPage() {
               <div style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '12px', border: '1px solid var(--b1)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
                   <h3 style={{ fontSize: '14px', fontWeight: '600', margin: 0 }}>Print Agent Configuration</h3>
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
                     <a
-                      href="/print-agent.js"
-                      download="print-agent.js"
+                      href="/print-agent.zip"
+                      download="print-agent.zip"
                       className="btn btn-secondary"
                       style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', padding: '6px 14px', borderRadius: '8px', textDecoration: 'none', color: 'var(--t0)' }}
                     >
@@ -653,6 +653,14 @@ export default function SettingsPage() {
                       <RefreshCw size={13} style={{ animation: updatingAgent ? 'spin 1s linear infinite' : 'none' }} />
                       {updatingAgent ? 'Updating...' : 'Update Agent'}
                     </button>
+                    <a
+                      href="/print-agent.js"
+                      download="print-agent.js"
+                      title="Download only the updated print-agent.js file"
+                      style={{ fontSize: '11px', color: 'var(--t2)', textDecoration: 'underline', marginLeft: '4px' }}
+                    >
+                      (or download only print-agent.js)
+                    </a>
                   </div>
                 </div>
                 <div className="settings-printing-row" style={{ gap: '16px', marginBottom: '16px' }}>

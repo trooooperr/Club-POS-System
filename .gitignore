@@ -13,5 +13,6 @@ yarn-error.log*
 .idea/
 print-agent/build/
 print-agent/SumatraPDF.exe
+print-agent/print-agent.exe
 print-agent/print-agent.log
 print-agent/bin/
