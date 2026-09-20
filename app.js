@@ -185,6 +185,30 @@ app.post('/api/qz/sign', requireAuth, async (req, res) => {
   }
 });
 
+// ── Print Agent Self-Update Source Endpoint ──────────────────────
+// Serves the latest print-agent.js to the cashier laptop so it can
+// self-update without any manual file copying.
+// Protected by PRINT_AGENT_UPDATE_SECRET in .env
+app.get('/api/print-agent-src', (req, res) => {
+  const expectedSecret = process.env.PRINT_AGENT_UPDATE_SECRET;
+  const token = req.query.token;
+
+  if (expectedSecret && token !== expectedSecret) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const agentFilePath = path.join(__dirname, 'print-agent', 'print-agent.js');
+  if (!fs.existsSync(agentFilePath)) {
+    return res.status(404).json({ error: 'print-agent.js not found on server' });
+  }
+
+  const fileContent = fs.readFileSync(agentFilePath, 'utf8');
+  res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+  res.setHeader('Content-Disposition', 'inline; filename=print-agent.js');
+  res.setHeader('Cache-Control', 'no-store');
+  res.send(fileContent);
+});
+
 // ── Protected API routes (auth required) ────────────────────────
 const { router: reportsRouter } = require('./src/routes/reports');
 

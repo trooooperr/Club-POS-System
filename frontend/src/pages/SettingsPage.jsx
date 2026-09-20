@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { Save, Check, Send, KeyRound, ShieldAlert, Users, Trash2, RefreshCw, GripVertical } from 'lucide-react';
+import { Save, Check, Send, KeyRound, ShieldAlert, Users, Trash2, RefreshCw, GripVertical, Download } from 'lucide-react';
 import { apiUrl, authFetch } from '../lib/api';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 export default function SettingsPage() {
@@ -24,6 +24,7 @@ export default function SettingsPage() {
   const { showToast } = useApp();
   const [fetchingPrinters, setFetchingPrinters] = useState(false);
   const [testingPrinter, setTestingPrinter] = useState(null);
+  const [updatingAgent, setUpdatingAgent] = useState(false);
 
   const [editingMenuCat, setEditingMenuCat] = useState(null);
   const [editingInvCat, setEditingInvCat] = useState(null);
@@ -202,6 +203,35 @@ export default function SettingsPage() {
       showToast('Failed to reach local Print Agent', 'error');
     } finally {
       setTestingPrinter(null);
+    }
+  };
+
+  const handleSelfUpdate = async () => {
+    const port = form.printAgentPort || 5001;
+    const token = form.printAgentToken || '';
+    // Points to the Node.js backend which serves the latest print-agent.js
+    const updateUrl = apiUrl(`/api/print-agent-src?token=${encodeURIComponent(token)}`);
+    setUpdatingAgent(true);
+    try {
+      const res = await fetch(`http://localhost:${port}/self-update`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ updateUrl })
+      });
+      if (res.ok) {
+        showToast('Print Agent is updating and will restart in ~5 seconds...', 'success');
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast(err.error || 'Update request rejected by Agent', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Could not reach Print Agent. Is it running?', 'error');
+    } finally {
+      setTimeout(() => setUpdatingAgent(false), 6000);
     }
   };
 
@@ -602,15 +632,28 @@ export default function SettingsPage() {
               <div style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '12px', border: '1px solid var(--b1)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
                   <h3 style={{ fontSize: '14px', fontWeight: '600', margin: 0 }}>Print Agent Configuration</h3>
-                  <a
-                    href="/print-agent.zip"
-                    download="print-agent.zip"
-                    className="btn btn-secondary"
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', padding: '6px 14px', borderRadius: '8px', textDecoration: 'none', color: 'var(--t0)' }}
-                  >
-                    <Send size={13} />
-                    Download Print Agent (.zip)
-                  </a>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <a
+                      href="/print-agent.js"
+                      download="print-agent.js"
+                      className="btn btn-secondary"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', padding: '6px 14px', borderRadius: '8px', textDecoration: 'none', color: 'var(--t0)' }}
+                    >
+                      <Download size={13} />
+                      Download Agent
+                    </a>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={handleSelfUpdate}
+                      disabled={updatingAgent || !agentConnected}
+                      title={!agentConnected ? 'Print Agent must be running to update' : 'Push the latest update to the cashier laptop automatically'}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', padding: '6px 14px', borderRadius: '8px' }}
+                    >
+                      <RefreshCw size={13} style={{ animation: updatingAgent ? 'spin 1s linear infinite' : 'none' }} />
+                      {updatingAgent ? 'Updating...' : 'Update Agent'}
+                    </button>
+                  </div>
                 </div>
                 <div className="settings-printing-row" style={{ gap: '16px', marginBottom: '16px' }}>
                   <div className="settings-field" style={{ flex: 1, minWidth: '150px' }}>
