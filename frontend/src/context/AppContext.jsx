@@ -1457,9 +1457,23 @@ export function AppProvider({ children }) {
       if (nextInventory) applyInventoryUpdate(nextInventory);
       setOrderHistory(prev => [saved, ...(Array.isArray(prev)?prev:[])]);
       setInvoiceOrder(saved);
-      // ← Table cleared ONLY here, after successful DB save
-      if (due === 0) clearTable(activeTableId);
-      else setTableField(activeTableId, 'dueAmount', due);
+      // Always clear billing metadata (discount, name, phone) after print.
+      // For due bills, keep items + dueAmount but reset per-bill fields so the
+      // next customer on this table doesn't inherit the previous customer's discount.
+      if (due === 0) {
+        clearTable(activeTableId);
+      } else {
+        setTableBills(prev => ({
+          ...prev,
+          [activeTableId]: {
+            ...prev[activeTableId],
+            discount: '',
+            customerName: '',
+            customerPhone: '',
+            dueAmount: due,
+          }
+        }));
+      }
       return { success:true, order:saved };
     } catch (err) {
       console.error('Generate bill error:', err);

@@ -835,6 +835,9 @@ export default function BillingPage() {
           let serviceTaxEnabledVal = undefined;
           let serviceTaxRateVal = undefined;
 
+          // Only inherit discount from prev state if the active order actually has a discount.
+          // If the order has no discount (new session after bill print), reset to '' to avoid
+          // carrying over the previous customer's discount to the next bill.
           if (!discountPctStr && actOrder) {
             if (actOrder.grandTotal <= 1 && (actOrder.discount || 0) > 0) {
               discountPctStr = '100';
@@ -844,6 +847,9 @@ export default function BillingPage() {
               const totalBeforeDisc = (actOrder.subtotal || 0) + (actOrder.sgst || 0) + (actOrder.cgst || 0) + (actOrder.serviceTax || 0);
               const base = totalBeforeDisc > 0 ? totalBeforeDisc : (actOrder.subtotal || 0);
               discountPctStr = base > 0 ? String(Math.min(100, Math.round((actOrder.discount / base) * 100))) : '';
+            } else {
+              // Active order has no discount — reset to empty (don't inherit prev bill's discount)
+              discountPctStr = '';
             }
           }
 
@@ -862,8 +868,10 @@ export default function BillingPage() {
             [targetTableId]: {
               ...prev[targetTableId],
               items: dbPendingItems,
-              customerName: session?.activeOrderId?.customerName || prev[targetTableId]?.customerName || '',
-              customerPhone: session?.activeOrderId?.customerPhone || prev[targetTableId]?.customerPhone || '',
+              // For customer info: only inherit from active order. If the active order
+              // has no customer name/phone (fresh bill), reset to empty strings.
+              customerName: session?.activeOrderId?.customerName || '',
+              customerPhone: session?.activeOrderId?.customerPhone || '',
               discount: discountPctStr,
               fine: fineStr,
               ...(serviceTaxEnabledVal !== undefined ? { serviceTaxEnabled: serviceTaxEnabledVal } : {}),
