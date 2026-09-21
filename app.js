@@ -238,6 +238,9 @@ app.use(express.static(frontendDist, {
 }));
 
 app.get('*', (req, res) => {
+  if (req.path.startsWith('/assets/')) {
+    return res.status(404).type('text/plain').send('Asset not found');
+  }
   const file = path.join(frontendDist, 'index.html');
   if (fs.existsSync(file)) {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');

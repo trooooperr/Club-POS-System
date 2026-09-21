@@ -3,7 +3,9 @@ frontend/node_modules/
 .env
 .DS_Store
 *.log
-dist/
+# Allow frontend/dist to be tracked in git for Render build
+!frontend/dist/
+!frontend/dist/**
 scratch/
 .vscode/
 npm-debug.log*
