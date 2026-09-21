@@ -561,35 +561,46 @@ export function AppProvider({ children }) {
     const totalBeforeDiscount = foodTotal + alcoholTotal;
     let discountAmount = 0;
     let discountPercent = 0;
-    if (typeof table.discountPercent === 'number' && table.discountPercent > 0) {
-      discountPercent = Math.min(100, Math.round(table.discountPercent));
-      discountAmount = typeof table.discountAmount === 'number' ? table.discountAmount : Number((subtotal * (discountPercent / 100)).toFixed(2));
-    } else {
-      const dv = typeof table.discount === 'string' ? table.discount.trim() : (typeof table.discount === 'number' ? String(table.discount) : '');
-      if (dv.endsWith('%')) {
-        discountPercent = Math.min(100, Math.round(parseFloat(dv) || 0));
-        discountAmount = Number((subtotal * (discountPercent / 100)).toFixed(2));
-      } else if (parseFloat(dv) > 0) {
-        discountPercent = Math.min(100, Math.round(parseFloat(dv)));
-        discountAmount = typeof table.discountAmount === 'number' ? table.discountAmount : Number((subtotal * (discountPercent / 100)).toFixed(2));
-      } else if (typeof table.discountAmount === 'number' && table.discountAmount > 0) {
-        discountAmount = table.discountAmount;
-        discountPercent = subtotal > 0 ? Math.min(100, Math.round((discountAmount / subtotal) * 100)) : 0;
+    const hasAlcohol = alcoholItems.length > 0 && alcoholSubtotal > 0;
+    if (hasAlcohol) {
+      if (typeof table.discountPercent === 'number' && table.discountPercent > 0) {
+        discountPercent = Math.min(100, Math.round(table.discountPercent));
+        discountAmount = typeof table.discountAmount === 'number' ? table.discountAmount : Number((alcoholSubtotal * (discountPercent / 100)).toFixed(2));
+      } else {
+        const dv = typeof table.discount === 'string' ? table.discount.trim() : (typeof table.discount === 'number' ? String(table.discount) : '');
+        if (dv.endsWith('%')) {
+          discountPercent = Math.min(100, Math.round(parseFloat(dv) || 0));
+          discountAmount = Number((alcoholSubtotal * (discountPercent / 100)).toFixed(2));
+        } else if (parseFloat(dv) > 0) {
+          discountPercent = Math.min(100, Math.round(parseFloat(dv)));
+          discountAmount = typeof table.discountAmount === 'number' ? table.discountAmount : Number((alcoholSubtotal * (discountPercent / 100)).toFixed(2));
+        } else if (typeof table.discountAmount === 'number' && table.discountAmount > 0) {
+          discountAmount = table.discountAmount;
+          discountPercent = alcoholSubtotal > 0 ? Math.min(100, Math.round((discountAmount / alcoholSubtotal) * 100)) : 0;
+        }
       }
-    }
 
-    if (discountPercent >= 100) {
-      const roundedBeforeDiscount = Math.round(totalBeforeDiscount);
-      if (roundedBeforeDiscount > 1) {
-        discountAmount = typeof table.discountAmount === 'number' && table.discountAmount > 0 ? table.discountAmount : (roundedBeforeDiscount - 1);
+      if (discountPercent >= 100) {
+        if (foodSubtotal === 0) {
+          const roundedBeforeDiscount = Math.round(totalBeforeDiscount);
+          if (roundedBeforeDiscount > 1) {
+            discountAmount = typeof table.discountAmount === 'number' && table.discountAmount > 0 ? table.discountAmount : (roundedBeforeDiscount - 1);
+          }
+          discountPercent = 100;
+        } else {
+          discountAmount = Number(alcoholSubtotal.toFixed(2));
+          discountPercent = 100;
+        }
+      } else if (foodSubtotal === 0 && ((((table?.grandTotal !== undefined && table.grandTotal <= 1) || (total !== undefined && total <= 1)) && discountAmount > 0) || discountPercent >= 100)) {
+        discountPercent = 100;
       }
-      discountPercent = 100;
-    } else if ((((table?.grandTotal !== undefined && table.grandTotal <= 1) || (total !== undefined && total <= 1)) && discountAmount > 0) || discountPercent >= 100) {
-      discountPercent = 100;
+    } else {
+      discountAmount = 0;
+      discountPercent = 0;
     }
     const fine = typeof table?.fine === 'number' ? table.fine : (parseFloat(table?.fine) || 0);
     const rawTotal = totalBeforeDiscount - discountAmount + fine;
-    const grandTotal = discountPercent >= 100 && Math.round(totalBeforeDiscount) > 1 ? (1 + fine) : Math.max(0, Math.round(rawTotal));
+    const grandTotal = discountPercent >= 100 && foodSubtotal === 0 && Math.round(totalBeforeDiscount) > 1 ? (1 + fine) : Math.max(0, Math.round(rawTotal));
     const roundOff = typeof table.roundOff === 'number'
       ? table.roundOff
       : grandTotal - rawTotal;
@@ -1267,10 +1278,22 @@ export function AppProvider({ children }) {
       : (settings.serviceTaxRate || 0);
     const serviceTax = isServiceTaxOn ? alcoholSubtotal * ((effectiveServiceTaxRate || 0) / 100) : 0;
     const totalBeforeDiscount = subtotal + sgst + cgst + serviceTax;
+    const hasAlcohol = alcoholItems.length > 0 && alcoholSubtotal > 0;
     const dv       = (table.discount || '').trim();
-    const discountAmount = dv.endsWith('%')
-      ? Number((subtotal * (parseFloat(dv)/100)).toFixed(2)) || 0
-      : parseFloat(dv) || 0;
+    let discountAmount = 0;
+    if (hasAlcohol && dv) {
+      const discountVal = parseFloat(dv.replace(/[^0-9.]/g, '')) || 0;
+      if (discountVal >= 100) {
+        if (foodSubtotal === 0) {
+          const rounded = Math.round(totalBeforeDiscount);
+          discountAmount = rounded > 1 ? rounded - 1 : 0;
+        } else {
+          discountAmount = Number(alcoholSubtotal.toFixed(2));
+        }
+      } else if (discountVal > 0) {
+        discountAmount = Number((alcoholSubtotal * (discountVal / 100)).toFixed(2));
+      }
+    }
     const fine = typeof table?.fine === 'number' ? table.fine : (parseFloat(table?.fine) || 0);
     const rawTotal = totalBeforeDiscount - discountAmount + fine;
     const grandTotal = Math.round(Math.max(0, rawTotal));
@@ -1388,15 +1411,21 @@ export function AppProvider({ children }) {
     const serviceTax = isServiceTaxOn ? alcoholSubtotal * ((effectiveServiceTaxRate || 0) / 100) : 0;
     const totalBeforeDiscount = subtotal + gst + serviceTax;
 
-    const discountVal = parseFloat(String(localBill?.discount || (actOrder?.discount ? actOrder.discount : '') || '').replace(/[^0-9.]/g, '')) || 0;
+    const hasAlcohol = alcoholSubtotal > 0;
+    const discountVal = hasAlcohol ? (parseFloat(String(localBill?.discount || (actOrder?.discount ? actOrder.discount : '') || '').replace(/[^0-9.]/g, '')) || 0) : 0;
     let discountAmount = 0;
     let grandTotal = Math.max(0, Math.round(totalBeforeDiscount));
 
-    if (discountVal >= 100) {
-      const roundedBeforeDiscount = Math.round(totalBeforeDiscount);
-      grandTotal = roundedBeforeDiscount > 1 ? 1 : Math.max(1, roundedBeforeDiscount);
-    } else if (discountVal > 0) {
-      discountAmount = Number((subtotal * (discountVal / 100)).toFixed(2));
+    if (hasAlcohol && discountVal >= 100) {
+      if (foodSubtotal === 0) {
+        const roundedBeforeDiscount = Math.round(totalBeforeDiscount);
+        grandTotal = roundedBeforeDiscount > 1 ? 1 : Math.max(1, roundedBeforeDiscount);
+      } else {
+        discountAmount = Number(alcoholSubtotal.toFixed(2));
+        grandTotal = Math.max(1, Math.round(totalBeforeDiscount - discountAmount));
+      }
+    } else if (hasAlcohol && discountVal > 0) {
+      discountAmount = Number((alcoholSubtotal * (discountVal / 100)).toFixed(2));
       grandTotal = Math.max(1, Math.round(totalBeforeDiscount - discountAmount));
     }
 
@@ -1405,7 +1434,7 @@ export function AppProvider({ children }) {
       subtotal,
       totalAmount: grandTotal
     };
-  }, [tableBills, activeSessions, settings]);
+  }, [tableBills, activeSessions, settings, allSellableItems, inventory]);
 
   // ── Generate bill (with proper error handling) ──────────────────
   const generateBill = useCallback(async (paymentMode, paidAmount) => {

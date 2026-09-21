@@ -667,6 +667,7 @@ export default function BillingPage() {
     const foodSubtotal = foodItems.reduce((s, i) => s + (i.price || 0) * (i.quantity || 0), 0);
     const alcoholSubtotal = alcoholItems.reduce((s, i) => s + (i.price || 0) * (i.quantity || 0), 0);
     const subtotal = foodSubtotal + alcoholSubtotal;
+    const hasAlcohol = alcoholItems.length > 0 && alcoholSubtotal > 0;
 
     const gstRate = settings.gstRate !== undefined ? settings.gstRate : Number(((settings.cgstRate || 0) + (settings.sgstRate || 0)).toFixed(2));
     const gst = foodSubtotal * (gstRate / 100);
@@ -692,36 +693,43 @@ export default function BillingPage() {
           : (settings.serviceTaxRate || 0));
     const serviceTax = isServiceTaxOn ? alcoholSubtotal * (effectiveServiceTaxRate / 100) : 0;
     const totalBeforeDiscount = subtotal + gst + serviceTax;
-    const discountVal = parseFloat((table.discount || '').replace(/[^0-9.]/g, '')) || 0;
+    const discountVal = hasAlcohol ? (parseFloat((table.discount || '').replace(/[^0-9.]/g, '')) || 0) : 0;
     const fine = parseFloat((table.fine || '').toString().replace(/[^0-9.]/g, '')) || 0;
     let discountAmount = 0;
     let rawTotal = totalBeforeDiscount + fine;
     let grandTotal = Math.max(0, Math.round(rawTotal));
     let roundOff = grandTotal - rawTotal;
 
-    if (discountVal >= 100) {
-      const roundedBeforeDiscount = Math.round(totalBeforeDiscount);
-      if (roundedBeforeDiscount > 1) {
-        grandTotal = 1 + fine;
-        discountAmount = roundedBeforeDiscount - 1;
-        rawTotal = totalBeforeDiscount - discountAmount + fine;
-        roundOff = Number((grandTotal - rawTotal).toFixed(2));
+    if (hasAlcohol && discountVal >= 100) {
+      if (foodSubtotal === 0) {
+        const roundedBeforeDiscount = Math.round(totalBeforeDiscount);
+        if (roundedBeforeDiscount > 1) {
+          grandTotal = 1 + fine;
+          discountAmount = roundedBeforeDiscount - 1;
+          rawTotal = totalBeforeDiscount - discountAmount + fine;
+          roundOff = Number((grandTotal - rawTotal).toFixed(2));
+        } else {
+          grandTotal = Math.max(1, roundedBeforeDiscount) + fine;
+          discountAmount = 0;
+          rawTotal = totalBeforeDiscount + fine;
+          roundOff = Number((grandTotal - rawTotal).toFixed(2));
+        }
       } else {
-        grandTotal = Math.max(1, roundedBeforeDiscount) + fine;
-        discountAmount = 0;
-        rawTotal = totalBeforeDiscount + fine;
+        discountAmount = Number(alcoholSubtotal.toFixed(2));
+        rawTotal = totalBeforeDiscount - discountAmount + fine;
+        grandTotal = Math.max(1, Math.round(rawTotal));
         roundOff = Number((grandTotal - rawTotal).toFixed(2));
       }
-    } else if (discountVal > 0) {
-      discountAmount = Number((subtotal * (discountVal / 100)).toFixed(2));
+    } else if (hasAlcohol && discountVal > 0) {
+      discountAmount = Number((alcoholSubtotal * (discountVal / 100)).toFixed(2));
       rawTotal = totalBeforeDiscount - discountAmount + fine;
       grandTotal = Math.max(1, Math.round(rawTotal));
       roundOff = Number((grandTotal - rawTotal).toFixed(2));
     }
-    return { subtotal, foodSubtotal, alcoholSubtotal, foodItems, alcoholItems, gst, gstRate, sgst, cgst, serviceTax, effectiveServiceTaxRate, isServiceTaxOn, totalBeforeDiscount, discountVal, discountAmount, fine, grandTotal, roundOff };
+    return { subtotal, foodSubtotal, alcoholSubtotal, foodItems, alcoholItems, hasAlcohol, gst, gstRate, sgst, cgst, serviceTax, effectiveServiceTaxRate, isServiceTaxOn, totalBeforeDiscount, discountVal, discountAmount, fine, grandTotal, roundOff };
   }, [combinedItems.all, table.discount, table.fine, table.serviceTaxEnabled, table.serviceTaxRate, activeSessions, activeTableId, settings, allSellableItems, inventory, checkIsAlcoholic]);
 
-  const { subtotal, foodSubtotal, alcoholSubtotal, foodItems, alcoholItems, gst, gstRate, sgst, cgst, serviceTax, effectiveServiceTaxRate, isServiceTaxOn, totalBeforeDiscount, discountVal, discountAmount, fine, grandTotal, roundOff } = totals;
+  const { subtotal, foodSubtotal, alcoholSubtotal, foodItems, alcoholItems, hasAlcohol, gst, gstRate, sgst, cgst, serviceTax, effectiveServiceTaxRate, isServiceTaxOn, totalBeforeDiscount, discountVal, discountAmount, fine, grandTotal, roundOff } = totals;
 
   const tableList = Array.from({ length: NUM_TABLES }, (_, i) => {
     const id = `t${i + 1}`;
@@ -1164,7 +1172,7 @@ export default function BillingPage() {
         isCreditPay,
         paidVal,
         dueVal,
-        (discountVal >= 100 || (discountAmount > 0 && grandTotal <= 1)) ? 100 : Math.min(100, Math.max(0, discountVal || (subtotal > 0 && discountAmount > 0 ? Math.round((discountAmount / subtotal) * 100) : 0))),
+        (!hasAlcohol || alcoholSubtotal <= 0) ? 0 : ((discountVal >= 100 || (discountAmount > 0 && grandTotal <= 1 && foodSubtotal === 0)) ? 100 : Math.min(100, Math.max(0, discountVal || (alcoholSubtotal > 0 && discountAmount > 0 ? Math.round((discountAmount / alcoholSubtotal) * 100) : 0)))),
         effectiveServiceTaxRate,
         fine,
         foodSubtotal,
@@ -1188,7 +1196,7 @@ export default function BillingPage() {
           serviceTaxRate: effectiveServiceTaxRate,
           serviceTaxEnabled: isServiceTaxOn,
           discountAmount,
-          discountPercent: (discountVal >= 100 || (discountAmount > 0 && grandTotal <= 1)) ? 100 : Math.min(100, Math.max(0, discountVal || (subtotal > 0 && discountAmount > 0 ? Math.round((discountAmount / subtotal) * 100) : 0))),
+          discountPercent: (!hasAlcohol || alcoholSubtotal <= 0) ? 0 : ((discountVal >= 100 || (discountAmount > 0 && grandTotal <= 1 && foodSubtotal === 0)) ? 100 : Math.min(100, Math.max(0, discountVal || (alcoholSubtotal > 0 && discountAmount > 0 ? Math.round((discountAmount / alcoholSubtotal) * 100) : 0)))),
           fine,
           roundOff,
           grandTotal,
@@ -1784,37 +1792,39 @@ export default function BillingPage() {
                 <div className="s-row" style={{ borderTop: '1px dashed var(--b1)', paddingTop: 4, fontWeight: 'bold' }}>
                   <span>Total</span><span>{c}{totalBeforeDiscount.toFixed(2)}</span>
                 </div>
-                <div className="s-row">
-                  <span>Discount (%)</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {discountAmount > 0 && (
-                      <span style={{ color: '#ef4444', fontWeight: 700, fontSize: '12px' }}>
-                        -{c}{discountAmount.toFixed(2)}
-                      </span>
-                    )}
-                    <input
-                      className="mini-input"
-                      style={{ width: 60, textAlign: 'right' }}
-                      value={table.discount || ''}
-                      onChange={e => {
-                        recordLocalEdit(activeTableId);
-                        const maxLimit = settings?.maxDiscountLimit !== undefined ? settings.maxDiscountLimit : 30;
-                        const raw = e.target.value.replace(/[^0-9.]/g, '');
-                        const val = parseFloat(raw) || 0;
-                        if (val > 100) {
-                          showToast('Discount cannot exceed 100%', 'amber');
-                          setTableField(activeTableId, 'discount', '100');
-                        } else if (role !== 'admin' && val > maxLimit) {
-                          showToast(`Discount limit exceeded! Maximum allowed for staff/manager is ${maxLimit}%`, 'amber');
-                          setTableField(activeTableId, 'discount', String(maxLimit));
-                        } else {
-                          setTableField(activeTableId, 'discount', raw);
-                        }
-                      }}
-                      placeholder="0"
-                    />
+                {hasAlcohol && (
+                  <div className="s-row">
+                    <span>Discount (%)</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {discountAmount > 0 && (
+                        <span style={{ color: '#ef4444', fontWeight: 700, fontSize: '12px' }}>
+                          -{c}{discountAmount.toFixed(2)}
+                        </span>
+                      )}
+                      <input
+                        className="mini-input"
+                        style={{ width: 60, textAlign: 'right' }}
+                        value={table.discount || ''}
+                        onChange={e => {
+                          recordLocalEdit(activeTableId);
+                          const maxLimit = settings?.maxDiscountLimit !== undefined ? settings.maxDiscountLimit : 30;
+                          const raw = e.target.value.replace(/[^0-9.]/g, '');
+                          const val = parseFloat(raw) || 0;
+                          if (val > 100) {
+                            showToast('Discount cannot exceed 100%', 'amber');
+                            setTableField(activeTableId, 'discount', '100');
+                          } else if (role !== 'admin' && val > maxLimit) {
+                            showToast(`Discount limit exceeded! Maximum allowed for staff/manager is ${maxLimit}%`, 'amber');
+                            setTableField(activeTableId, 'discount', String(maxLimit));
+                          } else {
+                            setTableField(activeTableId, 'discount', raw);
+                          }
+                        }}
+                        placeholder="0"
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
                 <div className="s-row" style={{ color: '#ef4444' }}>
                   <span style={{ color: '#ef4444', fontWeight: 700 }}>Fine</span>
                   <input

@@ -400,13 +400,17 @@ router.post('/', async (req, res) => {
 
     const discountAmount = typeof orderData.discount === 'number' ? orderData.discount : (parseFloat(orderData.discount) || 0);
     const subtotalVal = typeof orderData.subtotal === 'number' ? orderData.subtotal : (parseFloat(orderData.subtotal) || 0);
+    // Discount percentage is always relative to alcoholSubtotal (discount applies to alcohol only)
+    const alcoholSubtotalVal = typeof orderData.alcoholSubtotal === 'number' ? orderData.alcoholSubtotal : (parseFloat(orderData.alcoholSubtotal) || 0);
+    const baseForDiscountPct = alcoholSubtotalVal > 0 ? alcoholSubtotalVal : subtotalVal;
     let discountPercentVal = 0;
     if (orderData.discountPercent !== undefined && orderData.discountPercent !== null) {
       discountPercentVal = Math.min(100, parseFloat(orderData.discountPercent) || 0);
     } else if (discountAmount > 0) {
-      const baseVal = (orderData.grandTotal !== undefined && orderData.grandTotal > 0)
-        ? (orderData.grandTotal + discountAmount)
-        : (subtotalVal > 0 ? subtotalVal : 0);
+      const baseVal = baseForDiscountPct > 0 ? baseForDiscountPct
+        : ((orderData.grandTotal !== undefined && orderData.grandTotal > 0)
+          ? (orderData.grandTotal + discountAmount)
+          : 0);
       discountPercentVal = (orderData.grandTotal <= 1 && discountAmount > 0)
         ? 100
         : (baseVal > 0 ? Math.min(100, Math.round((discountAmount / baseVal) * 100)) : 0);
@@ -536,9 +540,13 @@ router.patch('/:id/finalize-bill', async (req, res) => {
     order.isActive = false;
 
     const totalBeforeDisc = (order.subtotal || 0) + (order.sgst || 0) + (order.cgst || 0) + (order.serviceTax || 0);
+    // Discount percentage is based on alcoholSubtotal (discount applies to alcohol only)
+    const alcBase = (order.alcoholSubtotal && order.alcoholSubtotal > 0) ? order.alcoholSubtotal : 0;
     const effectiveDiscountPercent = discountPercent !== undefined && discountPercent !== null
       ? parseFloat(discountPercent)
-      : (order.subtotal > 0 && order.discount > 0 ? (order.discount / order.subtotal) * 100 : (totalBeforeDisc > 0 && order.discount > 0 ? (order.discount / totalBeforeDisc) * 100 : 0));
+      : (alcBase > 0 && order.discount > 0
+          ? (order.discount / alcBase) * 100
+          : (totalBeforeDisc > 0 && order.discount > 0 ? (order.discount / totalBeforeDisc) * 100 : 0));
 
     if (effectiveDiscountPercent >= 100 || (totalBeforeDisc > 1 && (grandTotal - order.fine) <= 1 && order.discount >= (totalBeforeDisc - 1))) {
       order.discountPercent = 100;
@@ -848,18 +856,27 @@ router.patch('/:id/discount', async (req, res) => {
     const discountVal = parseFloat(discount) || 0;
     const serviceTaxVal = order.serviceTax || 0;
     const subtotalAndTax = order.subtotal + order.sgst + order.cgst + serviceTaxVal;
+    // Discount applies only to alcoholSubtotal — reject if no alcohol items
+    const alcSubtotal = order.alcoholSubtotal && order.alcoholSubtotal > 0 ? order.alcoholSubtotal : 0;
+    if (alcSubtotal <= 0) {
+      return res.status(400).json({ message: 'Discount can only be applied to orders containing alcoholic items' });
+    }
     if (discountVal < 0 || discountVal > subtotalAndTax) {
       return res.status(400).json({ message: 'Invalid discount amount' });
     }
 
     const fineVal = order.fine || 0;
     let finalDiscount = discountVal;
+    // Cap discount at alcoholSubtotal for alcohol-only discount rule
+    if (finalDiscount > alcSubtotal) {
+      finalDiscount = Number(alcSubtotal.toFixed(2));
+    }
     let rawTotal = subtotalAndTax - finalDiscount + fineVal;
     let rounded = Math.round(rawTotal);
 
-    if (subtotalAndTax > 1 && (discountVal >= Math.round(subtotalAndTax) || rounded <= 0)) {
+    if (subtotalAndTax > 1 && rounded <= 0) {
       rounded = 1 + fineVal;
-      finalDiscount = Math.round(subtotalAndTax) - 1;
+      finalDiscount = Number((subtotalAndTax - 1).toFixed(2));
       rawTotal = subtotalAndTax - finalDiscount + fineVal;
     }
 
@@ -867,7 +884,8 @@ router.patch('/:id/discount', async (req, res) => {
     order.roundOff = rounded - rawTotal;
     order.grandTotal = rounded;
 
-    const baseForPct = (order.subtotal && order.subtotal > 0) ? order.subtotal : (subtotalAndTax || 0);
+    // Percentage relative to alcoholSubtotal only
+    const baseForPct = alcSubtotal > 0 ? alcSubtotal : (subtotalAndTax || 0);
     order.discountPercent = (rounded <= 1 && finalDiscount > 0)
       ? 100
       : (baseForPct > 0 && finalDiscount > 0 ? Math.min(100, Math.round((finalDiscount / baseForPct) * 100)) : 0);
