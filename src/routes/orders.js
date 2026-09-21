@@ -538,7 +538,7 @@ router.patch('/:id/finalize-bill', async (req, res) => {
     const totalBeforeDisc = (order.subtotal || 0) + (order.sgst || 0) + (order.cgst || 0) + (order.serviceTax || 0);
     const effectiveDiscountPercent = discountPercent !== undefined && discountPercent !== null
       ? parseFloat(discountPercent)
-      : (totalBeforeDisc > 0 && order.discount > 0 ? (order.discount / totalBeforeDisc) * 100 : 0);
+      : (order.subtotal > 0 && order.discount > 0 ? (order.discount / order.subtotal) * 100 : (totalBeforeDisc > 0 && order.discount > 0 ? (order.discount / totalBeforeDisc) * 100 : 0));
 
     if (effectiveDiscountPercent >= 100 || (totalBeforeDisc > 1 && (grandTotal - order.fine) <= 1 && order.discount >= (totalBeforeDisc - 1))) {
       order.discountPercent = 100;
@@ -867,7 +867,7 @@ router.patch('/:id/discount', async (req, res) => {
     order.roundOff = rounded - rawTotal;
     order.grandTotal = rounded;
 
-    const baseForPct = subtotalAndTax > 0 ? subtotalAndTax : (order.subtotal || 0);
+    const baseForPct = (order.subtotal && order.subtotal > 0) ? order.subtotal : (subtotalAndTax || 0);
     order.discountPercent = (rounded <= 1 && finalDiscount > 0)
       ? 100
       : (baseForPct > 0 && finalDiscount > 0 ? Math.min(100, Math.round((finalDiscount / baseForPct) * 100)) : 0);

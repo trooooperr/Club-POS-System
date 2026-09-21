@@ -116,7 +116,7 @@ export default function InvoiceModal() {
   if (o.discountPercent !== undefined && o.discountPercent !== null && !isNaN(parseFloat(o.discountPercent)) && parseFloat(o.discountPercent) > 0) {
     discountPercent = Math.min(100, Math.round(parseFloat(o.discountPercent)));
   } else if (storedDiscount > 0) {
-    const base = (storedGrandTotal || 0) + storedDiscount || totalBeforeDiscount;
+    const base = (o.subtotal > 0 ? o.subtotal : (foodSubtotal + alcoholSubtotal)) || ((storedGrandTotal || 0) + storedDiscount) || totalBeforeDiscount;
     discountPercent = base > 0 ? Math.min(100, Math.round((storedDiscount / base) * 100)) : 0;
   }
 

@@ -78,11 +78,10 @@ export default function BillPreviewModal({ bill, table, tableNo, settings, onClo
   } else if (bill?.discountPercent !== undefined && bill?.discountPercent !== null && !isNaN(parseFloat(bill?.discountPercent)) && parseFloat(bill?.discountPercent) > 0) {
     discountPercent = Math.min(100, Math.round(parseFloat(bill.discountPercent)));
   } else if (discountVal > 0) {
-    if (totalBeforeDiscount > 0) {
+    if (subtotal > 0) {
+      discountPercent = Math.min(100, Math.round((discountVal / subtotal) * 100));
+    } else if (totalBeforeDiscount > 0) {
       discountPercent = Math.min(100, Math.round((discountVal / totalBeforeDiscount) * 100));
-    } else if (subtotal > 0) {
-      const base = ((bill?.grandTotal || bill?.totalAmount || 0) + discountVal) || subtotal;
-      discountPercent = Math.min(100, Math.round((discountVal / base) * 100));
     }
   }
   discountPercent = Math.min(100, Math.max(0, discountPercent));

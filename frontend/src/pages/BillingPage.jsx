@@ -705,18 +705,18 @@ export default function BillingPage() {
         grandTotal = 1 + fine;
         discountAmount = roundedBeforeDiscount - 1;
         rawTotal = totalBeforeDiscount - discountAmount + fine;
-        roundOff = grandTotal - rawTotal;
+        roundOff = Number((grandTotal - rawTotal).toFixed(2));
       } else {
         grandTotal = Math.max(1, roundedBeforeDiscount) + fine;
         discountAmount = 0;
         rawTotal = totalBeforeDiscount + fine;
-        roundOff = grandTotal - rawTotal;
+        roundOff = Number((grandTotal - rawTotal).toFixed(2));
       }
     } else if (discountVal > 0) {
-      discountAmount = Math.round(totalBeforeDiscount * (discountVal / 100));
+      discountAmount = Number((subtotal * (discountVal / 100)).toFixed(2));
       rawTotal = totalBeforeDiscount - discountAmount + fine;
       grandTotal = Math.max(1, Math.round(rawTotal));
-      roundOff = grandTotal - rawTotal;
+      roundOff = Number((grandTotal - rawTotal).toFixed(2));
     }
     return { subtotal, foodSubtotal, alcoholSubtotal, foodItems, alcoholItems, gst, gstRate, sgst, cgst, serviceTax, effectiveServiceTaxRate, isServiceTaxOn, totalBeforeDiscount, discountVal, discountAmount, fine, grandTotal, roundOff };
   }, [combinedItems.all, table.discount, table.fine, table.serviceTaxEnabled, table.serviceTaxRate, activeSessions, activeTableId, settings, allSellableItems, inventory, checkIsAlcoholic]);
@@ -1164,7 +1164,7 @@ export default function BillingPage() {
         isCreditPay,
         paidVal,
         dueVal,
-        (discountVal >= 100 || (discountAmount > 0 && grandTotal <= 1)) ? 100 : Math.min(100, Math.max(0, discountVal || (totalBeforeDiscount > 0 && discountAmount > 0 ? Math.round((discountAmount / totalBeforeDiscount) * 100) : 0))),
+        (discountVal >= 100 || (discountAmount > 0 && grandTotal <= 1)) ? 100 : Math.min(100, Math.max(0, discountVal || (subtotal > 0 && discountAmount > 0 ? Math.round((discountAmount / subtotal) * 100) : 0))),
         effectiveServiceTaxRate,
         fine,
         foodSubtotal,
@@ -1188,7 +1188,7 @@ export default function BillingPage() {
           serviceTaxRate: effectiveServiceTaxRate,
           serviceTaxEnabled: isServiceTaxOn,
           discountAmount,
-          discountPercent: (discountVal >= 100 || (discountAmount > 0 && grandTotal <= 1)) ? 100 : Math.min(100, Math.max(0, discountVal || (totalBeforeDiscount > 0 && discountAmount > 0 ? Math.round((discountAmount / totalBeforeDiscount) * 100) : 0))),
+          discountPercent: (discountVal >= 100 || (discountAmount > 0 && grandTotal <= 1)) ? 100 : Math.min(100, Math.max(0, discountVal || (subtotal > 0 && discountAmount > 0 ? Math.round((discountAmount / subtotal) * 100) : 0))),
           fine,
           roundOff,
           grandTotal,
