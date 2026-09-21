@@ -1767,7 +1767,7 @@ export default function BillingPage() {
               <div className="bill-summary-card">
                 {foodSubtotal > 0 && alcoholSubtotal > 0 ? (
                   <>
-                    <div className="s-row"><span>Food Subtotal</span><span>{c}{foodSubtotal.toFixed(0)}</span></div>
+                    <div className="s-row"><span>Bar Restaurant Subtotal</span><span>{c}{foodSubtotal.toFixed(0)}</span></div>
                     {gst > 0 && <div className="s-row"><span>Food GST ({gstRate}%)</span><span>{c}{gst.toFixed(2)}</span></div>}
                     <div className="s-row"><span>Bar Subtotal</span><span>{c}{alcoholSubtotal.toFixed(0)}</span></div>
                     {serviceTax > 0 && (

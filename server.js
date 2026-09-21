@@ -405,11 +405,24 @@ function setupDbChangeStreams(io) {
     console.log('⚡ MongoDB Change Streams explicitly disabled via ENABLE_CHANGE_STREAMS=false.');
     return;
   }
+
   try {
     const db = mongoose.connection.db;
 
     // Watch tablesessions collection
-    const sessionStream = db.collection('tablesessions').watch([], { fullDocument: 'updateLookup' });
+    // M0 free tier will throw here — caught below
+    let sessionStream;
+    try {
+      sessionStream = db.collection('tablesessions').watch([], { fullDocument: 'updateLookup' });
+    } catch (e) {
+      console.warn('⚠️  Change Streams not supported (MongoDB M0 free tier). Real-time DB push disabled.');
+      console.warn('   Set ENABLE_CHANGE_STREAMS=false in Render env vars to suppress this warning.');
+      return;
+    }
+
+    sessionStream.on('error', (err) => {
+      console.warn('⚠️  tablesessions Change Stream error:', err.message);
+    });
     sessionStream.on('change', (change) => {
       const doc = change.fullDocument;
       if (doc && doc.tableNo) {
@@ -421,7 +434,17 @@ function setupDbChangeStreams(io) {
     });
 
     // Watch kots collection (insert operations only for minimum bandwidth)
-    const kotStream = db.collection('kots').watch([{ $match: { operationType: 'insert' } }], { fullDocument: 'updateLookup' });
+    let kotStream;
+    try {
+      kotStream = db.collection('kots').watch([{ $match: { operationType: 'insert' } }], { fullDocument: 'updateLookup' });
+    } catch (e) {
+      console.warn('⚠️  kots Change Stream not supported:', e.message);
+      return;
+    }
+
+    kotStream.on('error', (err) => {
+      console.warn('⚠️  kots Change Stream error:', err.message);
+    });
     kotStream.on('change', async (change) => {
       if (change.operationType === 'insert') {
         const doc = change.fullDocument;
@@ -438,21 +461,20 @@ function setupDbChangeStreams(io) {
               const Order = require('./src/models/Order');
               const { deductInventoryForItems, broadcastInventoryUpdate } = require('./src/lib/inventoryStock');
 
-              // Atomically claim the deduction task to prevent other server processes from double-deducting in parallel
+              // Atomically claim the deduction task to prevent double-deducting in parallel
               const kotDoc = await KOT.findOneAndUpdate(
                 { _id: doc._id, inventoryDeducted: { $ne: true } },
                 { $set: { inventoryDeducted: true, inventoryDeductedAt: new Date() } },
-                { new: false } // returns the doc state before update
+                { new: false }
               );
               if (kotDoc) {
                 const order = await Order.findById(kotDoc.orderId);
                 const isAlreadyDeducted = order && order.inventoryFinalized;
                 if (isAlreadyDeducted) {
-                  console.log(`📡 Change Stream: Order is already inventoryFinalized. Skipping KOT ${kotDoc.kotNo} stock deduction.`);
+                  console.log(`📡 Change Stream: Order already inventoryFinalized. Skipping KOT ${kotDoc.kotNo} stock deduction.`);
                 } else {
                   console.log(`📡 Change Stream: Deducting inventory for table KOT ${kotDoc.kotNo}...`);
                   const updatedInventory = await deductInventoryForItems(kotDoc.items, order?.businessDate || order?.date || kotDoc.createdAt);
-
                   broadcastInventoryUpdate({ app: { locals: { io } } }, updatedInventory, {
                     orderId: kotDoc.orderId,
                     kotId: kotDoc._id,
@@ -461,7 +483,6 @@ function setupDbChangeStreams(io) {
                   console.log(`📡 Change Stream: Table KOT ${kotDoc.kotNo} inventory deducted successfully.`);
                 }
               }
-
             } catch (err) {
               console.error(`❌ Change Stream: Error deducting inventory for table KOT:`, err.message);
             }
@@ -470,23 +491,10 @@ function setupDbChangeStreams(io) {
       }
     });
 
-    // Watch menuitems collection (Commented out: endpoints handle REFRESH_MENU manually)
-    // const menuStream = db.collection('menuitems').watch([], { fullDocument: 'updateLookup' });
-    // menuStream.on('change', (change) => {
-    //   console.log('🍔 Change Stream: menuitems collection changed, broadcasting REFRESH_MENU');
-    //   io.emit('REFRESH_MENU');
-    // });
-
-    // Watch inventories collection (Commented out: endpoints and KOT sync handle updates manually via INVENTORY_UPDATED)
-    // const invStream = db.collection('inventories').watch([], { fullDocument: 'updateLookup' });
-    // invStream.on('change', (change) => {
-    //   console.log('🍻 Change Stream: inventories collection changed, broadcasting REFRESH_MENU');
-    //   io.emit('REFRESH_MENU');
-    // });
-
     console.log('✅ MongoDB Change Streams initialized for real-time synchronization');
   } catch (err) {
-    console.error('❌ Failed to initialize MongoDB Change Streams:', err.message);
+    console.warn('⚠️  MongoDB Change Streams unavailable:', err.message);
+    console.warn('   Set ENABLE_CHANGE_STREAMS=false in env vars to suppress this warning.');
   }
 }
 
