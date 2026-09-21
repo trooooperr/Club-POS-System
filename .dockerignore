@@ -4,5 +4,4 @@ frontend/node_modules
 .gitignore
 .DS_Store
 .log
-frontend/dist
 npm-debug.log
