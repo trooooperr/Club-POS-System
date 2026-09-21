@@ -692,7 +692,7 @@ export function AppProvider({ children }) {
             `).join('')}
             <div style="border-top: 1px dotted #000; margin: 4px 0 3px;"></div>
             <div class="row"><span>Subtotal</span><span>${alcoholSubtotal.toFixed(2)}</span></div>
-            ${isServiceTaxOn && effectiveServiceTaxRate > 0 && serviceTax > 0 ? `<div class="row"><span>Service Tax (${effectiveServiceTaxRate}%)</span><span>${serviceTax.toFixed(2)}</span></div>` : ''}
+            ${isServiceTaxOn && effectiveServiceTaxRate > 0 && serviceTax > 0 ? `<div class="row"><span>Service Charge (${effectiveServiceTaxRate}%)</span><span>${serviceTax.toFixed(2)}</span></div>` : ''}
             <div class="row" style="font-weight: 900; border-top: 2px solid #000; padding-top: 3px; font-size: 13px;"><span>Bar Total</span><span>${alcoholTotal.toFixed(2)}</span></div>
 
             <div class="dash-line" style="margin: 8px 0;"></div>
@@ -729,7 +729,7 @@ export function AppProvider({ children }) {
             `).join('')}
             <div style="border-top: 1px dotted #000; margin: 4px 0 3px;"></div>
             <div class="row"><span>Subtotal</span><span>${alcoholSubtotal.toFixed(2)}</span></div>
-            ${isServiceTaxOn && effectiveServiceTaxRate > 0 && serviceTax > 0 ? `<div class="row"><span>Service Tax (${effectiveServiceTaxRate}%)</span><span>${serviceTax.toFixed(2)}</span></div>` : ''}
+            ${isServiceTaxOn && effectiveServiceTaxRate > 0 && serviceTax > 0 ? `<div class="row"><span>Service Charge (${effectiveServiceTaxRate}%)</span><span>${serviceTax.toFixed(2)}</span></div>` : ''}
             <div class="row" style="font-weight: 900; border-top: 1px solid #000; padding-top: 2px;"><span>Total</span><span>${alcoholTotal.toFixed(2)}</span></div>
           `}
 

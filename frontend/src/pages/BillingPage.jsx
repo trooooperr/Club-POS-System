@@ -1772,7 +1772,7 @@ export default function BillingPage() {
                     <div className="s-row"><span>Bar Subtotal</span><span>{c}{alcoholSubtotal.toFixed(0)}</span></div>
                     {serviceTax > 0 && (
                       <div className="s-row">
-                        <span>Service Tax ({effectiveServiceTaxRate > 0 ? effectiveServiceTaxRate : (settings.serviceTaxRate || 5)}%)</span>
+                        <span>Service Charge ({effectiveServiceTaxRate > 0 ? effectiveServiceTaxRate : (settings.serviceTaxRate || 5)}%)</span>
                         <span>{c}{serviceTax.toFixed(2)}</span>
                       </div>
                     )}
@@ -1783,7 +1783,7 @@ export default function BillingPage() {
                     {gst > 0 && <div className="s-row"><span>GST ({gstRate}%)</span><span>{c}{gst.toFixed(2)}</span></div>}
                     {serviceTax > 0 && (
                       <div className="s-row">
-                        <span>Service Tax ({effectiveServiceTaxRate > 0 ? effectiveServiceTaxRate : (settings.serviceTaxRate || 5)}%)</span>
+                        <span>Service Charge ({effectiveServiceTaxRate > 0 ? effectiveServiceTaxRate : (settings.serviceTaxRate || 5)}%)</span>
                         <span>{c}{serviceTax.toFixed(2)}</span>
                       </div>
                     )}

@@ -287,7 +287,7 @@ export default function InvoiceModal() {
                       </tr>
                       {alcoholTax > 0 && (
                         <tr className="tax-row">
-                          <td colSpan="2">Service Tax ({stRate}%)</td>
+                          <td colSpan="2">Service Charge ({stRate}%)</td>
                           <td align="right">{s.currency}{alcoholTax.toFixed(2)}</td>
                         </tr>
                       )}
@@ -346,7 +346,7 @@ export default function InvoiceModal() {
                       )}
                       {s.serviceTaxEnabled && stRate > 0 && (o.serviceTax || 0) > 0 && (
                         <tr className="tax-row">
-                          <td colSpan="2">Service Tax ({stRate}%)</td>
+                          <td colSpan="2">Service Charge ({stRate}%)</td>
                           <td align="right">{s.currency}{o.serviceTax.toFixed(2)}</td>
                         </tr>
                       )}

@@ -575,11 +575,11 @@ export default function SettingsPage() {
             </div>
             <label className={`settings-toggle ${!form.serviceTaxEnabled ? 'settings-wide' : 'settings-service-tax-toggle'}`}>
               <input type="checkbox" checked={!!form.serviceTaxEnabled} onChange={e => set('serviceTaxEnabled', e.target.checked)} />
-              <span>Enable Service Tax</span>
+              <span>Enable Service Charge</span>
             </label>
             {form.serviceTaxEnabled && (
               <div className="settings-field">
-                <label>Service Tax Rate %</label>
+                <label>Service Charge Rate %</label>
                 <input type="number" min="0" step="0.01" value={form.serviceTaxRate ?? 0} onChange={e => set('serviceTaxRate', parseFloat(e.target.value) || 0)} />
               </div>
             )}

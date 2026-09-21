@@ -207,7 +207,7 @@ export default function BillPreviewModal({ bill, table, tableNo, settings, onClo
                   </div>
                   {serviceTax > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#1e293b', fontWeight: 600, marginBottom: 3 }}>
-                      <span>Service Tax ({stRate}%)</span><span>₹{serviceTax.toFixed(2)}</span>
+                      <span>Service Charge ({stRate}%)</span><span>₹{serviceTax.toFixed(2)}</span>
                     </div>
                   )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 900, color: '#0f172a', borderTop: '2px solid #1e293b', paddingTop: 5, marginTop: 4 }}>
@@ -263,7 +263,7 @@ export default function BillPreviewModal({ bill, table, tableNo, settings, onClo
                   )}
                   {serviceTax > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#666', marginBottom: 3 }}>
-                      <span>Service Tax ({stRate}%)</span><span>₹{serviceTax.toFixed(2)}</span>
+                      <span>Service Charge ({stRate}%)</span><span>₹{serviceTax.toFixed(2)}</span>
                     </div>
                   )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 800, color: '#000', borderTop: '1px solid #000', paddingTop: 3, marginTop: 2 }}>
