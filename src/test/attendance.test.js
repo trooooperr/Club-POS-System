@@ -124,6 +124,82 @@ describe('Attendance & GST Settings API', () => {
     expect(w2.absenceDetails.length).toBe(0);
   });
 
+  it('should mark a date as restaurant closed day', async () => {
+    const res = await request(app)
+      .post('/api/attendance/closed-day')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        date: '2026-09-12',
+        isClosed: true,
+        reason: 'Weekly Off'
+      });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.isClosedDay).toBe(true);
+    expect(res.body.closedDay.reason).toBe('Weekly Off');
+  });
+
+  it('should return closed day status on daily attendance', async () => {
+    const res = await request(app)
+      .get('/api/attendance/daily?date=2026-09-12')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.isClosedDay).toBe(true);
+    expect(res.body.closedDay.reason).toBe('Weekly Off');
+    expect(res.body.summary.isClosedDay).toBe(true);
+    expect(res.body.summary.present).toBe(0);
+    expect(res.body.summary.absent).toBe(0);
+    expect(res.body.attendance[0].status).toBe('closed');
+    expect(res.body.attendance[1].status).toBe('closed');
+  });
+
+  it('should exclude closed days from active days in monthly report', async () => {
+    const res = await request(app)
+      .get('/api/attendance/monthly?month=2026-09')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.totalClosedDays).toBe(1);
+    expect(res.body.closedDays.length).toBe(1);
+    expect(res.body.closedDays[0].date).toBe('2026-09-12');
+    expect(res.body.closedDays[0].reason).toBe('Weekly Off');
+
+    // activeDays must exclude elapsed closed days
+    expect(res.body.activeDays).toBe(res.body.elapsedDays - res.body.elapsedClosedDays);
+    expect(res.body.overallStats.totalWorkingDays).toBe(res.body.activeDays);
+    expect(res.body.overallStats.closedDaysCount).toBe(res.body.elapsedClosedDays);
+
+    // Each staff member's totalDays should be the activeDays
+    expect(res.body.staff[0].totalDays).toBe(res.body.activeDays);
+    expect(res.body.staff[1].totalDays).toBe(res.body.activeDays);
+  });
+
+  it('should reopen a closed day when isClosed is false', async () => {
+    const res = await request(app)
+      .post('/api/attendance/closed-day')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        date: '2026-09-12',
+        isClosed: false
+      });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.isClosedDay).toBe(false);
+
+    // Verify daily attendance is now open again
+    const dailyRes = await request(app)
+      .get('/api/attendance/daily?date=2026-09-12')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(dailyRes.body.isClosedDay).toBe(false);
+    expect(dailyRes.body.attendance[0].status).toBe('present');
+  });
+
   it('should update GST rate in settings and synchronize cgst and sgst rates', async () => {
     const res = await request(app)
       .put('/api/settings')

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Worker = require('../models/Worker');
 const Attendance = require('../models/Attendance');
+const ClosedDay = require('../models/ClosedDay');
 const { requireRole } = require('../middleware/auth');
 
 function getTodayIST() {
@@ -19,7 +20,7 @@ function getDaysInMonth(year, monthIndex) {
 }
 
 // GET /api/attendance/daily?date=YYYY-MM-DD
-// Returns attendance for all staff on a specific date (defaults to present if unmarked, unless future date)
+// Returns attendance for all staff on a specific date (defaults to present if unmarked, unless future date or closed day)
 router.get('/daily', requireRole(['admin', 'manager', 'staff']), async (req, res) => {
   try {
     const todayIST = getTodayIST();
@@ -27,6 +28,8 @@ router.get('/daily', requireRole(['admin', 'manager', 'staff']), async (req, res
     const isFutureDate = queryDate > todayIST;
     const workers = await Worker.find().sort({ name: 1 }).lean();
     const records = await Attendance.find({ date: queryDate }).lean();
+    const closedDay = await ClosedDay.findOne({ date: queryDate }).lean();
+    const isClosedDay = !!closedDay;
 
     const recordMap = new Map();
     for (const r of records) {
@@ -41,17 +44,25 @@ router.get('/daily', requireRole(['admin', 'manager', 'staff']), async (req, res
 
     const list = workers.map(w => {
       const rec = recordMap.get(w._id.toString());
-      // Default to "present" if no specific record exists and date is not in future
-      const status = rec ? rec.status : (isFutureDate ? 'upcoming' : 'present');
       const overtimeHours = rec ? (Number(rec.overtimeHours) || 0) : 0;
       const note = rec ? (rec.note || '') : '';
       const markedBy = rec ? (rec.markedBy || '') : '';
       const isExplicit = !!rec;
 
-      if (status === 'absent') absentCount++;
-      else if (status === 'half-day') halfDayCount++;
-      else if (status === 'leave') leaveCount++;
-      else if (status === 'present' || status === 'overtime') presentCount++;
+      // Status logic: if restaurant closed, staff status is 'closed'
+      let status;
+      if (isClosedDay) {
+        status = 'closed';
+      } else {
+        status = rec ? rec.status : (isFutureDate ? 'upcoming' : 'present');
+      }
+
+      if (!isClosedDay) {
+        if (status === 'absent') absentCount++;
+        else if (status === 'half-day') halfDayCount++;
+        else if (status === 'leave') leaveCount++;
+        else if (status === 'present' || status === 'overtime') presentCount++;
+      }
 
       totalOvertimeHours += overtimeHours;
 
@@ -68,7 +79,8 @@ router.get('/daily', requireRole(['admin', 'manager', 'staff']), async (req, res
         markedBy,
         isExplicit,
         date: queryDate,
-        isFutureDate
+        isFutureDate,
+        isClosedDay
       };
     });
 
@@ -76,18 +88,75 @@ router.get('/daily', requireRole(['admin', 'manager', 'staff']), async (req, res
       success: true,
       date: queryDate,
       isFutureDate,
+      isClosedDay,
+      closedDay: closedDay ? { date: closedDay.date, reason: closedDay.reason, markedBy: closedDay.markedBy } : null,
       summary: {
         total: workers.length,
-        present: presentCount,
-        absent: absentCount,
-        halfDay: halfDayCount,
-        leave: leaveCount,
+        isClosedDay,
+        closedReason: closedDay?.reason || '',
+        present: isClosedDay ? 0 : presentCount,
+        absent: isClosedDay ? 0 : absentCount,
+        halfDay: isClosedDay ? 0 : halfDayCount,
+        leave: isClosedDay ? 0 : leaveCount,
         totalOvertime: totalOvertimeHours
       },
       attendance: list
     });
   } catch (error) {
     console.error('Error fetching daily attendance:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// POST /api/attendance/closed-day
+// Mark or reopen a restaurant closed day (Admin / Manager)
+router.post('/closed-day', requireRole(['admin', 'manager']), async (req, res) => {
+  try {
+    const { date, isClosed, reason } = req.body;
+    if (!date || typeof date !== 'string') {
+      return res.status(400).json({ success: false, message: 'Valid date (YYYY-MM-DD) is required' });
+    }
+
+    const targetDate = date.trim();
+    const targetMonth = targetDate.slice(0, 7);
+    const markedBy = req.user?.username || req.user?.name || 'admin';
+
+    // If isClosed is explicitly false, reopen / remove closed day
+    if (isClosed === false) {
+      await ClosedDay.findOneAndDelete({ date: targetDate });
+      return res.json({
+        success: true,
+        isClosedDay: false,
+        closedDay: null,
+        message: `Restaurant marked OPEN on ${targetDate}`
+      });
+    }
+
+    // Otherwise mark as closed
+    const cleanReason = (typeof reason === 'string' && reason.trim()) ? reason.trim() : 'Restaurant Closed';
+    const closedRecord = await ClosedDay.findOneAndUpdate(
+      { date: targetDate },
+      {
+        date: targetDate,
+        month: targetMonth,
+        reason: cleanReason,
+        markedBy
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    res.json({
+      success: true,
+      isClosedDay: true,
+      closedDay: {
+        date: closedRecord.date,
+        reason: closedRecord.reason,
+        markedBy: closedRecord.markedBy
+      },
+      message: `Restaurant marked CLOSED on ${targetDate} (${cleanReason})`
+    });
+  } catch (error) {
+    console.error('Error updating closed day:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -149,6 +218,7 @@ router.post('/mark', requireRole(['admin', 'manager']), async (req, res) => {
 
 // GET /api/attendance/monthly?month=YYYY-MM
 // Detailed monthly breakdown with all staff members, present/absent days, and complete absence details
+// Active working days exclude restaurant closed days!
 router.get('/monthly', requireRole(['admin', 'manager', 'staff']), async (req, res) => {
   try {
     const currentMonthIST = getCurrentMonthIST();
@@ -172,6 +242,26 @@ router.get('/monthly', requireRole(['admin', 'manager', 'staff']), async (req, r
       elapsedDays = totalDaysInMonth;
     }
 
+    // Fetch closed days in this month
+    const closedDays = await ClosedDay.find({ month: queryMonth }).sort({ date: 1 }).lean();
+    const closedDatesSet = new Set(closedDays.map(c => c.date));
+    const totalClosedDaysInMonth = closedDays.length;
+
+    let elapsedClosedDays = 0;
+    if (!isFutureMonth) {
+      for (const cd of closedDays) {
+        if (isCurrentMonth) {
+          if (cd.date <= todayIST) elapsedClosedDays++;
+        } else {
+          elapsedClosedDays++;
+        }
+      }
+    }
+
+    // Active working days strictly exclude closed days!
+    const activeDays = Math.max(0, elapsedDays - elapsedClosedDays);
+    const totalActiveDaysInMonth = Math.max(0, totalDaysInMonth - totalClosedDaysInMonth);
+
     const workers = await Worker.find().sort({ name: 1 }).lean();
     const records = await Attendance.find({ month: queryMonth }).sort({ date: 1 }).lean();
 
@@ -189,19 +279,21 @@ router.get('/monthly', requireRole(['admin', 'manager', 'staff']), async (req, r
 
     const staffSummary = workers.map(w => {
       const wRecords = recordsByWorker.get(w._id.toString()) || [];
-      const absences = wRecords.filter(r => r.status === 'absent');
-      const leaves = wRecords.filter(r => r.status === 'leave');
-      const halfDays = wRecords.filter(r => r.status === 'half-day');
+      // Records on closed days should not penalize staff as absences
+      const activeRecords = wRecords.filter(r => !closedDatesSet.has(r.date));
+      const absences = activeRecords.filter(r => r.status === 'absent');
+      const leaves = activeRecords.filter(r => r.status === 'leave');
+      const halfDays = activeRecords.filter(r => r.status === 'half-day');
 
       const absentCount = absences.length;
       const leaveCount = leaves.length;
       const halfDayCount = halfDays.length;
       const totalOvertimeHours = wRecords.reduce((sum, r) => sum + (Number(r.overtimeHours) || 0), 0);
 
-      // Unrecorded days are treated as present for past and elapsed days!
+      // Unrecorded days are treated as present ONLY on active working days!
       const totalNonPresent = absentCount + leaveCount + (halfDayCount * 0.5);
-      const presentDays = isFutureMonth ? 0 : Math.max(0, parseFloat((elapsedDays - totalNonPresent).toFixed(1)));
-      const attendanceRate = elapsedDays > 0 ? Math.round((presentDays / elapsedDays) * 100) : 0;
+      const presentDays = isFutureMonth ? 0 : Math.max(0, parseFloat((activeDays - totalNonPresent).toFixed(1)));
+      const attendanceRate = activeDays > 0 ? Math.round((presentDays / activeDays) * 100) : (isFutureMonth ? 0 : 100);
 
       totalAbsencesAll += absentCount;
       totalPresentDaysAll += presentDays;
@@ -213,12 +305,14 @@ router.get('/monthly', requireRole(['admin', 'manager', 'staff']), async (req, r
         .map(r => {
           const d = new Date(r.date + 'T00:00:00Z');
           const dayName = d.toLocaleDateString('en-IN', { weekday: 'short', timeZone: 'UTC' });
+          const isDateClosed = closedDatesSet.has(r.date);
           return {
             _id: r._id,
             date: r.date,
             dayName,
             status: r.status,
             overtimeHours: r.overtimeHours || 0,
+            isClosedDay: isDateClosed,
             note: r.note || (r.overtimeHours > 0 ? `Overtime: ${r.overtimeHours} hrs` : 'No reason provided'),
             markedBy: r.markedBy || 'System',
             updatedAt: r.updatedAt
@@ -232,7 +326,8 @@ router.get('/monthly', requireRole(['admin', 'manager', 'staff']), async (req, r
         contact: w.contact || '',
         salary: w.salary || 0,
         joiningDate: w.joiningDate,
-        totalDays: elapsedDays,
+        totalDays: activeDays, // Active working days (excluding closed days)
+        calendarDays: elapsedDays,
         presentDays,
         absentDays: absentCount,
         halfDays: halfDayCount,
@@ -244,21 +339,28 @@ router.get('/monthly', requireRole(['admin', 'manager', 'staff']), async (req, r
     });
 
     const totalStaff = workers.length;
-    const avgAttendanceRate = (totalStaff > 0 && elapsedDays > 0)
-      ? Math.round((totalPresentDaysAll / (totalStaff * elapsedDays)) * 100)
+    const avgAttendanceRate = (totalStaff > 0 && activeDays > 0)
+      ? Math.round((totalPresentDaysAll / (totalStaff * activeDays)) * 100)
       : 100;
 
     res.json({
       success: true,
       month: queryMonth,
       totalDaysInMonth,
+      totalActiveDaysInMonth,
       elapsedDays,
+      activeDays,
+      totalClosedDays: totalClosedDaysInMonth,
+      elapsedClosedDays,
+      closedDays: closedDays.map(c => ({ date: c.date, reason: c.reason, markedBy: c.markedBy })),
       isCurrentMonth,
       overallStats: {
         totalStaff,
         totalAbsences: totalAbsencesAll,
         avgAttendanceRate,
-        totalWorkingDays: elapsedDays,
+        totalWorkingDays: activeDays,
+        calendarDaysElapsed: elapsedDays,
+        closedDaysCount: elapsedClosedDays,
         totalOvertimeHours: totalOvertimeAll
       },
       staff: staffSummary

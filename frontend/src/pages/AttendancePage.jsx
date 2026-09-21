@@ -17,7 +17,10 @@ import {
   TrendingUp,
   Award,
   Filter,
-  ArrowLeft
+  ArrowLeft,
+  CalendarOff,
+  Store,
+  Unlock
 } from 'lucide-react';
 import { apiUrl, authFetch } from '../lib/api';
 
@@ -53,6 +56,13 @@ export default function AttendancePage() {
   const [historyModal, setHistoryModal] = useState({
     isOpen: false,
     staff: null
+  });
+
+  // Closed day marking modal state
+  const [closedDayModal, setClosedDayModal] = useState({
+    isOpen: false,
+    reason: 'Weekly Off',
+    submitting: false
   });
 
   // Fetch Daily Attendance
@@ -143,12 +153,43 @@ export default function AttendancePage() {
         } else if (historyModal.isOpen) {
           e.preventDefault();
           setHistoryModal({ isOpen: false, staff: null });
+        } else if (closedDayModal.isOpen) {
+          e.preventDefault();
+          setClosedDayModal({ isOpen: false, reason: 'Weekly Off', submitting: false });
         }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [markingModal.isOpen, historyModal.isOpen]);
+  }, [markingModal.isOpen, historyModal.isOpen, closedDayModal.isOpen]);
+
+  // Mark or reopen restaurant closed day
+  const handleToggleClosedDay = async (markClosed, reasonStr) => {
+    setClosedDayModal(prev => ({ ...prev, submitting: true }));
+    try {
+      const res = await authFetch(apiUrl('/api/attendance/closed-day'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: selectedDate,
+          isClosed: markClosed,
+          reason: reasonStr || 'Restaurant Closed'
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message, 'success');
+        setClosedDayModal({ isOpen: false, reason: 'Weekly Off', submitting: false });
+        fetchDailyAttendance(selectedDate);
+      } else {
+        showToast(data.message || 'Failed to update closed day', 'error');
+        setClosedDayModal(prev => ({ ...prev, submitting: false }));
+      }
+    } catch (err) {
+      showToast(err.message || 'Error updating closed day', 'error');
+      setClosedDayModal(prev => ({ ...prev, submitting: false }));
+    }
+  };
 
   // Quick mark present
   const handleMarkPresent = async (worker) => {
@@ -286,12 +327,114 @@ export default function AttendancePage() {
       ────────────────────────────────────────────────────────────── */}
       {activeTab === 'daily' && (
         <>
+          {/* CLOSED DAY ALERT BANNER */}
+          {dailyData.isClosedDay && (
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(239,68,68,0.12) 0%, rgba(185,28,28,0.06) 100%)',
+              border: '1px solid rgba(239, 68, 68, 0.35)',
+              borderRadius: 12,
+              padding: '12px 18px',
+              marginBottom: 14,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 12
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 10,
+                  background: 'rgba(239, 68, 68, 0.2)',
+                  color: '#ef4444',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}>
+                  <CalendarOff size={20} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: '#ef4444', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    Restaurant is Marked CLOSED on this Day
+                    <span style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      background: 'var(--s1)',
+                      color: 'var(--t0)',
+                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                      padding: '2px 8px',
+                      borderRadius: 6
+                    }}>
+                      {dailyData.closedDay?.reason || 'Restaurant Closed'}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--t2)', marginTop: 2 }}>
+                    This day is <strong>excluded from active working days</strong>. Staff will not be penalized as absent in monthly reports.
+                  </div>
+                </div>
+              </div>
+              {(role === 'admin' || role === 'manager') && (
+                <button
+                  type="button"
+                  onClick={() => handleToggleClosedDay(false)}
+                  className="btn btn-sm"
+                  style={{
+                    background: 'var(--s1)',
+                    border: '1px solid var(--b2)',
+                    color: 'var(--t0)',
+                    fontWeight: 700,
+                    fontSize: 12,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    cursor: 'pointer'
+                  }}
+                >
+                  <Unlock size={14} /> Reopen Restaurant on this Day
+                </button>
+              )}
+            </div>
+          )}
+
           {/* DATE CONTROL & KPI SUMMARY */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginBottom: 14 }}>
             {/* Date selector card with Calendar Picker */}
             <div style={{ background: 'var(--s1)', padding: '12px 14px', borderRadius: 12, border: '1px solid var(--b1)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                 <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase' }}>Selected Date</span>
+                {dailyData.isClosedDay ? (
+                  <span style={{
+                    fontSize: 10.5,
+                    fontWeight: 800,
+                    background: 'rgba(239, 68, 68, 0.15)',
+                    color: '#ef4444',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    padding: '2px 8px',
+                    borderRadius: 12,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4
+                  }}>
+                    <CalendarOff size={11} /> CLOSED
+                  </span>
+                ) : (
+                  <span style={{
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    color: '#22c55e',
+                    background: 'rgba(34, 197, 94, 0.12)',
+                    border: '1px solid rgba(34, 197, 94, 0.25)',
+                    padding: '2px 8px',
+                    borderRadius: 12,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4
+                  }}>
+                    <Store size={11} /> OPEN
+                  </span>
+                )}
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
@@ -399,26 +542,42 @@ export default function AttendancePage() {
               <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>Registered Members</div>
             </div>
 
-            {/* Metric: Present Today */}
-            <div style={{ background: 'var(--s1)', padding: '14px 18px', borderRadius: 12, border: '1px solid rgba(34,197,94,0.3)' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#22c55e', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4 }}>
-                <UserCheck size={14} /> Present Today
+            {/* Metric: Present Today / Day Status */}
+            {dailyData.isClosedDay ? (
+              <div style={{ background: 'var(--s1)', padding: '14px 18px', borderRadius: 12, border: '1px solid rgba(239,68,68,0.3)' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#f87171', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <CalendarOff size={14} /> Restaurant Status
+                </div>
+                <div style={{ fontSize: 20, fontWeight: 900, color: '#f87171', marginTop: 4 }}>
+                  CLOSED DAY
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>
+                  {dailyData.closedDay?.reason || 'Restaurant off'}
+                </div>
               </div>
-              <div style={{ fontSize: 24, fontWeight: 900, color: '#22c55e', marginTop: 4 }}>
-                {dailyData.summary?.present ?? 0}
+            ) : (
+              <div style={{ background: 'var(--s1)', padding: '14px 18px', borderRadius: 12, border: '1px solid rgba(34,197,94,0.3)' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#22c55e', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <UserCheck size={14} /> Present Today
+                </div>
+                <div style={{ fontSize: 24, fontWeight: 900, color: '#22c55e', marginTop: 4 }}>
+                  {dailyData.summary?.present ?? 0}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>Default status applied</div>
               </div>
-              <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>Default status applied</div>
-            </div>
+            )}
 
             {/* Metric: Absent Today */}
             <div style={{ background: 'var(--s1)', padding: '14px 18px', borderRadius: 12, border: '1px solid rgba(239,68,68,0.3)' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#ef4444', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: dailyData.isClosedDay ? 'var(--t3)' : '#ef4444', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4 }}>
                 <UserX size={14} /> Absent Today
               </div>
-              <div style={{ fontSize: 24, fontWeight: 900, color: '#ef4444', marginTop: 4 }}>
-                {dailyData.summary?.absent ?? 0}
+              <div style={{ fontSize: 24, fontWeight: 900, color: dailyData.isClosedDay ? 'var(--t2)' : '#ef4444', marginTop: 4 }}>
+                {dailyData.isClosedDay ? 0 : (dailyData.summary?.absent ?? 0)}
               </div>
-              <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>Marked absent by manager</div>
+              <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>
+                {dailyData.isClosedDay ? 'Not counted in active days' : 'Marked absent by manager'}
+              </div>
             </div>
 
             {/* Metric: Overtime Today */}
@@ -433,7 +592,7 @@ export default function AttendancePage() {
             </div>
           </div>
 
-          {/* SEARCH & FILTER BAR */}
+          {/* SEARCH & FILTER BAR WITH MARK CLOSED ACTION */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, gap: 12, flexWrap: 'wrap' }}>
             <div style={{ position: 'relative', minWidth: 260, flex: 1, maxWidth: 400 }}>
               <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--t3)' }} />
@@ -453,6 +612,54 @@ export default function AttendancePage() {
                 }}
               />
             </div>
+
+            {(role === 'admin' || role === 'manager') && (
+              dailyData.isClosedDay ? (
+                <button
+                  type="button"
+                  onClick={() => handleToggleClosedDay(false)}
+                  className="btn btn-sm"
+                  style={{
+                    background: 'var(--s2)',
+                    border: '1px solid var(--b2)',
+                    color: 'var(--t1)',
+                    fontWeight: 700,
+                    fontSize: 12,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '8px 14px',
+                    borderRadius: 8,
+                    cursor: 'pointer'
+                  }}
+                  title="Reopen restaurant on this day"
+                >
+                  <Unlock size={14} style={{ color: '#22c55e' }} /> Reopen Restaurant Day
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setClosedDayModal({ isOpen: true, reason: 'Weekly Off', submitting: false })}
+                  className="btn btn-sm"
+                  style={{
+                    background: 'var(--s2)',
+                    border: '1px solid var(--b2)',
+                    color: 'var(--t1)',
+                    fontWeight: 700,
+                    fontSize: 12,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '8px 14px',
+                    borderRadius: 8,
+                    cursor: 'pointer'
+                  }}
+                  title="Mark this day as closed (excluded from active working days)"
+                >
+                  <CalendarOff size={14} style={{ color: '#ef4444' }} /> Mark Day as Closed
+                </button>
+              )
+            )}
           </div>
 
           {/* DAILY ATTENDANCE TABLE */}
@@ -479,11 +686,12 @@ export default function AttendancePage() {
                   </thead>
                   <tbody>
                     {filteredDailyList.map((worker) => {
-                      const isFuture = selectedDate > getTodayStr() || worker.isFutureDate || worker.status === 'upcoming';
-                      const isAbsent = !isFuture && worker.status === 'absent';
-                      const isLeave = !isFuture && worker.status === 'leave';
-                      const isHalfDay = !isFuture && worker.status === 'half-day';
-                      const isOvertime = !isFuture && (worker.status === 'overtime' || (worker.overtimeHours > 0 && worker.status === 'present'));
+                      const isClosed = dailyData.isClosedDay || worker.isClosedDay || worker.status === 'closed';
+                      const isFuture = !isClosed && (selectedDate > getTodayStr() || worker.isFutureDate || worker.status === 'upcoming');
+                      const isAbsent = !isClosed && !isFuture && worker.status === 'absent';
+                      const isLeave = !isClosed && !isFuture && worker.status === 'leave';
+                      const isHalfDay = !isClosed && !isFuture && worker.status === 'half-day';
+                      const isOvertime = !isClosed && !isFuture && (worker.status === 'overtime' || (worker.overtimeHours > 0 && worker.status === 'present'));
 
                       return (
                         <tr key={worker.workerId} style={{ borderBottom: '1px solid var(--b0)', transition: 'background 0.15s' }}>
@@ -499,7 +707,22 @@ export default function AttendancePage() {
                             {worker.contact || '—'}
                           </td>
                           <td style={{ padding: '14px 16px', textAlign: 'center' }}>
-                            {isFuture ? (
+                            {isClosed ? (
+                              <span style={{ 
+                                display: 'inline-flex', 
+                                alignItems: 'center', 
+                                gap: 4, 
+                                background: 'rgba(239,68,68,0.1)', 
+                                color: '#f87171', 
+                                padding: '4px 10px', 
+                                borderRadius: 20, 
+                                fontSize: 12, 
+                                fontWeight: 800, 
+                                border: '1px solid rgba(239,68,68,0.25)' 
+                              }}>
+                                <CalendarOff size={13} /> RESTAURANT CLOSED
+                              </span>
+                            ) : isFuture ? (
                               <span style={{ 
                                 display: 'inline-flex', 
                                 alignItems: 'center', 
@@ -599,6 +822,8 @@ export default function AttendancePage() {
                           <td style={{ padding: '14px 16px', color: 'var(--t2)', fontSize: 12 }}>
                             {worker.note ? (
                               <span>{worker.note}</span>
+                            ) : isClosed ? (
+                              <span style={{ color: 'var(--t3)', fontStyle: 'italic' }}>{dailyData.closedDay?.reason || 'Restaurant Off'}</span>
                             ) : isAbsent ? (
                               <span style={{ color: 'var(--t3)', fontStyle: 'italic' }}>No reason recorded</span>
                             ) : (
@@ -606,7 +831,42 @@ export default function AttendancePage() {
                             )}
                           </td>
                           <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                            {isFuture ? (
+                            {isClosed ? (
+                              <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                                <button
+                                  type="button"
+                                  onClick={() => setMarkingModal({ 
+                                    isOpen: true, 
+                                    worker, 
+                                    status: 'present', 
+                                    overtimeHours: worker.overtimeHours || '', 
+                                    note: worker.note || '', 
+                                    submitting: false 
+                                  })}
+                                  className="btn btn-sm btn-ghost"
+                                  style={{ padding: '4px 8px', fontSize: 11, color: '#06b6d4', border: '1px solid rgba(6, 182, 212, 0.35)' }}
+                                  title="Log overtime hours for this closed day"
+                                >
+                                  + OT
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setMarkingModal({ 
+                                    isOpen: true, 
+                                    worker, 
+                                    status: 'present', 
+                                    overtimeHours: worker.overtimeHours || '', 
+                                    note: worker.note || '', 
+                                    submitting: false 
+                                  })}
+                                  className="btn btn-sm btn-ghost"
+                                  style={{ padding: '4px 8px', fontSize: 11 }}
+                                  title="Add note"
+                                >
+                                  Note
+                                </button>
+                              </div>
+                            ) : isFuture ? (
                               <span style={{ fontSize: 11, color: 'var(--t3)', fontStyle: 'italic' }}>Upcoming date</span>
                             ) : (
                               <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
@@ -715,13 +975,17 @@ export default function AttendancePage() {
               </div>
             </div>
 
-            {/* Metric: Working Days Elapsed */}
+            {/* Metric: Active Days */}
             <div style={{ background: 'var(--s1)', padding: '14px 18px', borderRadius: 12, border: '1px solid var(--b1)' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase' }}>Working Days (MTD)</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase' }}>Active Days (MTD)</div>
               <div style={{ fontSize: 24, fontWeight: 900, color: 'var(--t0)', marginTop: 4 }}>
-                {monthlyData.elapsedDays ?? 0} <span style={{ fontSize: 14, color: 'var(--t3)', fontWeight: 500 }}>/ {monthlyData.totalDaysInMonth ?? 30} days</span>
+                {monthlyData.activeDays ?? monthlyData.elapsedDays ?? 0} <span style={{ fontSize: 14, color: 'var(--t3)', fontWeight: 500 }}>/ {monthlyData.totalActiveDaysInMonth ?? monthlyData.totalDaysInMonth ?? 30} days</span>
               </div>
-              <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>Days counted up to today</div>
+              <div style={{ fontSize: 11, color: (monthlyData.elapsedClosedDays > 0 || monthlyData.totalClosedDays > 0) ? '#f59e0b' : 'var(--t3)', marginTop: 2 }}>
+                {(monthlyData.elapsedClosedDays > 0 || monthlyData.totalClosedDays > 0)
+                  ? `${monthlyData.elapsedClosedDays || monthlyData.totalClosedDays} closed day(s) excluded` 
+                  : 'Days counted up to today'}
+              </div>
             </div>
 
             {/* Metric: Average Attendance Rate */}
@@ -758,14 +1022,47 @@ export default function AttendancePage() {
             </div>
           </div>
 
+          {/* MONTHLY CLOSED DAYS BANNER */}
+          {monthlyData.closedDays && monthlyData.closedDays.length > 0 && (
+            <div style={{
+              background: 'rgba(239, 68, 68, 0.08)',
+              border: '1px solid rgba(239, 68, 68, 0.25)',
+              borderRadius: 10,
+              padding: '10px 14px',
+              marginBottom: 14,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 8
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <CalendarOff size={16} style={{ color: '#ef4444' }} />
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--t0)' }}>
+                  {monthlyData.closedDays.length} Restaurant Closed {monthlyData.closedDays.length === 1 ? 'Day' : 'Days'} in {formattedMonthName}:
+                </span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {monthlyData.closedDays.map((cd, i) => (
+                    <span key={i} style={{ fontSize: 11.5, background: 'var(--s1)', border: '1px solid var(--b2)', padding: '2px 8px', borderRadius: 6, color: 'var(--t1)' }}>
+                      <strong>{cd.date.slice(8)}th</strong> ({cd.reason})
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <span style={{ fontSize: 11.5, color: '#f59e0b', fontWeight: 600 }}>
+                Excluded from active working days
+              </span>
+            </div>
+          )}
+
           {/* MONTHLY STAFF BREAKDOWN TABLE */}
           <div style={{ background: 'var(--s1)', borderRadius: 12, border: '1px solid var(--b1)', overflow: 'hidden' }}>
-            <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--b1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--b1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
               <h2 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: 'var(--t0)' }}>
                 Monthly Staff Breakdown — {formattedMonthName}
               </h2>
               <span style={{ fontSize: 12, color: 'var(--t2)' }}>
-                Click <strong>"View Absence / OT Log"</strong> to inspect exact dates, reasons, and overtime records.
+                Active days exclude restaurant closed days. Click <strong>"View Absence / OT Log"</strong> for exact dates.
               </span>
             </div>
 
@@ -780,7 +1077,7 @@ export default function AttendancePage() {
                     <tr style={{ background: 'var(--s2)', borderBottom: '1px solid var(--b1)', color: 'var(--t2)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                       <th style={{ padding: '12px 16px' }}>Staff Name</th>
                       <th style={{ padding: '12px 16px' }}>Role</th>
-                      <th style={{ padding: '12px 16px', textAlign: 'center' }}>Total Days</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'center' }}>Active Days</th>
                       <th style={{ padding: '12px 16px', textAlign: 'center' }}>Present</th>
                       <th style={{ padding: '12px 16px', textAlign: 'center' }}>Absent</th>
                       <th style={{ padding: '12px 16px', textAlign: 'center' }}>Leave / Half-Day</th>
@@ -1203,6 +1500,101 @@ export default function AttendancePage() {
                 onClick={() => setHistoryModal({ isOpen: false, staff: null })}
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────
+          MODAL 3: MARK RESTAURANT CLOSED DAY
+      ────────────────────────────────────────────────────────────── */}
+      {closedDayModal.isOpen && (
+        <div className="moverlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.85)' }}>
+          <div className="mbox" style={{ maxWidth: '420px', width: '92%', padding: '22px', borderRadius: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 34, height: 34, borderRadius: 8, background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <CalendarOff size={18} />
+                </div>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: 'var(--t0)' }}>
+                  Mark as Closed Day
+                </h3>
+              </div>
+              <button 
+                onClick={() => setClosedDayModal({ isOpen: false, reason: 'Weekly Off', submitting: false })}
+                style={{ background: 'none', border: 'none', color: 'var(--t2)', cursor: 'pointer' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ fontSize: 13, color: 'var(--t2)', marginBottom: 16, lineHeight: 1.5 }}>
+              Date: <strong style={{ color: 'var(--t0)' }}>{formattedDateName}</strong>
+              <div style={{ marginTop: 8, fontSize: 12, color: '#f59e0b', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.25)', padding: '8px 10px', borderRadius: 8 }}>
+                ℹ️ When marked as closed, this day will <strong>NOT</strong> be counted in active working days for staff.
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>
+                Select Preset Reason
+              </label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                {['Weekly Off', 'Holiday / Festival', 'Maintenance', 'Renovation', 'Emergency / Weather'].map(preset => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setClosedDayModal(prev => ({ ...prev, reason: preset }))}
+                    style={{
+                      fontSize: 11.5,
+                      padding: '4px 10px',
+                      borderRadius: 6,
+                      background: closedDayModal.reason === preset ? 'rgba(239,68,68,0.18)' : 'var(--s2)',
+                      border: closedDayModal.reason === preset ? '1px solid #ef4444' : '1px solid var(--b1)',
+                      color: closedDayModal.reason === preset ? '#ef4444' : 'var(--t2)',
+                      fontWeight: closedDayModal.reason === preset ? 700 : 500,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+              <input
+                type="text"
+                value={closedDayModal.reason}
+                onChange={e => setClosedDayModal(prev => ({ ...prev, reason: e.target.value }))}
+                placeholder="Or type custom reason..."
+                style={{
+                  width: '100%',
+                  borderRadius: 8,
+                  background: 'var(--s2)',
+                  border: '1px solid var(--b1)',
+                  padding: '8px 10px',
+                  color: 'var(--t0)',
+                  fontSize: 13
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setClosedDayModal({ isOpen: false, reason: 'Weekly Off', submitting: false })}
+                disabled={closedDayModal.submitting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={() => handleToggleClosedDay(true, closedDayModal.reason)}
+                disabled={closedDayModal.submitting}
+                style={{ minWidth: 140 }}
+              >
+                {closedDayModal.submitting ? 'Marking...' : 'Confirm Closed Day'}
               </button>
             </div>
           </div>
