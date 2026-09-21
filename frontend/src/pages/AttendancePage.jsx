@@ -1531,9 +1531,6 @@ export default function AttendancePage() {
 
             <div style={{ fontSize: 13, color: 'var(--t2)', marginBottom: 16, lineHeight: 1.5 }}>
               Date: <strong style={{ color: 'var(--t0)' }}>{formattedDateName}</strong>
-              <div style={{ marginTop: 8, fontSize: 12, color: '#f59e0b', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.25)', padding: '8px 10px', borderRadius: 8 }}>
-                ℹ️ When marked as closed, this day will <strong>NOT</strong> be counted in active working days for staff.
-              </div>
             </div>
 
             <div style={{ marginBottom: 14 }}>
