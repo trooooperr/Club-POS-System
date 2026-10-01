@@ -240,6 +240,7 @@ router.post('/', async (req, res) => {
     }
 
     // Create KOT
+    const kotSource = req.body.source || (notes && notes.includes('pos_print_') ? 'pos' : 'customer');
     const kot = new KOT({
       kotNo,
       orderId,
@@ -250,18 +251,16 @@ router.post('/', async (req, res) => {
       orderType: orderType || order.orderType || 'dine-in',
       departmentQueues,
       status: 'PENDING',
-      source: 'pos'
+      source: kotSource
     });
 
     const saved = await kot.save();
 
     let updatedInventory = null;
     try {
-      // Determine request source (default to 'pos')
-      const kotSource = req.body.source || 'pos';
-      // Deduct inventory only for POS-initiated KOTs and only if order is not a direct device order
+      // Deduct inventory if not already finalized
       const isAlreadyDeducted = order.inventoryFinalized;
-      if (!isAlreadyDeducted && kotSource === 'pos') {
+      if (!isAlreadyDeducted) {
         updatedInventory = await deductInventoryForItems(items, order.businessDate || order.date || saved.createdAt);
         saved.inventoryDeducted = true;
         saved.inventoryDeductedAt = new Date();
@@ -295,6 +294,19 @@ router.post('/', async (req, res) => {
 
     const response = saved.toObject();
     if (updatedInventory) response.inventory = updatedInventory;
+
+    // Immediately emit NEW_KOT via Socket.IO so cashier POS and kitchen display receive it reliably
+    try {
+      const io = req.app?.locals?.io;
+      if (io) {
+        io.to('kitchen').emit('NEW_KOT', response);
+        io.emit('NEW_KOT', response);
+        io.emit('TABLE_SESSION_UPDATED', { tableNo });
+      }
+    } catch (socketErr) {
+      console.error('Error broadcasting NEW_KOT via socket:', socketErr.message);
+    }
+
     res.status(201).json(response);
     
     // Invalidate cache

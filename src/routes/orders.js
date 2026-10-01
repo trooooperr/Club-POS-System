@@ -856,19 +856,15 @@ router.patch('/:id/discount', async (req, res) => {
     const discountVal = parseFloat(discount) || 0;
     const serviceTaxVal = order.serviceTax || 0;
     const subtotalAndTax = order.subtotal + order.sgst + order.cgst + serviceTaxVal;
-    // Discount applies only to alcoholSubtotal — reject if no alcohol items
-    const alcSubtotal = order.alcoholSubtotal && order.alcoholSubtotal > 0 ? order.alcoholSubtotal : 0;
-    if (alcSubtotal <= 0) {
-      return res.status(400).json({ message: 'Discount can only be applied to orders containing alcoholic items' });
-    }
     if (discountVal < 0 || discountVal > subtotalAndTax) {
       return res.status(400).json({ message: 'Invalid discount amount' });
     }
 
+    const alcSubtotal = order.alcoholSubtotal && order.alcoholSubtotal > 0 ? order.alcoholSubtotal : 0;
     const fineVal = order.fine || 0;
     let finalDiscount = discountVal;
-    // Cap discount at alcoholSubtotal for alcohol-only discount rule
-    if (finalDiscount > alcSubtotal) {
+    // When order has alcohol, discount reduces only up to alcohol/bar subtotal
+    if (alcSubtotal > 0 && finalDiscount > alcSubtotal) {
       finalDiscount = Number(alcSubtotal.toFixed(2));
     }
     let rawTotal = subtotalAndTax - finalDiscount + fineVal;

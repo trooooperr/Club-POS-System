@@ -11,7 +11,7 @@ const NAV = [
   { id:'discounts', label:'Discounts',       icon:Tag,             perm:'sales'     },
   { id:'due-payments', label:'Due Payments', icon:Wallet,          perm:'sales'     },
   { id:'expenses',  label:'Expenses',        icon:DollarSign,      perm:'sales'     },
-  { id:'events',    label:'Events',          icon:Calendar,        perm:'events'    },
+  { id:'bookings',  label:'Bookings',        icon:CalendarCheck,   perm:'bookings'  },
   { id:'workers',   label:'Staff',           icon:Users,           perm:'workers'   },
   { id:'attendance', label:'Attendance',      icon:CalendarCheck,   perm:'attendance'},
   { id:'settings',  label:'Settings',        icon:Settings,        perm:'settings'  },

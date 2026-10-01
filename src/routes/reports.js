@@ -2,6 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const Order   = require('../models/Order');
 const Event   = require('../models/Event');
+const Booking = require('../models/Booking');
 const Inventory = require('../models/Inventory');
 const MenuItem = require('../models/MenuItem');
 const Settings = require('../models/Settings');
@@ -479,8 +480,16 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
 
     const orderMatch = { businessDate: { $gte: startDate, $lte: endDate }, grandTotal: { $gt: 0 } };
     const eventMatch = { date: { $gte: startDate, $lte: endDate } };
+    const bookingMatch = {
+      $or: [
+        { advancePaymentDate: { $gte: startDate, $lte: endDate } },
+        { createdAtDate: { $gte: startDate, $lte: endDate } }
+      ],
+      advancePayment: { $gt: 0 },
+      status: { $ne: 'cancelled' }
+    };
 
-    // 1. Order Stats & Event Stats
+    // 1. Order Stats & Event Stats & Bookings
     const statsResult = await Order.aggregate([
       { $match: orderMatch },
       { $group: { 
@@ -520,53 +529,141 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
     ]);
     const eventStats = eventStatsResult[0] || { revenue: 0, expenses: 0, net: 0, count: 0 };
 
-    // 2. Daily Data Merged (Orders + Events)
-    const dailyOrderResult = await Order.aggregate([
-      { $match: orderMatch },
-      { $group: { 
-          _id: "$businessDate", 
-          sales: { 
-            $sum: {
-              $cond: [
-                { $gt: ["$paidAmount", 0] },
-                "$paidAmount",
-                {
-                  $cond: [
-                    { $gt: ["$dueAmount", 0] },
-                    { $max: [0, { $subtract: ["$grandTotal", "$dueAmount"] }] },
-                    "$grandTotal"
-                  ]
-                }
-              ]
-            }
-          },
-          grossSales: { $sum: "$grandTotal" },
-          due: { $sum: { $ifNull: ["$dueAmount", 0] } }
-      } },
-      { $sort: { _id: 1 } }
-    ]);
+    // Fetch Bookings with advance payment in the requested period
+    const bookings = await Booking.find(bookingMatch).lean();
 
-    const dailyEventResult = await Event.aggregate([
-      { $match: eventMatch },
-      { $group: { _id: "$date", sales: { $sum: "$grandTotal" }, expenses: { $sum: "$totalExpenses" } } },
-      { $sort: { _id: 1 } }
-    ]);
+    // 2. Fetch inventory names to accurately distinguish Bar (inventory/alcoholic) vs Restaurant (menu/food)
+    const inventoryItems = await Inventory.find({}).select('name').lean();
+    const inventoryNamesSet = new Set(inventoryItems.map(i => (i.name || '').trim().toLowerCase()));
+
+    // 3. Fetch all orders with items & financial fields to calculate exact Restaurant & Bar sales
+    const orders = await Order.find(orderMatch).select(
+      'businessDate items foodSubtotal alcoholSubtotal subtotal sgst cgst serviceTax discount roundOff grandTotal paidAmount dueAmount paymentMode isCredit paymentMethod paymentStatus cashAmount upiAmount'
+    ).lean();
 
     const dailyMap = {};
-    dailyOrderResult.forEach(d => {
-      dailyMap[d._id] = {
-        sales: (dailyMap[d._id]?.sales || 0) + (d.sales || 0),
-        grossSales: (dailyMap[d._id]?.grossSales || 0) + (d.grossSales || 0),
-        due: (dailyMap[d._id]?.due || 0) + (d.due || 0)
-      };
+    const initDailyEntry = () => ({
+      sales: 0,
+      grossSales: 0,
+      due: 0,
+      restaurantSales: 0,
+      barSales: 0,
+      advancePayments: 0
     });
-    dailyEventResult.forEach(d => {
-      dailyMap[d._id] = {
-        sales: (dailyMap[d._id]?.sales || 0) + (d.sales || 0),
-        grossSales: (dailyMap[d._id]?.grossSales || 0) + (d.sales || 0),
-        due: (dailyMap[d._id]?.due || 0)
-      };
+
+    let totalRestaurantSales = 0;
+    let totalBarSales = 0;
+    let cashTotal = 0, upiTotal = 0, dueTotal = 0;
+
+    orders.forEach(o => {
+      const bDate = o.businessDate || (o.date ? new Date(o.date).toISOString().slice(0, 10) : 'Other');
+      if (!dailyMap[bDate]) dailyMap[bDate] = initDailyEntry();
+
+      // Determine order actual collected and due
+      const isDueOrder = o.paymentMode === 'due' || o.paymentMethod === 'due' || o.paymentStatus === 'pending' || o.isCredit;
+      const orderDue = o.dueAmount > 0 ? o.dueAmount : (isDueOrder ? o.grandTotal - (o.paidAmount || 0) : 0);
+      const actualPaid = o.paidAmount !== undefined ? o.paidAmount : (o.dueAmount > 0 ? Math.max(0, o.grandTotal - o.dueAmount) : o.grandTotal);
+
+      dailyMap[bDate].sales += actualPaid;
+      dailyMap[bDate].grossSales += (o.grandTotal || 0);
+      dailyMap[bDate].due += Math.max(0, orderDue);
+      dueTotal += Math.max(0, orderDue);
+
+      // Payment mode allocation
+      if (o.paymentMode === 'split') {
+        cashTotal += (o.cashAmount || 0);
+        upiTotal  += (o.upiAmount  || 0);
+      } else if (isDueOrder) {
+        if (o.cashAmount > 0) cashTotal += o.cashAmount;
+        if (o.upiAmount > 0) upiTotal += o.upiAmount;
+        if (!o.cashAmount && !o.upiAmount && actualPaid > 0) {
+          cashTotal += actualPaid;
+        }
+      } else if (o.paymentMode === 'upi') {
+        upiTotal += actualPaid;
+      } else {
+        cashTotal += actualPaid;
+      }
+
+      // Compute exact Restaurant vs Bar sales from items
+      let orderFood = 0;
+      let orderAlcohol = 0;
+
+      if (Array.isArray(o.items) && o.items.length > 0) {
+        o.items.forEach(item => {
+          if (!item) return;
+          const name = (item.name || '').trim().toLowerCase();
+          const itemTotal = (item.price || 0) * (item.quantity || 1);
+          const isInv = Boolean(item.inventoryItemId || item.isAlcoholic || inventoryNamesSet.has(name));
+          if (isInv) {
+            orderAlcohol += itemTotal;
+          } else {
+            orderFood += itemTotal;
+          }
+        });
+      } else {
+        orderFood = o.foodSubtotal || (o.subtotal || 0);
+        orderAlcohol = o.alcoholSubtotal || 0;
+      }
+
+      // Non-alcoholic items have GST (SGST + CGST) -> Restaurant
+      // Discounts reduce ONLY from Bar section, not from Restaurant section
+      const orderGst = Number(((o.sgst || 0) + (o.cgst || 0)).toFixed(2));
+      const orderRestaurantSales = Math.round((orderFood + orderGst) * 100) / 100;
+      const orderBarSales = Math.max(0, Math.round((orderAlcohol + (o.serviceTax || 0) - (o.discount || 0)) * 100) / 100);
+
+      dailyMap[bDate].restaurantSales += orderRestaurantSales;
+      dailyMap[bDate].barSales += orderBarSales;
+
+      totalRestaurantSales += orderRestaurantSales;
+      totalBarSales += orderBarSales;
     });
+
+    // Merge Event stats into daily data and totals
+    const events = await Event.find(eventMatch).select('date paymentMode grandTotal cashAmount upiAmount totalExpenses').lean();
+    events.forEach(e => {
+      const eDate = e.date;
+      if (!dailyMap[eDate]) dailyMap[eDate] = initDailyEntry();
+      dailyMap[eDate].sales += (e.grandTotal || 0);
+      dailyMap[eDate].grossSales += (e.grandTotal || 0);
+
+      if (e.paymentMode === 'split') {
+        cashTotal += (e.cashAmount || 0);
+        upiTotal  += (e.upiAmount  || 0);
+      } else if (e.paymentMode === 'upi') {
+        upiTotal += (e.grandTotal || 0);
+      } else {
+        cashTotal += (e.grandTotal || 0);
+      }
+    });
+
+    // Merge Booking advance payments into daily data on the date created / advance paid
+    let totalAdvancePayment = 0;
+    bookings.forEach(b => {
+      const bDate = b.advancePaymentDate || b.createdAtDate || (b.createdAt ? new Date(b.createdAt).toISOString().slice(0, 10) : startDate);
+      if (bDate >= startDate && bDate <= endDate) {
+        const adv = b.advancePayment || 0;
+        if (!dailyMap[bDate]) dailyMap[bDate] = initDailyEntry();
+        dailyMap[bDate].advancePayments += adv;
+        dailyMap[bDate].sales += adv;
+        dailyMap[bDate].grossSales += adv;
+
+        totalAdvancePayment += adv;
+        if (b.advancePaymentMode === 'split') {
+          cashTotal += (b.advanceCashAmount || 0);
+          upiTotal  += (b.advanceUpiAmount  || 0);
+        } else if (b.advancePaymentMode === 'upi') {
+          upiTotal += adv;
+        } else {
+          cashTotal += adv;
+        }
+      }
+    });
+
+    // If a specific future or empty single day was requested, guarantee its entry in dailyMap
+    if (startDate === endDate && !dailyMap[startDate]) {
+      dailyMap[startDate] = initDailyEntry();
+    }
 
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const shortDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -588,55 +685,19 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
       }
       const day = dateParts[2];
       const month = months[parseInt(dateParts[1], 10) - 1] || dateParts[1];
-      const entry = dailyMap[dateStr] || { sales: 0, grossSales: 0, due: 0 };
+      const entry = dailyMap[dateStr] || initDailyEntry();
       return { 
         name: `${day} ${month}`, 
         date: dateStr,
         dayOfWeek,
         dayShort,
-        sales: entry.sales,
-        grossSales: entry.grossSales,
-        due: entry.due
+        sales: Math.round(entry.sales),
+        grossSales: Math.round(entry.grossSales),
+        due: Math.round(entry.due),
+        restaurantSales: Math.round(entry.restaurantSales),
+        barSales: Math.round(entry.barSales),
+        advancePayments: Math.round(entry.advancePayments)
       };
-    });
-
-    // 3. Payment Breakdown (Cash vs UPI, with split allocation for Orders & Events)
-    const orders = await Order.find(orderMatch).select('paymentMode paymentMethod paymentStatus isCredit grandTotal paidAmount dueAmount cashAmount upiAmount').lean();
-    const events = await Event.find(eventMatch).select('paymentMode grandTotal cashAmount upiAmount').lean();
-
-    let cashTotal = 0, upiTotal = 0, dueTotal = 0;
-    orders.forEach(o => {
-      const isDueOrder = o.paymentMode === 'due' || o.paymentMethod === 'due' || o.paymentStatus === 'pending' || o.isCredit;
-      const due = o.dueAmount > 0 ? o.dueAmount : (isDueOrder ? o.grandTotal - (o.paidAmount || 0) : 0);
-      dueTotal += Math.max(0, due);
-
-      if (o.paymentMode === 'split') {
-        cashTotal += (o.cashAmount || 0);
-        upiTotal  += (o.upiAmount  || 0);
-      } else if (isDueOrder) {
-        if (o.cashAmount > 0) cashTotal += o.cashAmount;
-        if (o.upiAmount > 0) upiTotal += o.upiAmount;
-        if (!o.cashAmount && !o.upiAmount && (o.paidAmount || 0) > 0) {
-          cashTotal += o.paidAmount;
-        }
-      } else if (o.paymentMode === 'upi') {
-        const actualPaid = o.paidAmount !== undefined ? o.paidAmount : (o.dueAmount > 0 ? Math.max(0, o.grandTotal - o.dueAmount) : o.grandTotal);
-        upiTotal += actualPaid;
-      } else {
-        const actualPaid = o.paidAmount !== undefined ? o.paidAmount : (o.dueAmount > 0 ? Math.max(0, o.grandTotal - o.dueAmount) : o.grandTotal);
-        cashTotal += actualPaid;
-      }
-    });
-
-    events.forEach(e => {
-      if (e.paymentMode === 'split') {
-        cashTotal += (e.cashAmount || 0);
-        upiTotal  += (e.upiAmount  || 0);
-      } else if (e.paymentMode === 'upi') {
-        upiTotal += (e.grandTotal || 0);
-      } else {
-        cashTotal += (e.grandTotal || 0);
-      }
     });
 
     // 4. Alcoholic Shots / Liquor Sales Analytics (Excludes Non-Alcoholic items like Fire Pencil/Platters)
@@ -706,8 +767,8 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
 
     const shotsBreakdown = Object.values(shotItemsMap).sort((a, b) => b.quantity - a.quantity);
 
-    const combinedCollectedRevenue = (orderStats.revenue || 0) + (eventStats.revenue || 0);
-    const combinedGrossRevenue = (orderStats.grossRevenue || 0) + (eventStats.revenue || 0);
+    const combinedCollectedRevenue = (orderStats.revenue || 0) + (eventStats.revenue || 0) + totalAdvancePayment;
+    const combinedGrossRevenue = (orderStats.grossRevenue || 0) + (eventStats.revenue || 0) + totalAdvancePayment;
     const totalDueAmount = dueTotal > 0 ? dueTotal : (orderStats.dueAmount || 0);
 
     res.json({
@@ -716,15 +777,22 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
       grossRevenue: combinedGrossRevenue,         // Total including due bills
       totalSalesWithDue: combinedGrossRevenue,    // Clear alias for total sales incl due
       totalDue: totalDueAmount,                   // Total pending due amount
+      restaurantSales: Math.round(totalRestaurantSales * 100) / 100,
+      barSales: Math.round(totalBarSales * 100) / 100,
+      advancePayments: Math.round(totalAdvancePayment * 100) / 100,
+      totalRestaurantSales: Math.round(totalRestaurantSales * 100) / 100,
+      totalBarSales: Math.round(totalBarSales * 100) / 100,
+      totalAdvancePayment: Math.round(totalAdvancePayment * 100) / 100,
       orderRevenue: orderStats.revenue || 0,
       orderGrossRevenue: orderStats.grossRevenue || 0,
       eventRevenue: eventStats.revenue || 0,
       eventExpenses: eventStats.expenses || 0,
       netEventRevenue: eventStats.net || 0,
       totalDiscount: orderStats.discount || 0,
-      count: (orderStats.count || 0) + (eventStats.count || 0),
+      count: (orderStats.count || 0) + (eventStats.count || 0) + bookings.length,
       orderCount: orderStats.count || 0,
       eventCount: eventStats.count || 0,
+      bookingCount: bookings.length,
       dailyData,
       paymentBreakdown: { cash: cashTotal, upi: upiTotal, due: totalDueAmount },
       shotsStats: {

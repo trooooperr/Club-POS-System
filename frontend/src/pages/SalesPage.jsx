@@ -43,6 +43,27 @@ const Tip = ({ active, payload, label }) => {
   return (
     <div className="chart-tip">
       <div className="tip-head" style={{ whiteSpace: 'nowrap' }}>{tipTitle}</div>
+      {itemData.restaurantSales !== undefined && (
+        <div className="tip-row">
+          <span className="tip-dot" style={{ background: '#38BDF8' }}></span>
+          <span className="tip-label" style={{ color: 'var(--t1)' }}>Restaurant:</span>
+          <span className="tip-val mono" style={{ color: 'var(--t0)' }}>₹{itemData.restaurantSales.toLocaleString('en-IN')}</span>
+        </div>
+      )}
+      {itemData.barSales !== undefined && (
+        <div className="tip-row">
+          <span className="tip-dot" style={{ background: '#F59E0B' }}></span>
+          <span className="tip-label" style={{ color: 'var(--t1)' }}>Bar:</span>
+          <span className="tip-val mono" style={{ color: 'var(--t0)' }}>₹{itemData.barSales.toLocaleString('en-IN')}</span>
+        </div>
+      )}
+      {itemData.advancePayments > 0 && (
+        <div className="tip-row">
+          <span className="tip-dot" style={{ background: '#8B5CF6' }}></span>
+          <span className="tip-label" style={{ color: 'var(--t1)' }}>Advance:</span>
+          <span className="tip-val mono" style={{ color: 'var(--t0)' }}>₹{itemData.advancePayments.toLocaleString('en-IN')}</span>
+        </div>
+      )}
       {payload.map((p, i) => (
         <div key={i} className="tip-row">
           <span className="tip-dot" style={{ background: p.color || 'var(--blue)' }}></span>
@@ -52,6 +73,13 @@ const Tip = ({ active, payload, label }) => {
           </span>
         </div>
       ))}
+      {itemData.due > 0 && (
+        <div className="tip-row">
+          <span className="tip-dot" style={{ background: '#EF4444' }}></span>
+          <span className="tip-label" style={{ color: '#EF4444' }}>Due:</span>
+          <span className="tip-val mono" style={{ color: '#EF4444' }}>₹{itemData.due.toLocaleString('en-IN')}</span>
+        </div>
+      )}
     </div>
   );
 };
@@ -91,7 +119,6 @@ function DateField({ value, onChange, inputRef, label, max }) {
           type="date"
           value={value}
           onChange={onChange}
-          max={max}
           className="d-input unified-date-input"
           ref={inputRef}
         />
@@ -221,8 +248,7 @@ export default function SalesPage() {
       const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
       setStartDate(formatDateStr(firstDay));
       const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      const lastDayStr = formatDateStr(lastDay);
-      setEndDate(lastDayStr > todayStr ? todayStr : lastDayStr);
+      setEndDate(formatDateStr(lastDay));
     } else if (f === 'all') {
       setStartDate('2020-01-01');
       setEndDate(todayStr);
@@ -231,9 +257,8 @@ export default function SalesPage() {
 
   const handleDateChange = (type, val) => {
     if (!val) return;
-    const clampedVal = val > todayStr ? todayStr : val;
-    let newStart = type === 'start' ? clampedVal : startDate;
-    let newEnd = type === 'end' ? clampedVal : endDate;
+    let newStart = type === 'start' ? val : startDate;
+    let newEnd = type === 'end' ? val : endDate;
 
     if (newStart > newEnd) {
       if (type === 'start') newEnd = newStart;
@@ -270,13 +295,8 @@ export default function SalesPage() {
       curEnd = todayStr;
     }
 
-    // Never advance into future beyond today
-    if (offset > 0 && curEnd >= todayStr) return;
-
     const nextStart = addDays(curStart, offset);
     const nextEnd = addDays(curEnd, offset);
-
-    if (offset > 0 && nextEnd > todayStr) return;
 
     setStartDate(nextStart);
     setEndDate(nextEnd);
@@ -288,7 +308,7 @@ export default function SalesPage() {
     }
   };
 
-  const isNextDisabled = range === 'today' || endDate >= todayStr;
+  const isNextDisabled = false; // Allow stepping into future days
 
   const pieData = useMemo(() => {
     const pb = analytics.paymentBreakdown || { cash: 0, upi: 0 };
@@ -346,9 +366,9 @@ export default function SalesPage() {
             <ChevronLeft size={16} />
           </button>
 
-          <DateField label="From" value={startDate} onChange={e => handleDateChange('start', e.target.value)} max={todayStr} inputRef={startInputRef} />
+          <DateField label="From" value={startDate} onChange={e => handleDateChange('start', e.target.value)} inputRef={startInputRef} />
           <ArrowRight size={14} style={{ color: 'var(--t2)', flexShrink: 0 }} />
-          <DateField label="To" value={endDate} onChange={e => handleDateChange('end', e.target.value)} max={todayStr} inputRef={endInputRef} />
+          <DateField label="To" value={endDate} onChange={e => handleDateChange('end', e.target.value)} inputRef={endInputRef} />
 
           {/* Right arrow: Next Day */}
           <button
@@ -357,7 +377,6 @@ export default function SalesPage() {
               e.stopPropagation();
               handleStepDate(1);
             }}
-            disabled={isNextDisabled}
             className="btn btn-ghost date-nav-btn"
             style={{
               padding: '6px 8px',
@@ -371,10 +390,9 @@ export default function SalesPage() {
               height: 32,
               width: 32,
               flexShrink: 0,
-              opacity: isNextDisabled ? 0.25 : 1,
-              cursor: isNextDisabled ? 'not-allowed' : 'pointer'
+              cursor: 'pointer'
             }}
-            title={isNextDisabled ? "Cannot select future dates" : "Next Day"}
+            title="Next Day"
           >
             <ChevronRight size={16} />
           </button>
@@ -382,12 +400,37 @@ export default function SalesPage() {
       </div>
 
       {/* KPI Cards Row */}
-      <div className="kpi-row-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
+      <div className="kpi-row-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))' }}>
         <div className="kpi" style={{ color: 'var(--t0)' }}>
-          <div className="kpi-label">Total Sales</div>
+          <div className="kpi-label">Total Sales (Gross)</div>
           <div className="kpi-value mono" style={{ color: 'var(--a)' }}>
             {loading ? '...' : `₹${((analytics?.grossRevenue ?? analytics?.totalSalesWithDue) || 0).toLocaleString('en-IN')}`}
           </div>
+          <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 4 }}>Restaurant + Bar + Advance</div>
+        </div>
+
+        <div className="kpi" style={{ color: 'var(--t0)' }}>
+          <div className="kpi-label" style={{ color: '#38BDF8' }}>Restaurant Sales</div>
+          <div className="kpi-value mono" style={{ color: '#38BDF8' }}>
+            {loading ? '...' : `₹${(analytics?.restaurantSales ?? analytics?.totalRestaurantSales ?? 0).toLocaleString('en-IN')}`}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 4 }}>Menu items + 5% GST</div>
+        </div>
+
+        <div className="kpi" style={{ color: 'var(--t0)' }}>
+          <div className="kpi-label" style={{ color: '#F59E0B' }}>Bar Sales</div>
+          <div className="kpi-value mono" style={{ color: '#F59E0B' }}>
+            {loading ? '...' : `₹${(analytics?.barSales ?? analytics?.totalBarSales ?? 0).toLocaleString('en-IN')}`}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 4 }}>Inventory items - Discount</div>
+        </div>
+
+        <div className="kpi" style={{ color: 'var(--t0)' }}>
+          <div className="kpi-label" style={{ color: '#8B5CF6' }}>Advance Bookings</div>
+          <div className="kpi-value mono" style={{ color: '#8B5CF6' }}>
+            {loading ? '...' : `₹${(analytics?.advancePayments ?? analytics?.totalAdvancePayment ?? 0).toLocaleString('en-IN')}`}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 4 }}>Advance on booking dates</div>
         </div>
 
         <div className="kpi" style={{ color: 'var(--t0)' }}>
@@ -395,6 +438,7 @@ export default function SalesPage() {
           <div className="kpi-value mono" style={{ color: '#10B981' }}>
             {loading ? '...' : `₹${((analytics?.collectedRevenue ?? analytics?.revenue) || 0).toLocaleString('en-IN')}`}
           </div>
+          <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 4 }}>Cash + UPI received</div>
         </div>
 
         <div className="kpi" style={{ color: 'var(--t0)' }}>
@@ -402,11 +446,13 @@ export default function SalesPage() {
           <div className="kpi-value mono" style={{ color: (analytics?.totalDue || analytics?.paymentBreakdown?.due || 0) > 0 ? '#EF4444' : 'var(--t0)' }}>
             {loading ? '...' : `₹${((analytics?.totalDue ?? analytics?.paymentBreakdown?.due) || 0).toLocaleString('en-IN')}`}
           </div>
+          <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 4 }}>Uncollected balances</div>
         </div>
 
         <div className="kpi" style={{ color: 'var(--t0)' }}>
           <div className="kpi-label">{range === 'today' ? 'Today Orders' : 'POS Orders'}</div>
           <div className="kpi-value mono">{loading ? '...' : (analytics?.orderCount ?? (analytics?.count || 0))}</div>
+          <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 4 }}>Billed customer orders</div>
         </div>
 
         <div className="kpi" style={{ color: 'var(--t0)' }}>
@@ -416,15 +462,7 @@ export default function SalesPage() {
           <div className="kpi-value mono" style={{ color: '#F59E0B' }}>
             {loading ? '...' : `${totalShotsCount} Shots`}
           </div>
-        </div>
-
-        <div className="kpi" style={{ color: 'var(--t0)' }}>
-          <div className="kpi-label" style={{ color: '#10B981' }}>
-            Shots Revenue
-          </div>
-          <div className="kpi-value mono" style={{ color: '#10B981' }}>
-            {loading ? '...' : `₹${totalShotsRevenue.toLocaleString('en-IN')}`}
-          </div>
+          <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 4 }}>₹{totalShotsRevenue.toLocaleString('en-IN')} revenue</div>
         </div>
 
         {analytics?.eventCount > 0 && (
@@ -470,6 +508,14 @@ export default function SalesPage() {
               </button>
               <button
                 type="button"
+                className={`f-pill ${chartMetric === 'split' ? 'active' : ''}`}
+                style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '16px' }}
+                onClick={() => setChartMetric('split')}
+              >
+                Rest vs Bar
+              </button>
+              <button
+                type="button"
                 className={`f-pill ${chartMetric === 'gross' ? 'active' : ''}`}
                 style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '16px' }}
                 onClick={() => setChartMetric('gross')}
@@ -498,16 +544,34 @@ export default function SalesPage() {
                     <stop offset="5%" stopColor="#10B981" stopOpacity={0.35} />
                     <stop offset="95%" stopColor="#10B981" stopOpacity={0.02} />
                   </linearGradient>
+                  <linearGradient id="areaGradRestaurant" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#38BDF8" stopOpacity={0.35} />
+                    <stop offset="95%" stopColor="#38BDF8" stopOpacity={0.02} />
+                  </linearGradient>
+                  <linearGradient id="areaGradBar" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.35} />
+                    <stop offset="95%" stopColor="#F59E0B" stopOpacity={0.02} />
+                  </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--b1)" />
                 <XAxis dataKey="name" tick={{ fill: 'var(--t1)', fontSize: 10 }} axisLine={{ stroke: 'var(--b2)' }} />
                 <YAxis tick={{ fill: 'var(--t1)', fontSize: 10 }} axisLine={{ stroke: 'var(--b2)' }} />
                 <Tooltip content={<Tip />} cursor={{ stroke: 'var(--a)', strokeWidth: 1 }} />
-                {(chartMetric === 'all' || chartMetric === 'gross') && (
-                  <Area type="monotone" dataKey="grossSales" name="Total Sales" stroke="var(--a)" strokeWidth={2.5} fill="url(#areaGradGross)" />
-                )}
-                {(chartMetric === 'all' || chartMetric === 'collected') && (
-                  <Area type="monotone" dataKey="sales" name="Collected" stroke="#10B981" strokeWidth={2.2} fill={chartMetric === 'all' ? 'none' : 'url(#areaGradCollected)'} />
+                {chartMetric === 'split' ? (
+                  <>
+                    <Area type="monotone" dataKey="restaurantSales" name="Restaurant" stroke="#38BDF8" strokeWidth={2.5} fill="url(#areaGradRestaurant)" />
+                    <Area type="monotone" dataKey="barSales" name="Bar" stroke="#F59E0B" strokeWidth={2.5} fill="url(#areaGradBar)" />
+                    <Area type="monotone" dataKey="advancePayments" name="Advance" stroke="#8B5CF6" strokeWidth={2} fill="none" />
+                  </>
+                ) : (
+                  <>
+                    {(chartMetric === 'all' || chartMetric === 'gross') && (
+                      <Area type="monotone" dataKey="grossSales" name="Total Sales" stroke="var(--a)" strokeWidth={2.5} fill="url(#areaGradGross)" />
+                    )}
+                    {(chartMetric === 'all' || chartMetric === 'collected') && (
+                      <Area type="monotone" dataKey="sales" name="Collected" stroke="#10B981" strokeWidth={2.2} fill={chartMetric === 'all' ? 'none' : 'url(#areaGradCollected)'} />
+                    )}
+                  </>
                 )}
               </AreaChart>
             )}

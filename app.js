@@ -218,6 +218,7 @@ app.use('/api/kots',      requireAuth, require('./src/routes/kots'));
 app.use('/api/workers',    requireAuth, require('./src/routes/workers'));
 app.use('/api/attendance', requireAuth, require('./src/routes/attendance'));
 app.use('/api/events',     requireAuth, require('./src/routes/events'));
+app.use('/api/bookings',   requireAuth, require('./src/routes/bookings'));
 app.use('/api/reports',   allowCronSecret, reportsRouter);
 app.use('/api/settings',  requireAuth, require('./src/routes/settings'));
 app.use('/api/inventory', requireAuth, require('./src/routes/inventory'));

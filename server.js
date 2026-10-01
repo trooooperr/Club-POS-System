@@ -251,8 +251,12 @@ function setupSocketIO() {
     });
 
     socket.on('kot-created', (data) => {
-      io.emit('TABLE_SESSION_UPDATED', { tableNo: data.tableNo });
-      console.log('🎫 Socket.io: kot-created received, broadcasting TABLE_SESSION_UPDATED:', data.kotNo);
+      if (data) {
+        io.to('kitchen').emit('NEW_KOT', data);
+        io.emit('NEW_KOT', data);
+        io.emit('TABLE_SESSION_UPDATED', { tableNo: data.tableNo });
+      }
+      console.log('🎫 Socket.io: kot-created received, broadcasting NEW_KOT & TABLE_SESSION_UPDATED:', data?.kotNo);
     });
 
     socket.on('kot-status-updated', (data) => {

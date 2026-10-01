@@ -89,19 +89,19 @@ export const ROLE_HIERARCHY = {
     label: 'Admin',
     level: 3,
     color: '#FF8C00',
-    permissions: ['billing','menu','orders','sales','events','workers','attendance','inventory','settings','kitchen']
+    permissions: ['billing','menu','orders','sales','bookings','events','workers','attendance','inventory','settings','kitchen']
   },
   manager: {
     label: 'Manager',
     level: 2,
     color: '#B8860B',
-    permissions: ['billing','menu','orders','sales','events','workers','attendance','inventory','settings','kitchen']
+    permissions: ['billing','menu','orders','sales','bookings','events','workers','attendance','inventory','settings','kitchen']
   },
   staff: {
     label: 'Staff',
     level: 1,
     color: '#22C55E',
-    permissions: ['billing','orders','events','inventory','kitchen']
+    permissions: ['billing','orders','bookings','events','inventory','kitchen']
   },
 };
 
@@ -1052,17 +1052,14 @@ export function AppProvider({ children }) {
     });
 
     newSocket.on('NEW_KOT', (kot) => {
-      if (kot && kot.source === 'pos') {
-        console.log('Skipping NEW_KOT print/alarm for POS-created KOT (source):', kot.kotNo);
-        return;
-      }
+      // If this exact browser tab initiated the print locally via POS, skip duplicate print
       if (kot && kot.notes && kot.notes.includes('pos_print_')) {
         const match = kot.notes.match(/(pos_print_[a-z0-9]+)/);
         if (match) {
           const printJobId = match[1];
           try {
             if (sessionStorage.getItem(printJobId)) {
-              console.log('Skipping NEW_KOT print/alarm for POS-created KOT (sessionStorage):', kot.kotNo);
+              console.log('Skipping duplicate NEW_KOT print on originating POS tab:', kot.kotNo);
               return;
             }
           } catch (e) {

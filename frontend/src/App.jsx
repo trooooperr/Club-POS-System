@@ -10,7 +10,7 @@ import OrdersPage from './pages/OrdersPage';
 import SalesPage from './pages/SalesPage';
 import DiscountsPage from './pages/DiscountsPage';
 import DuePaymentsPage from './pages/DuePaymentsPage';
-import EventsPage from './pages/EventsPage';
+import BookingsPage from './pages/BookingsPage';
 import WorkersPage from './pages/WorkersPage';
 import AttendancePage from './pages/AttendancePage';
 import InventoryPage from './pages/InventoryPage';
@@ -40,7 +40,8 @@ function Shell() {
     discounts: 'Discount Analytics',
     'due-payments': 'Due Payments',
     expenses: 'Expense Tracker',
-    events: 'Events Management',
+    bookings: 'Bookings & Reservations',
+    events: 'Bookings & Reservations',
     workers: 'Staff',
     attendance: 'Staff Attendance',
     settings: 'Settings',
@@ -104,7 +105,8 @@ function Shell() {
     discounts:<DiscountsPage/>,
     'due-payments':<DuePaymentsPage/>,
     expenses:<ExpensesPage/>,
-    events:<EventsPage/>, 
+    bookings:<BookingsPage/>,
+    events:<BookingsPage/>, 
     workers:<WorkersPage/>, 
     attendance:<AttendancePage/>,
     inventory:<InventoryPage/>, 
