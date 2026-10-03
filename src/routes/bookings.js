@@ -7,6 +7,8 @@ const nodemailer = require('nodemailer');
 const { requireRole } = require('../middleware/auth');
 const { getBusinessDateString } = require('../lib/businessDay');
 
+const { resolveEmailConfig, createTransport, getPersistedSettings } = require('./reports');
+
 // Helper to generate next permanent sequential booking number (never resets)
 async function generateBookingNo() {
   const counter = await BookingCounter.findByIdAndUpdate(
@@ -17,38 +19,25 @@ async function generateBookingNo() {
   return `HTB-${String(counter.seq).padStart(3, '0')}`;
 }
 
-// Build nodemailer transporter from settings/env
-async function getTransporter() {
-  const settings = await Settings.findOne();
-  const senderEmail = process.env.GMAIL_SENDER || settings?.senderEmail || '';
-  const senderPassword = process.env.GMAIL_APP_PASSWORD || settings?.senderPassword || '';
-  if (!senderEmail || !senderPassword) return null;
-  if (process.env.SMTP_HOST) {
-    return nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT || '587', 10),
-      secure: process.env.SMTP_SECURE === 'true',
-      auth: { user: senderEmail, pass: senderPassword }
-    });
-  }
-  return nodemailer.createTransport({ service: 'gmail', auth: { user: senderEmail, pass: senderPassword } });
-}
-
-// Send booking confirmation email to admin
+// Send booking confirmation email to admin using the exact same transport as daily reports
 async function sendBookingEmail(booking, subject, bodyHtml) {
   try {
-    const settings = await Settings.findOne();
-    const adminEmail = process.env.ADMIN_EMAIL || settings?.adminEmail || '';
-    if (!adminEmail) return;
-    const transporter = await getTransporter();
-    if (!transporter) return;
+    const persisted = await getPersistedSettings();
+    const emailConfig = resolveEmailConfig(persisted);
+    if (!emailConfig.adminEmail || !emailConfig.senderPassword || !emailConfig.authEmail) {
+      console.warn('⚠️ Booking email skipped: missing email credentials or admin recipient');
+      return;
+    }
+    const transporter = await createTransport(emailConfig);
+    const sender = emailConfig.senderEmail || emailConfig.authEmail;
     await transporter.sendMail({
-      from: `"HumTum POS" <${process.env.GMAIL_SENDER || settings?.senderEmail}>`,
-      to: adminEmail,
+      from: `"${persisted?.restaurantName || 'HumTum POS'}" <${sender}>`,
+      replyTo: sender,
+      to: emailConfig.adminEmail,
       subject,
       html: bodyHtml
     });
-    console.log(`📧 Booking email sent: ${subject}`);
+    console.log(`📧 Booking email successfully sent to ${emailConfig.adminEmail}: ${subject}`);
   } catch (e) {
     console.warn('Booking email send failed:', e.message);
   }

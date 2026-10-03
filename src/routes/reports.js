@@ -941,4 +941,4 @@ router.get('/shots', requireRole(['admin', 'manager', 'staff']), async (req, res
   }
 });
 
-module.exports = { router, sendDailyReportInternal };
+module.exports = { router, sendDailyReportInternal, resolveEmailConfig, createTransport, getPersistedSettings };

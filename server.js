@@ -64,17 +64,19 @@ function scheduleBookingReminders() {
   cron.schedule('0 9 * * *', async () => {
     console.log('🔔 Checking booking reminders...');
     try {
-      const nodemailer = require('nodemailer');
       const Booking = require('./src/models/Booking');
       const { getBusinessDateString } = require('./src/lib/businessDay');
+      const { resolveEmailConfig, createTransport, getPersistedSettings } = require('./src/routes/reports');
 
-      const settings = await Settings.findOne();
-      const adminEmail = process.env.ADMIN_EMAIL || settings?.adminEmail || '';
-      const senderEmail = process.env.GMAIL_SENDER || settings?.senderEmail || '';
-      const senderPassword = process.env.GMAIL_APP_PASSWORD || settings?.senderPassword || '';
-      if (!adminEmail || !senderEmail || !senderPassword) return;
+      const persisted = await getPersistedSettings();
+      const emailConfig = resolveEmailConfig(persisted);
+      if (!emailConfig.adminEmail || !emailConfig.senderPassword || !emailConfig.authEmail) {
+        console.warn('⚠️ Booking reminder cron skipped: missing email credentials or admin recipient');
+        return;
+      }
 
-      const transporter = nodemailer.createTransport({ service: 'gmail', auth: { user: senderEmail, pass: senderPassword } });
+      const transporter = await createTransport(emailConfig);
+      const sender = emailConfig.senderEmail || emailConfig.authEmail;
 
       const today = getBusinessDateString(new Date());
       const addDays = (dateStr, n) => {
@@ -94,12 +96,12 @@ function scheduleBookingReminders() {
 
       for (const b of bookings) {
         const daysUntil = b.bookingDate === in1 ? 1 : 2;
-        const subject = `⏰ Reminder: ${b.bookingNo} — ${b.customerName} (Tomorrow${daysUntil === 2 ? ' in 2 days' : ''})`;
+        const subject = `⏰ Reminder: ${b.bookingNo} — ${b.customerName} (${daysUntil === 1 ? 'Tomorrow' : 'in 2 days'})`;
         const adv = b.advancePayment > 0 ? `<p><b>Advance Paid:</b> ₹${b.advancePayment.toLocaleString('en-IN')}</p>` : '';
         const html = `
           <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;border:1px solid #ddd;border-radius:8px;overflow:hidden">
             <div style="background:#f59e0b;color:#000;padding:16px 20px;font-size:18px;font-weight:bold">
-              ⏰ Event in ${daysUntil} Day${daysUntil > 1 ? 's' : ''}: ${b.bookingNo}
+              ⏰ Event ${daysUntil === 1 ? 'Tomorrow' : 'in 2 Days'}: ${b.bookingNo}
             </div>
             <div style="padding:20px;color:#222">
               <p><b>Customer:</b> ${b.customerName} — ${b.customerPhone}</p>
@@ -113,8 +115,14 @@ function scheduleBookingReminders() {
             <div style="background:#f5f5f5;padding:10px 20px;font-size:12px;color:#888">HUMTUM The BAR &amp; Restaurant</div>
           </div>
         `;
-        await transporter.sendMail({ from: `"HumTum POS" <${senderEmail}>`, to: adminEmail, subject, html });
-        console.log(`📧 Reminder sent for ${b.bookingNo}`);
+        await transporter.sendMail({
+          from: `"${persisted?.restaurantName || 'HumTum POS'}" <${sender}>`,
+          replyTo: sender,
+          to: emailConfig.adminEmail,
+          subject,
+          html
+        });
+        console.log(`📧 Reminder sent for ${b.bookingNo} to ${emailConfig.adminEmail}`);
       }
     } catch (err) {
       console.error('❌ Booking reminder failed:', err.message);
@@ -122,6 +130,7 @@ function scheduleBookingReminders() {
   }, { timezone: 'Asia/Kolkata' });
   console.log('🔔 Booking reminder cron scheduled: 09:00 AM IST daily');
 }
+
 
 
 // ── Cache warmup ─────────────────────────────────────────────────
