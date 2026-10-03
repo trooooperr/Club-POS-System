@@ -61,6 +61,13 @@ const Tip = ({ active, payload, label }) => {
             <span className="tip-label" style={{ color: 'var(--t0)', fontWeight: 800 }}>Total:</span>
             <span className="tip-val mono" style={{ color: 'var(--a)', fontWeight: 800 }}>₹{(itemData.restaurantSales + itemData.barSales).toLocaleString('en-IN')}</span>
           </div>
+          {itemData.sales !== undefined && (
+            <div className="tip-row">
+              <span className="tip-dot" style={{ background: '#34D399' }}></span>
+              <span className="tip-label" style={{ color: '#34D399', fontWeight: 700 }}>Collected:</span>
+              <span className="tip-val mono" style={{ color: '#34D399', fontWeight: 700 }}>₹{itemData.sales.toLocaleString('en-IN')}</span>
+            </div>
+          )}
         </>
       ) : (
         payload.map((p, i) => (
@@ -78,6 +85,13 @@ const Tip = ({ active, payload, label }) => {
           <span className="tip-dot" style={{ background: '#EF4444' }}></span>
           <span className="tip-label" style={{ color: '#EF4444' }}>Due:</span>
           <span className="tip-val mono" style={{ color: '#EF4444' }}>₹{itemData.due.toLocaleString('en-IN')}</span>
+        </div>
+      )}
+      {itemData.restaurantSales === undefined && itemData.sales !== undefined && (
+        <div className="tip-row">
+          <span className="tip-dot" style={{ background: '#34D399' }}></span>
+          <span className="tip-label" style={{ color: '#34D399', fontWeight: 700 }}>Collected:</span>
+          <span className="tip-val mono" style={{ color: '#34D399', fontWeight: 700 }}>₹{itemData.sales.toLocaleString('en-IN')}</span>
         </div>
       )}
     </div>
