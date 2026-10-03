@@ -94,6 +94,21 @@ router.get('/:id/history', requireRole(['admin', 'manager']), async (req, res) =
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
+// DELETE a single payment history entry (Admin only)
+router.delete('/:workerId/history/:txId', requireRole(['admin', 'manager']), async (req, res) => {
+  try {
+    const tx = await Transaction.findById(req.params.txId);
+    if (!tx) return res.status(404).json({ message: 'Transaction not found' });
+    if (tx.workerId.toString() !== req.params.workerId) return res.status(403).json({ message: 'Mismatch' });
+    const amount = parseFloat(tx.amount) || 0;
+    await tx.deleteOne();
+    // Reduce paidSalary on the worker
+    const Worker = require('../models/Worker');
+    await Worker.findByIdAndUpdate(req.params.workerId, { $inc: { paidSalary: -amount, advance: -amount } });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
 // CREATE worker (Admin/Manager only)
 router.post(
   '/',

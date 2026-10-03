@@ -1,15 +1,77 @@
 const express = require('express');
 const router = express.Router();
 const Booking = require('../models/Booking');
+const BookingCounter = require('../models/BookingCounter');
+const Settings = require('../models/Settings');
+const nodemailer = require('nodemailer');
 const { requireRole } = require('../middleware/auth');
 const { getBusinessDateString } = require('../lib/businessDay');
 
-// Helper to generate next sequential booking number
+// Helper to generate next permanent sequential booking number (never resets)
 async function generateBookingNo() {
-  const todayStr = getBusinessDateString(new Date()).replace(/-/g, '').slice(2); // e.g. 261001
-  const count = await Booking.countDocuments();
-  const nextSeq = String(count + 1).padStart(3, '0');
-  return `BK-${todayStr}-${nextSeq}`;
+  const counter = await BookingCounter.findByIdAndUpdate(
+    'global',
+    { $inc: { seq: 1 } },
+    { upsert: true, new: true }
+  );
+  return `HTB-${String(counter.seq).padStart(3, '0')}`;
+}
+
+// Build nodemailer transporter from settings/env
+async function getTransporter() {
+  const settings = await Settings.findOne();
+  const senderEmail = process.env.GMAIL_SENDER || settings?.senderEmail || '';
+  const senderPassword = process.env.GMAIL_APP_PASSWORD || settings?.senderPassword || '';
+  if (!senderEmail || !senderPassword) return null;
+  if (process.env.SMTP_HOST) {
+    return nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT || '587', 10),
+      secure: process.env.SMTP_SECURE === 'true',
+      auth: { user: senderEmail, pass: senderPassword }
+    });
+  }
+  return nodemailer.createTransport({ service: 'gmail', auth: { user: senderEmail, pass: senderPassword } });
+}
+
+// Send booking confirmation email to admin
+async function sendBookingEmail(booking, subject, bodyHtml) {
+  try {
+    const settings = await Settings.findOne();
+    const adminEmail = process.env.ADMIN_EMAIL || settings?.adminEmail || '';
+    if (!adminEmail) return;
+    const transporter = await getTransporter();
+    if (!transporter) return;
+    await transporter.sendMail({
+      from: `"HumTum POS" <${process.env.GMAIL_SENDER || settings?.senderEmail}>`,
+      to: adminEmail,
+      subject,
+      html: bodyHtml
+    });
+    console.log(`📧 Booking email sent: ${subject}`);
+  } catch (e) {
+    console.warn('Booking email send failed:', e.message);
+  }
+}
+
+function bookingEmailBody(booking, heading) {
+  const adv = booking.advancePayment > 0 ? `<p><b>Advance Paid:</b> ₹${booking.advancePayment.toLocaleString('en-IN')} (${booking.advancePaymentMode?.toUpperCase()})</p>` : '';
+  return `
+    <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;border:1px solid #ddd;border-radius:8px;overflow:hidden">
+      <div style="background:#1a1a1a;color:#f59e0b;padding:16px 20px;font-size:18px;font-weight:bold">${heading}</div>
+      <div style="padding:20px;color:#222">
+        <p><b>Booking No:</b> ${booking.bookingNo}</p>
+        <p><b>Customer:</b> ${booking.customerName} — ${booking.customerPhone}</p>
+        <p><b>Event Date:</b> ${booking.bookingDate} at ${booking.bookingTime || '07:00 PM'}</p>
+        <p><b>Occasion:</b> ${booking.occasion || 'Reservation'}</p>
+        <p><b>Guests:</b> ${booking.guestCount || 1} Persons</p>
+        ${booking.tableNo ? `<p><b>Table/Area:</b> ${booking.tableNo}</p>` : ''}
+        ${adv}
+        ${booking.notes ? `<p><b>Notes:</b> ${booking.notes}</p>` : ''}
+      </div>
+      <div style="background:#f5f5f5;padding:10px 20px;font-size:12px;color:#888">HUMTUM The BAR &amp; Restaurant</div>
+    </div>
+  `;
 }
 
 // GET /api/bookings - List bookings with filter & upcoming sorting
@@ -169,6 +231,14 @@ router.post('/', requireRole(['admin', 'manager', 'staff']), async (req, res) =>
     });
 
     const saved = await booking.save();
+
+    // Send booking confirmation email (non-blocking)
+    sendBookingEmail(
+      saved,
+      `📅 New Booking ${saved.bookingNo} — ${saved.customerName}`,
+      bookingEmailBody(saved, `New Booking Confirmed: ${saved.bookingNo}`)
+    );
+
     res.status(201).json(saved);
   } catch (err) {
     console.error('Error creating booking:', err);

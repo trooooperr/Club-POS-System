@@ -15,8 +15,8 @@ const bookingSchema = new mongoose.Schema({
   },
   billingType: { 
     type: String, 
-    enum: ['custom', 'per_plate'], 
-    default: 'custom' 
+    enum: ['table_only', 'custom', 'per_plate'], 
+    default: 'table_only' 
   },
   pricePerPlate: { type: Number, default: 0 },
   foodAmount: { type: Number, default: 0 }, // Food / catering component

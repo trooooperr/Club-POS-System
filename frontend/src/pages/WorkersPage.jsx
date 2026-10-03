@@ -7,56 +7,87 @@ import { apiUrl, authFetch } from '../lib/api';
 function HistoryModal({ worker, onClose }) {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(null);
 
-  useEffect(() => {
+  const fetchHistory = () => {
+    setLoading(true);
     authFetch(apiUrl(`/api/workers/${worker._id}/history`))
       .then(res => res.json())
       .then(data => { setHistory(Array.isArray(data) ? data : []); setLoading(false); })
       .catch(() => setLoading(false));
-  }, [worker._id]);
+  };
+
+  useEffect(() => { fetchHistory(); }, [worker._id]);
+
+  const handleDelete = async (tx) => {
+    if (!window.confirm(`Delete ₹${tx.amount.toLocaleString('en-IN')} payment entry? This cannot be undone.`)) return;
+    setDeleting(tx._id);
+    try {
+      await authFetch(apiUrl(`/api/workers/${worker._id}/history/${tx._id}`), { method: 'DELETE' });
+      setHistory(prev => prev.filter(h => h._id !== tx._id));
+    } catch (e) {
+      alert('Failed to delete entry.');
+    }
+    setDeleting(null);
+  };
 
   return (
     <div className="moverlay">
-      <div className="mbox history-modal">
+      <div className="mbox history-modal" style={{ maxWidth: 560, width: '95vw' }}>
         <div className="mhead">
           <span className="truncate">Payment Log: {worker.name}</span>
           <button className="iBtn" onClick={onClose}><X size={18} /></button>
         </div>
-        <div className="historyContent" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+        <div className="historyContent" style={{ maxHeight: '65vh', overflowY: 'auto', overflowX: 'hidden' }}>
           {loading ? (<p className="empty">Loading records...</p>) : history.length === 0 ? (<p className="empty">No records found.</p>) : (
-            <>
-              {/* Desktop table */}
-              <table className="dtable history-table-desktop">
-                <thead><tr><th>Date & Time</th><th>Amount</th><th>Status</th></tr></thead>
-                <tbody>
-                  {history.map((t) => (
-                    <tr key={t._id}>
-                      <td>
-                        <div style={{ color: 'var(--t0)', fontWeight: 600 }}>{new Date(t.date).toLocaleDateString('en-IN')}</div>
-                        <div style={{ fontSize: '10px', color: 'var(--t2)' }}>{new Date(t.date).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</div>
-                      </td>
-                      <td className="mono" style={{ fontWeight: 700, color: 'var(--t0)' }}>₹{t.amount.toLocaleString('en-IN')}</td>
-                      <td><span className="badge b-green">Paid</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              {/* Mobile cards */}
-              <div className="history-cards-mobile">
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ borderBottom: '1.5px solid var(--b2)', color: 'var(--t2)', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  <th style={{ padding: '10px 12px', textAlign: 'left' }}>Date &amp; Time</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'right' }}>Amount</th>
+                  <th style={{ padding: '10px 8px', textAlign: 'center', width: 52 }}></th>
+                </tr>
+              </thead>
+              <tbody>
                 {history.map((t) => (
-                  <div key={t._id} className="history-card-item">
-                    <div className="history-card-left">
-                      <div className="history-card-amount mono">₹{t.amount.toLocaleString('en-IN')}</div>
-                      <div className="history-card-date">
-                        {new Date(t.date).toLocaleDateString('en-IN')} • {new Date(t.date).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                      </div>
-                    </div>
-                    <span className="badge b-green" style={{ fontSize: 10, padding: '2px 8px' }}>Paid</span>
-                  </div>
+                  <tr key={t._id} style={{ borderBottom: '1px solid var(--b0)' }}>
+                    <td style={{ padding: '10px 12px' }}>
+                      <div style={{ color: 'var(--t0)', fontWeight: 600 }}>{new Date(t.date).toLocaleDateString('en-IN')}</div>
+                      <div style={{ fontSize: 10, color: 'var(--t2)' }}>{new Date(t.date).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</div>
+                    </td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: 'var(--t0)', fontFamily: 'monospace', fontSize: 14 }}>
+                      ₹{t.amount.toLocaleString('en-IN')}
+                    </td>
+                    <td style={{ padding: '10px 8px', textAlign: 'center' }}>
+                      <button
+                        onClick={() => handleDelete(t)}
+                        disabled={deleting === t._id}
+                        title="Delete this entry"
+                        style={{
+                          background: 'rgba(239,68,68,0.1)',
+                          border: '1px solid rgba(239,68,68,0.3)',
+                          color: '#F87171',
+                          borderRadius: 6,
+                          width: 30,
+                          height: 30,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: deleting === t._id ? 'not-allowed' : 'pointer',
+                          opacity: deleting === t._id ? 0.4 : 1,
+                          transition: 'all 0.15s',
+                          flexShrink: 0
+                        }}
+                        onMouseEnter={e => { if (deleting !== t._id) { e.currentTarget.style.background = 'rgba(239,68,68,0.22)'; e.currentTarget.style.borderColor = '#F87171'; }}}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.3)'; }}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </td>
+                  </tr>
                 ))}
-              </div>
-            </>
+              </tbody>
+            </table>
           )}
         </div>
       </div>

@@ -43,36 +43,36 @@ const Tip = ({ active, payload, label }) => {
   return (
     <div className="chart-tip">
       <div className="tip-head" style={{ whiteSpace: 'nowrap' }}>{tipTitle}</div>
-      {itemData.restaurantSales !== undefined && (
-        <div className="tip-row">
-          <span className="tip-dot" style={{ background: '#38BDF8' }}></span>
-          <span className="tip-label" style={{ color: 'var(--t1)' }}>Restaurant:</span>
-          <span className="tip-val mono" style={{ color: 'var(--t0)' }}>₹{itemData.restaurantSales.toLocaleString('en-IN')}</span>
-        </div>
+      {/* In split mode: show explicit restaurant/bar. In other modes: use payload.map */}
+      {itemData.restaurantSales !== undefined ? (
+        <>
+          <div className="tip-row">
+            <span className="tip-dot" style={{ background: '#38BDF8' }}></span>
+            <span className="tip-label" style={{ color: 'var(--t1)' }}>Restaurant:</span>
+            <span className="tip-val mono" style={{ color: 'var(--t0)' }}>₹{itemData.restaurantSales.toLocaleString('en-IN')}</span>
+          </div>
+          <div className="tip-row">
+            <span className="tip-dot" style={{ background: '#F59E0B' }}></span>
+            <span className="tip-label" style={{ color: 'var(--t1)' }}>Bar:</span>
+            <span className="tip-val mono" style={{ color: 'var(--t0)' }}>₹{itemData.barSales.toLocaleString('en-IN')}</span>
+          </div>
+          <div className="tip-row" style={{ borderTop: '1px solid var(--b2)', marginTop: 6, paddingTop: 6 }}>
+            <span className="tip-dot" style={{ background: 'var(--a)' }}></span>
+            <span className="tip-label" style={{ color: 'var(--t0)', fontWeight: 800 }}>Total:</span>
+            <span className="tip-val mono" style={{ color: 'var(--a)', fontWeight: 800 }}>₹{(itemData.restaurantSales + itemData.barSales).toLocaleString('en-IN')}</span>
+          </div>
+        </>
+      ) : (
+        payload.map((p, i) => (
+          <div key={i} className="tip-row">
+            <span className="tip-dot" style={{ background: p.color || 'var(--blue)' }}></span>
+            <span className="tip-label" style={{ color: 'var(--t1)' }}>{p.name}:</span>
+            <span className="tip-val mono" style={{ color: 'var(--t0)' }}>
+              {p.name === 'Qty' ? p.value : `₹${p.value?.toLocaleString('en-IN')}`}
+            </span>
+          </div>
+        ))
       )}
-      {itemData.barSales !== undefined && (
-        <div className="tip-row">
-          <span className="tip-dot" style={{ background: '#F59E0B' }}></span>
-          <span className="tip-label" style={{ color: 'var(--t1)' }}>Bar:</span>
-          <span className="tip-val mono" style={{ color: 'var(--t0)' }}>₹{itemData.barSales.toLocaleString('en-IN')}</span>
-        </div>
-      )}
-      {itemData.advancePayments > 0 && (
-        <div className="tip-row">
-          <span className="tip-dot" style={{ background: '#8B5CF6' }}></span>
-          <span className="tip-label" style={{ color: 'var(--t1)' }}>Advance:</span>
-          <span className="tip-val mono" style={{ color: 'var(--t0)' }}>₹{itemData.advancePayments.toLocaleString('en-IN')}</span>
-        </div>
-      )}
-      {payload.map((p, i) => (
-        <div key={i} className="tip-row">
-          <span className="tip-dot" style={{ background: p.color || 'var(--blue)' }}></span>
-          <span className="tip-label" style={{ color: 'var(--t1)' }}>{p.name}:</span>
-          <span className="tip-val mono" style={{ color: 'var(--t0)' }}>
-            {p.name === 'Qty' ? p.value : `₹${p.value?.toLocaleString('en-IN')}`}
-          </span>
-        </div>
-      ))}
       {itemData.due > 0 && (
         <div className="tip-row">
           <span className="tip-dot" style={{ background: '#EF4444' }}></span>
@@ -399,85 +399,94 @@ export default function SalesPage() {
         </div>
       </div>
 
-      {/* KPI Cards Row */}
-      <div className="kpi-row-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))' }}>
+      {/* KPI Row 1 — Total Sales | Collected */}
+      <div className="kpi-row-2">
         <div className="kpi" style={{ color: 'var(--t0)' }}>
-          <div className="kpi-label">Total Sales (Gross)</div>
+          <div className="kpi-label">Total Sales</div>
           <div className="kpi-value mono" style={{ color: 'var(--a)' }}>
             {loading ? '...' : `₹${((analytics?.grossRevenue ?? analytics?.totalSalesWithDue) || 0).toLocaleString('en-IN')}`}
           </div>
-          <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 4 }}>Restaurant + Bar + Advance</div>
+          <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 4 }}>Rest + Bar + Advance</div>
         </div>
 
         <div className="kpi" style={{ color: 'var(--t0)' }}>
-          <div className="kpi-label" style={{ color: '#38BDF8' }}>Restaurant Sales</div>
-          <div className="kpi-value mono" style={{ color: '#38BDF8' }}>
-            {loading ? '...' : `₹${(analytics?.restaurantSales ?? analytics?.totalRestaurantSales ?? 0).toLocaleString('en-IN')}`}
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 4 }}>Menu items + 5% GST</div>
-        </div>
-
-        <div className="kpi" style={{ color: 'var(--t0)' }}>
-          <div className="kpi-label" style={{ color: '#F59E0B' }}>Bar Sales</div>
-          <div className="kpi-value mono" style={{ color: '#F59E0B' }}>
-            {loading ? '...' : `₹${(analytics?.barSales ?? analytics?.totalBarSales ?? 0).toLocaleString('en-IN')}`}
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 4 }}>Inventory items - Discount</div>
-        </div>
-
-        <div className="kpi" style={{ color: 'var(--t0)' }}>
-          <div className="kpi-label" style={{ color: '#8B5CF6' }}>Advance Bookings</div>
-          <div className="kpi-value mono" style={{ color: '#8B5CF6' }}>
-            {loading ? '...' : `₹${(analytics?.advancePayments ?? analytics?.totalAdvancePayment ?? 0).toLocaleString('en-IN')}`}
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 4 }}>Advance on booking dates</div>
-        </div>
-
-        <div className="kpi" style={{ color: 'var(--t0)' }}>
-          <div className="kpi-label">Collected Revenue</div>
-          <div className="kpi-value mono" style={{ color: '#10B981' }}>
+          <div className="kpi-label" style={{ color: '#34D399' }}>Collected</div>
+          <div className="kpi-value mono" style={{ color: '#34D399' }}>
             {loading ? '...' : `₹${((analytics?.collectedRevenue ?? analytics?.revenue) || 0).toLocaleString('en-IN')}`}
           </div>
           <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 4 }}>Cash + UPI received</div>
         </div>
+      </div>
 
+      {/* KPI Row 2 — Pending Due | Shots Sold */}
+      <div className="kpi-row-2">
         <div className="kpi" style={{ color: 'var(--t0)' }}>
-          <div className="kpi-label">Pending Due</div>
-          <div className="kpi-value mono" style={{ color: (analytics?.totalDue || analytics?.paymentBreakdown?.due || 0) > 0 ? '#EF4444' : 'var(--t0)' }}>
+          <div className="kpi-label" style={{ color: ((analytics?.totalDue ?? analytics?.paymentBreakdown?.due) || 0) > 0 ? '#F87171' : 'var(--t1)' }}>Pending Due</div>
+          <div className="kpi-value mono" style={{ color: ((analytics?.totalDue ?? analytics?.paymentBreakdown?.due) || 0) > 0 ? '#F87171' : 'var(--t1)' }}>
             {loading ? '...' : `₹${((analytics?.totalDue ?? analytics?.paymentBreakdown?.due) || 0).toLocaleString('en-IN')}`}
           </div>
           <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 4 }}>Uncollected balances</div>
         </div>
 
         <div className="kpi" style={{ color: 'var(--t0)' }}>
-          <div className="kpi-label">{range === 'today' ? 'Today Orders' : 'POS Orders'}</div>
-          <div className="kpi-value mono">{loading ? '...' : (analytics?.orderCount ?? (analytics?.count || 0))}</div>
-          <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 4 }}>Billed customer orders</div>
-        </div>
-
-        <div className="kpi" style={{ color: 'var(--t0)' }}>
-          <div className="kpi-label" style={{ color: '#F59E0B' }}>
-            Shots Sold
-          </div>
-          <div className="kpi-value mono" style={{ color: '#F59E0B' }}>
+          <div className="kpi-label" style={{ color: '#FCD34D' }}>Shots Sold</div>
+          <div className="kpi-value mono" style={{ color: '#FCD34D' }}>
             {loading ? '...' : `${totalShotsCount} Shots`}
           </div>
-          <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 4 }}>₹{totalShotsRevenue.toLocaleString('en-IN')} revenue</div>
+          <div style={{ fontSize: 13, color: '#FCD34D', marginTop: 5, fontWeight: 700 }}>
+            {loading ? '' : `₹${totalShotsRevenue.toLocaleString('en-IN')} revenue`}
+          </div>
+        </div>
+      </div>
+
+      {/* KPI Row 3 — SECONDARY 4-col: Restaurant | Bar | Advance | GST */}
+      <div className="kpi-row-secondary">
+        <div className="kpi kpi-sm">
+          <div className="kpi-label" style={{ color: '#7DD3FC' }}>Restaurant</div>
+          <div className="kpi-value mono" style={{ color: '#7DD3FC', fontSize: 20 }}>
+            {loading ? '...' : `₹${(analytics?.restaurantSales ?? analytics?.totalRestaurantSales ?? 0).toLocaleString('en-IN')}`}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 3 }}>Menu + GST</div>
+        </div>
+
+        <div className="kpi kpi-sm">
+          <div className="kpi-label" style={{ color: '#FDE68A' }}>Bar Sales</div>
+          <div className="kpi-value mono" style={{ color: '#FDE68A', fontSize: 20 }}>
+            {loading ? '...' : `₹${(analytics?.barSales ?? analytics?.totalBarSales ?? 0).toLocaleString('en-IN')}`}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 3 }}>Alcohol - Discount</div>
+        </div>
+
+        <div className="kpi kpi-sm">
+          <div className="kpi-label" style={{ color: '#C4B5FD' }}>Advance</div>
+          <div className="kpi-value mono" style={{ color: '#C4B5FD', fontSize: 20 }}>
+            {loading ? '...' : `₹${(analytics?.advancePayments ?? analytics?.totalAdvancePayment ?? 0).toLocaleString('en-IN')}`}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 3 }}>Booking advance paid</div>
+        </div>
+
+        <div className="kpi kpi-sm">
+          <div className="kpi-label" style={{ color: '#67E8F9' }}>GST Collected</div>
+          <div className="kpi-value mono" style={{ color: '#67E8F9', fontSize: 20 }}>
+            {loading ? '...' : `₹${(analytics?.totalGst || 0).toLocaleString('en-IN')}`}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 3 }}>SGST + CGST</div>
         </div>
 
         {analytics?.eventCount > 0 && (
           <>
-            <div className="kpi" style={{ color: 'var(--t0)' }}>
+            <div className="kpi kpi-sm">
               <div className="kpi-label">Event Revenue</div>
-              <div className="kpi-value mono" style={{ color: 'var(--a)' }}>{loading ? '...' : `₹${(analytics?.eventRevenue || 0).toLocaleString('en-IN')}`}</div>
+              <div className="kpi-value mono" style={{ color: 'var(--a)', fontSize: 20 }}>{loading ? '...' : `₹${(analytics?.eventRevenue || 0).toLocaleString('en-IN')}`}</div>
             </div>
-            <div className="kpi" style={{ color: 'var(--t0)' }}>
+            <div className="kpi kpi-sm">
               <div className="kpi-label">Event Expenses</div>
-              <div className="kpi-value mono" style={{ color: '#EF4444' }}>{loading ? '...' : `₹${(analytics?.eventExpenses || 0).toLocaleString('en-IN')}`}</div>
+              <div className="kpi-value mono" style={{ color: '#F87171', fontSize: 20 }}>{loading ? '...' : `₹${(analytics?.eventExpenses || 0).toLocaleString('en-IN')}`}</div>
             </div>
           </>
         )}
       </div>
+
 
       {/* Charts Row */}
       <div className="charts-equal-row">
@@ -807,6 +816,10 @@ export default function SalesPage() {
         }
 
         .kpi-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .kpi-row-secondary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+        .kpi-sm { padding: 14px 16px !important; }
+        .kpi-sm .kpi-value { font-size: 20px !important; }
+        .kpi-sm .kpi-label { font-size: 10px !important; margin-bottom: 4px !important; }
         .sales-page .kpi-label { color: var(--t0) !important; opacity: 0.95; font-weight: 800; }
         .sales-page .d-input { color: var(--t0) !important; font-weight: 700; }
         .sales-page .sales-date-label { color: var(--t0) !important; font-weight: 800; }
@@ -868,7 +881,8 @@ export default function SalesPage() {
         }
 
         @media (max-width: 1024px) { 
-          .charts-equal-row { grid-template-columns: 1fr; } 
+          .charts-equal-row { grid-template-columns: 1fr; }
+          .kpi-row-2 { grid-template-columns: 1fr 1fr; }
         }
         
         @media (max-width: 480px) {

@@ -59,6 +59,71 @@ function scheduleDailyReport() {
   console.log(`📅 Daily report cron scheduled: ${REPORT_TIME} IST`);
 }
 
+// ── Cron: Booking event reminders (9 AM IST daily) ───────────────
+function scheduleBookingReminders() {
+  cron.schedule('0 9 * * *', async () => {
+    console.log('🔔 Checking booking reminders...');
+    try {
+      const nodemailer = require('nodemailer');
+      const Booking = require('./src/models/Booking');
+      const { getBusinessDateString } = require('./src/lib/businessDay');
+
+      const settings = await Settings.findOne();
+      const adminEmail = process.env.ADMIN_EMAIL || settings?.adminEmail || '';
+      const senderEmail = process.env.GMAIL_SENDER || settings?.senderEmail || '';
+      const senderPassword = process.env.GMAIL_APP_PASSWORD || settings?.senderPassword || '';
+      if (!adminEmail || !senderEmail || !senderPassword) return;
+
+      const transporter = nodemailer.createTransport({ service: 'gmail', auth: { user: senderEmail, pass: senderPassword } });
+
+      const today = getBusinessDateString(new Date());
+      const addDays = (dateStr, n) => {
+        const [y, m, d] = dateStr.split('-').map(Number);
+        const dt = new Date(Date.UTC(y, m - 1, d));
+        dt.setUTCDate(dt.getUTCDate() + n);
+        return dt.toISOString().split('T')[0];
+      };
+
+      const in1 = addDays(today, 1);
+      const in2 = addDays(today, 2);
+
+      const bookings = await Booking.find({
+        bookingDate: { $in: [in1, in2] },
+        status: { $ne: 'cancelled' }
+      });
+
+      for (const b of bookings) {
+        const daysUntil = b.bookingDate === in1 ? 1 : 2;
+        const subject = `⏰ Reminder: ${b.bookingNo} — ${b.customerName} (Tomorrow${daysUntil === 2 ? ' in 2 days' : ''})`;
+        const adv = b.advancePayment > 0 ? `<p><b>Advance Paid:</b> ₹${b.advancePayment.toLocaleString('en-IN')}</p>` : '';
+        const html = `
+          <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;border:1px solid #ddd;border-radius:8px;overflow:hidden">
+            <div style="background:#f59e0b;color:#000;padding:16px 20px;font-size:18px;font-weight:bold">
+              ⏰ Event in ${daysUntil} Day${daysUntil > 1 ? 's' : ''}: ${b.bookingNo}
+            </div>
+            <div style="padding:20px;color:#222">
+              <p><b>Customer:</b> ${b.customerName} — ${b.customerPhone}</p>
+              <p><b>Event Date:</b> ${b.bookingDate} at ${b.bookingTime || '07:00 PM'}</p>
+              <p><b>Occasion:</b> ${b.occasion || 'Reservation'}</p>
+              <p><b>Guests:</b> ${b.guestCount || 1} Persons</p>
+              ${b.tableNo ? `<p><b>Table/Area:</b> ${b.tableNo}</p>` : ''}
+              ${adv}
+              ${b.notes ? `<p><b>Notes:</b> ${b.notes}</p>` : ''}
+            </div>
+            <div style="background:#f5f5f5;padding:10px 20px;font-size:12px;color:#888">HUMTUM The BAR &amp; Restaurant</div>
+          </div>
+        `;
+        await transporter.sendMail({ from: `"HumTum POS" <${senderEmail}>`, to: adminEmail, subject, html });
+        console.log(`📧 Reminder sent for ${b.bookingNo}`);
+      }
+    } catch (err) {
+      console.error('❌ Booking reminder failed:', err.message);
+    }
+  }, { timezone: 'Asia/Kolkata' });
+  console.log('🔔 Booking reminder cron scheduled: 09:00 AM IST daily');
+}
+
+
 // ── Cache warmup ─────────────────────────────────────────────────
 async function warmupCache() {
   try {
@@ -396,6 +461,7 @@ async function startServer() {
       console.log(`📡 Server running on port ${PORT}`);
       console.log(`🔗 Socket.IO ready`);
       scheduleDailyReport();
+      scheduleBookingReminders();
     });
 
   } catch (err) {

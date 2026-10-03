@@ -483,7 +483,8 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
     const bookingMatch = {
       $or: [
         { advancePaymentDate: { $gte: startDate, $lte: endDate } },
-        { createdAtDate: { $gte: startDate, $lte: endDate } }
+        { createdAtDate: { $gte: startDate, $lte: endDate } },
+        { bookingDate: { $gte: startDate, $lte: endDate } }
       ],
       advancePayment: { $gt: 0 },
       status: { $ne: 'cancelled' }
@@ -532,9 +533,49 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
     // Fetch Bookings with advance payment in the requested period
     const bookings = await Booking.find(bookingMatch).lean();
 
-    // 2. Fetch inventory names to accurately distinguish Bar (inventory/alcoholic) vs Restaurant (menu/food)
+    // 2. Fetch inventory names and prepare smart alcohol classifier
     const inventoryItems = await Inventory.find({}).select('name').lean();
-    const inventoryNamesSet = new Set(inventoryItems.map(i => (i.name || '').trim().toLowerCase()));
+    const invNorms = inventoryItems.map(i => (i.name || '').toLowerCase().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim());
+
+    const alcKeywords = [
+      'carlsberg', 'carlsbesrg', 'budweiser', 'budwiser', 'tuborg', 'kingfisher', 'corona', 
+      'breezer', 'breezers', 'bacardi', 'absolut', 'pipers', 'ballantine', 'black dog', 
+      'black & white', 'blenders pride', 'blender pride', 'bombay sapphire', 'dewar', 'grey goose', 'indri', 
+      'jack daniel', 'jagermeister', 'jager bomb', 'jameson', 'johnnie walker', 'jose cuervo', 
+      'royal stag', 'smirnoff', 'simranoff', 'vodka', 'whisky', 'whiskey', 'scotch', 'tequila', 
+      'beer', 'rum', 'gin', 'liqueur', 'shot', 'shots', 'fire pencil', 'flaming', 'plater', 'platter',
+      '30ml', '60ml', '90ml', '120ml', 'bucket', 'bomb mix', 'bira', 'heineken', 'old monk',
+      'chivas', 'glenfiddich', 'teachers', 'vat 69', 'royal challenge', 'signature', 'antiquity',
+      'imperial blue', 'mcdowell', 'magic moments', 'cocktail', 'peg'
+    ];
+
+    const isAlcoholItem = (item) => {
+      if (!item) return false;
+      if (item.isAlcoholic === true || item.isAlcohol === true) return true;
+      if (item.department === 'bar') return true;
+
+      const norm = (item.name || '').toLowerCase().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+      if (!norm) return false;
+
+      for (const iname of invNorms) {
+        if (norm === iname) return true;
+        if (iname.length >= 4 && norm.includes(iname)) return true;
+        if (norm.length >= 6 && iname.includes(norm)) return true;
+      }
+
+      for (const kw of alcKeywords) {
+        if (norm.includes(kw)) {
+          const isSoft = norm.includes('water') || norm.includes('soda') || norm.includes('juice') || norm.includes('shake') || norm.includes('coffee') || norm.includes('tea') || norm.includes('red bull') || norm.includes('cold drink');
+          if (isSoft) {
+            const hasHardBrand = ['carlsberg', 'carlsbesrg', 'budweiser', 'budwiser', 'tuborg', 'kingfisher', 'corona', 'breezer', 'bacardi', 'absolut', 'pipers', 'ballantine', 'black dog', 'blenders', 'blender', 'bombay sapphire', 'grey goose', 'indri', 'jack daniel', 'jagermeister', 'jameson', 'johnnie walker', 'jose cuervo', 'royal stag', 'smirnoff', 'simranoff', 'vodka', 'whisky', 'whiskey', 'scotch', 'tequila', 'beer', 'rum', 'gin'].some(b => norm.includes(b));
+            if (hasHardBrand) return true;
+            return false;
+          }
+          return true;
+        }
+      }
+      return false;
+    };
 
     // 3. Fetch all orders with items & financial fields to calculate exact Restaurant & Bar sales
     const orders = await Order.find(orderMatch).select(
@@ -553,6 +594,7 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
 
     let totalRestaurantSales = 0;
     let totalBarSales = 0;
+    let totalGst = 0;
     let cashTotal = 0, upiTotal = 0, dueTotal = 0;
 
     orders.forEach(o => {
@@ -592,25 +634,34 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
       if (Array.isArray(o.items) && o.items.length > 0) {
         o.items.forEach(item => {
           if (!item) return;
-          const name = (item.name || '').trim().toLowerCase();
           const itemTotal = (item.price || 0) * (item.quantity || 1);
-          const isInv = Boolean(item.inventoryItemId || item.isAlcoholic || inventoryNamesSet.has(name));
-          if (isInv) {
+          if (isAlcoholItem(item)) {
             orderAlcohol += itemTotal;
           } else {
             orderFood += itemTotal;
           }
         });
+
+        // Respect saved alcohol subtotal if stored higher
+        if (o.alcoholSubtotal > orderAlcohol) {
+          const diff = o.alcoholSubtotal - orderAlcohol;
+          orderAlcohol = o.alcoholSubtotal;
+          orderFood = Math.max(0, orderFood - diff);
+        }
       } else {
-        orderFood = o.foodSubtotal || (o.subtotal || 0);
+        orderFood = o.foodSubtotal || 0;
         orderAlcohol = o.alcoholSubtotal || 0;
+        if (orderFood === 0 && orderAlcohol === 0) {
+          orderFood = o.subtotal || 0;
+        }
       }
 
-      // Non-alcoholic items have GST (SGST + CGST) -> Restaurant
-      // Discounts reduce ONLY from Bar section, not from Restaurant section
+      // Track total GST collected (SGST + CGST)
       const orderGst = Number(((o.sgst || 0) + (o.cgst || 0)).toFixed(2));
-      const orderRestaurantSales = Math.round((orderFood + orderGst) * 100) / 100;
-      const orderBarSales = Math.max(0, Math.round((orderAlcohol + (o.serviceTax || 0) - (o.discount || 0)) * 100) / 100);
+      totalGst += orderGst;
+
+      const orderRestaurantSales = Math.round(orderFood + orderGst);
+      const orderBarSales = Math.max(0, Math.round(orderAlcohol + (o.serviceTax || 0) - (o.discount || 0)));
 
       dailyMap[bDate].restaurantSales += orderRestaurantSales;
       dailyMap[bDate].barSales += orderBarSales;
@@ -772,32 +823,33 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
     const totalDueAmount = dueTotal > 0 ? dueTotal : (orderStats.dueAmount || 0);
 
     res.json({
-      revenue: combinedCollectedRevenue,           // Collected (Cash + UPI received)
-      collectedRevenue: combinedCollectedRevenue,  // Explicit alias
-      grossRevenue: combinedGrossRevenue,         // Total including due bills
-      totalSalesWithDue: combinedGrossRevenue,    // Clear alias for total sales incl due
-      totalDue: totalDueAmount,                   // Total pending due amount
-      restaurantSales: Math.round(totalRestaurantSales * 100) / 100,
-      barSales: Math.round(totalBarSales * 100) / 100,
-      advancePayments: Math.round(totalAdvancePayment * 100) / 100,
-      totalRestaurantSales: Math.round(totalRestaurantSales * 100) / 100,
-      totalBarSales: Math.round(totalBarSales * 100) / 100,
-      totalAdvancePayment: Math.round(totalAdvancePayment * 100) / 100,
-      orderRevenue: orderStats.revenue || 0,
-      orderGrossRevenue: orderStats.grossRevenue || 0,
-      eventRevenue: eventStats.revenue || 0,
-      eventExpenses: eventStats.expenses || 0,
-      netEventRevenue: eventStats.net || 0,
-      totalDiscount: orderStats.discount || 0,
+      revenue: Math.round(combinedCollectedRevenue),           // Collected (Cash + UPI received)
+      collectedRevenue: Math.round(combinedCollectedRevenue),  // Explicit alias
+      grossRevenue: Math.round(combinedGrossRevenue),         // Total including due bills
+      totalSalesWithDue: Math.round(combinedGrossRevenue),    // Clear alias for total sales incl due
+      totalDue: Math.round(totalDueAmount),                   // Total pending due amount
+      totalGst: Math.round(totalGst),                         // Total GST collected from customers
+      restaurantSales: Math.round(totalRestaurantSales),
+      barSales: Math.round(totalBarSales),
+      advancePayments: Math.round(totalAdvancePayment),
+      totalRestaurantSales: Math.round(totalRestaurantSales),
+      totalBarSales: Math.round(totalBarSales),
+      totalAdvancePayment: Math.round(totalAdvancePayment),
+      orderRevenue: Math.round(orderStats.revenue || 0),
+      orderGrossRevenue: Math.round(orderStats.grossRevenue || 0),
+      eventRevenue: Math.round(eventStats.revenue || 0),
+      eventExpenses: Math.round(eventStats.expenses || 0),
+      netEventRevenue: Math.round(eventStats.net || 0),
+      totalDiscount: Math.round(orderStats.discount || 0),
       count: (orderStats.count || 0) + (eventStats.count || 0) + bookings.length,
       orderCount: orderStats.count || 0,
       eventCount: eventStats.count || 0,
       bookingCount: bookings.length,
       dailyData,
-      paymentBreakdown: { cash: cashTotal, upi: upiTotal, due: totalDueAmount },
+      paymentBreakdown: { cash: Math.round(cashTotal), upi: Math.round(upiTotal), due: Math.round(totalDueAmount) },
       shotsStats: {
         totalShots: totalShotsCount,
-        totalRevenue: totalShotsRevenue,
+        totalRevenue: Math.round(totalShotsRevenue),
         items: shotsBreakdown
       }
     });

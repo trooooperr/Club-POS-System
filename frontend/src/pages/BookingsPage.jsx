@@ -56,7 +56,7 @@ export default function BookingsPage() {
     guestCount: 4,
     tableNo: '',
     occasion: 'Table Reservation',
-    billingType: 'custom',
+    billingType: 'table_only',
     pricePerPlate: '',
     foodAmount: '',
     decorationAmount: '',
@@ -149,9 +149,16 @@ export default function BookingsPage() {
         merged.foodAmount = food > 0 ? String(food) : '';
       }
 
-      const calcTotal = food + decor;
-      if (calcTotal > 0) {
-        merged.totalAmount = String(calcTotal);
+      // For table_only, no fixed total
+      if (merged.billingType === 'table_only') {
+        merged.totalAmount = '';
+        merged.foodAmount = '';
+        merged.decorationAmount = '';
+      } else {
+        const calcTotal = food + decor;
+        if (calcTotal > 0) {
+          merged.totalAmount = String(calcTotal);
+        }
       }
       return merged;
     });
@@ -285,7 +292,7 @@ export default function BookingsPage() {
             .highlight-box { border: 1.5px solid #000; padding: 6px; margin: 8px 0; text-align: center; }
             .advance-title { font-size: 13px; font-weight: 900; text-transform: uppercase; }
             .advance-amount { font-size: 20px; font-weight: 900; margin: 2px 0; }
-            .sign-area { margin-top: 25px; padding-top: 20px; border-top: 1px dashed #000; display: flex; justify-content: space-between; align-items: flex-end; }
+            .sign-area { margin-top: 25px; padding-top: 20px; border-top: 1px dashed #000; display: flex; justify-content: flex-end; align-items: flex-end; }
             .sign-box { text-align: center; width: 45%; }
             .sign-line { border-top: 1px solid #000; margin-top: 25px; padding-top: 2px; font-size: 11px; }
             .footer-msg { font-size: 11px; margin-top: 12px; font-style: italic; text-align: center; }
@@ -303,7 +310,6 @@ export default function BookingsPage() {
 
           <div class="thick-line"></div>
           <div class="center receipt-title">BOOKING CONFIRMATION</div>
-          <div class="center" style="font-size: 11px; margin-bottom: 4px;">& ADVANCE PAYMENT RECEIPT</div>
           <div class="dash-line"></div>
 
           <div class="row"><span class="label">BOOKING NO:</span><span class="val">${b.bookingNo}</span></div>
@@ -323,7 +329,7 @@ export default function BookingsPage() {
           <div class="row"><span class="label">BILLING PLAN:</span><span class="val">${b.billingType === 'per_plate' ? `₹${b.pricePerPlate}/Plate (${b.guestCount || 1} Guests)` : 'Custom Bill'}</span></div>
           ${b.foodAmount ? `<div class="row"><span class="label">FOOD & CATERING:</span><span class="val">₹${Number(b.foodAmount).toLocaleString('en-IN')}</span></div>` : ''}
           ${b.decorationAmount ? `<div class="row"><span class="label">DECORATION & SETUP:</span><span class="val">₹${Number(b.decorationAmount).toLocaleString('en-IN')}</span></div>` : ''}
-          <div class="row"><span class="label">ESTIMATED TOTAL:</span><span class="val">₹${estTotal.toLocaleString('en-IN')}</span></div>
+
 
           <div class="highlight-box">
             <div class="advance-title">ADVANCE RECEIVED</div>
@@ -347,9 +353,6 @@ export default function BookingsPage() {
 
           <div class="sign-area">
             <div class="sign-box">
-              <div class="sign-line">Customer Signature</div>
-            </div>
-            <div class="sign-box">
               <div class="sign-line">Manager Signature</div>
             </div>
           </div>
@@ -357,8 +360,7 @@ export default function BookingsPage() {
           <div class="dash-line"></div>
           <div class="footer-msg">
             Thank you for choosing ${restName}!<br/>
-            Please present this receipt during arrival.<br/>
-            Party & Celebration Partner
+            Please present this receipt during arrival.
           </div>
         </body>
       </html>
@@ -429,16 +431,10 @@ export default function BookingsPage() {
 
   return (
     <div className="fi bookings-page">
-      {/* Top Header & Metrics Bar */}
+      {/* Top Header */}
       <div className="bookings-header">
-        <div>
-          <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <CalendarCheck size={24} style={{ color: 'var(--a)' }} />
-            Bookings & Reservations
-          </h1>
-          <p className="page-sub" style={{ margin: '2px 0 0 0', color: 'var(--t2)', fontSize: 13 }}>
-            Manage upcoming guest bookings, party reservations, advance payments & print official confirmation receipts.
-          </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <CalendarCheck size={18} style={{ color: 'var(--a)' }} />
         </div>
 
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -560,7 +556,7 @@ export default function BookingsPage() {
           ))}
         </div>
 
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
           {/* Status selector */}
           <select 
             value={statusFilter}
@@ -572,7 +568,9 @@ export default function BookingsPage() {
               fontSize: 12, 
               background: 'var(--s1)', 
               color: 'var(--t0)',
-              border: '1px solid var(--b2)'
+              border: '1px solid var(--b2)',
+              flexShrink: 0,
+              width: 140
             }}
           >
             <option value="all">All Statuses</option>
@@ -582,7 +580,7 @@ export default function BookingsPage() {
           </select>
 
           {/* Search box */}
-          <div style={{ position: 'relative', minWidth: 220 }}>
+          <div style={{ position: 'relative', width: 220, flexShrink: 0 }}>
             <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--t2)' }} />
             <input 
               type="text"
@@ -818,41 +816,46 @@ export default function BookingsPage() {
       {/* NEW / EDIT BOOKING MODAL */}
       {modalOpen && (
         <div className="moverlay" onClick={() => setModalOpen(false)}>
-          <div className="mbox booking-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 650 }}>
-            <div className="inv-m-header" style={{ borderBottom: '1px solid var(--b1)' }}>
-              <div className="header-left">
+          <div className="mbox booking-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 620 }}>
+            {/* Modal Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: '1px solid var(--b1)', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div className="live-dot" style={{ background: 'var(--a)' }}></div>
-                <span className="header-status">
-                  {editingBooking ? `EDIT BOOKING ${editingBooking.bookingNo}` : 'NEW BOOKING RESERVATION'}
+                <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--t0)', textTransform: 'uppercase' }}>
+                  {editingBooking ? `Edit Booking — ${editingBooking.bookingNo}` : 'New Booking'}
                 </span>
               </div>
-              <button className="close-btn-minimal" onClick={() => setModalOpen(false)}>
-                <X size={20} />
+              <button
+                type="button"
+                onClick={() => setModalOpen(false)}
+                style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid var(--b2)', background: 'var(--s2)', color: 'var(--t1)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
+              >
+                <X size={15} />
               </button>
             </div>
 
             <form onSubmit={e => handleSaveBooking(e, false)}>
-              <div className="booking-modal-body" style={{ maxHeight: '72vh', overflowY: 'auto', padding: '20px 24px' }}>
-                {/* Customer Details */}
-                <h4 className="modal-section-title">Customer Information</h4>
+              <div className="booking-modal-body" style={{ maxHeight: '76vh', overflowY: 'auto', padding: '14px 16px' }}>
+
+                {/* Row 1: Name + Phone */}
                 <div className="form-grid-2">
                   <div className="form-field">
-                    <label>Customer Name *</label>
+                    <label>Name *</label>
                     <input 
                       type="text" 
                       required
-                      placeholder="e.g. Rahul Sharma"
+                      placeholder="Customer name"
                       value={formData.customerName}
                       onChange={e => setFormData({ ...formData, customerName: e.target.value })}
                       className="d-input"
                     />
                   </div>
                   <div className="form-field">
-                    <label>Customer Phone Number *</label>
+                    <label>Phone *</label>
                     <input 
                       type="tel" 
                       required
-                      placeholder="10 digit mobile number"
+                      placeholder="Mobile number"
                       value={formData.customerPhone}
                       onChange={e => setFormData({ ...formData, customerPhone: e.target.value })}
                       className="d-input"
@@ -860,11 +863,10 @@ export default function BookingsPage() {
                   </div>
                 </div>
 
-                {/* Event Schedule */}
-                <h4 className="modal-section-title" style={{ marginTop: 20 }}>Event Schedule & Reservation</h4>
-                <div className="form-grid-3">
+                {/* Row 2: Date + Time + Guests */}
+                <div className="form-grid-3" style={{ marginTop: 10 }}>
                   <div className="form-field">
-                    <label>Event Date *</label>
+                    <label>Date *</label>
                     <input 
                       type="date" 
                       required
@@ -874,17 +876,17 @@ export default function BookingsPage() {
                     />
                   </div>
                   <div className="form-field">
-                    <label>Event Time</label>
+                    <label>Time</label>
                     <input 
                       type="text" 
-                      placeholder="e.g. 07:30 PM"
+                      placeholder="07:30 PM"
                       value={formData.bookingTime}
                       onChange={e => setFormData({ ...formData, bookingTime: e.target.value })}
                       className="d-input"
                     />
                   </div>
                   <div className="form-field">
-                    <label>Guest Count</label>
+                    <label>Guests</label>
                     <input 
                       type="number" 
                       min="1"
@@ -895,9 +897,10 @@ export default function BookingsPage() {
                   </div>
                 </div>
 
-                <div className="form-grid-2" style={{ marginTop: 12 }}>
+                {/* Row 3: Occasion + Table */}
+                <div className="form-grid-2" style={{ marginTop: 10 }}>
                   <div className="form-field">
-                    <label>Occasion / Event Type</label>
+                    <label>Occasion</label>
                     <select 
                       value={formData.occasion}
                       onChange={e => setFormData({ ...formData, occasion: e.target.value })}
@@ -913,10 +916,10 @@ export default function BookingsPage() {
                     </select>
                   </div>
                   <div className="form-field">
-                    <label>Area / Table Reserved</label>
+                    <label>Table / Area</label>
                     <input 
                       type="text" 
-                      placeholder="e.g. Table 4, VIP Lounge, Rooftop"
+                      placeholder="e.g. Table 4, VIP Lounge"
                       value={formData.tableNo}
                       onChange={e => setFormData({ ...formData, tableNo: e.target.value })}
                       className="d-input"
@@ -924,24 +927,46 @@ export default function BookingsPage() {
                   </div>
                 </div>
 
-                {/* Billing & Advance Payment */}
-                <h4 className="modal-section-title" style={{ marginTop: 20 }}>Billing & Advance Payment</h4>
-                <div className="form-grid-2">
-                  <div className="form-field">
-                    <label>Billing Calculation Type</label>
-                    <select 
-                      value={formData.billingType}
-                      onChange={e => updateBillingAmounts({ billingType: e.target.value })}
-                      className="d-input"
-                    >
-                      <option value="custom">Custom Billing Total</option>
-                      <option value="per_plate">Per Plate Billing Rate</option>
-                    </select>
+                {/* Billing type selector */}
+                <div style={{ marginTop: 14, marginBottom: 2 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--a)', marginBottom: 7, borderBottom: '1px solid var(--b1)', paddingBottom: 5 }}>Billing & Advance</div>
+                  <div className="billing-type-selector">
+                    {[
+                      { value: 'table_only', label: '🪑 Table Only', sub: 'Pay as per menu' },
+                      { value: 'custom', label: '📋 Custom Amount', sub: 'Fixed food + decor' },
+                      { value: 'per_plate', label: '🍽️ Per Plate', sub: 'Rate × Guests' },
+                    ].map(opt => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        className={`billing-type-opt ${formData.billingType === opt.value ? 'active' : ''}`}
+                        onClick={() => updateBillingAmounts({ billingType: opt.value })}
+                      >
+                        <span className="bt-label">{opt.label}</span>
+                        <span className="bt-sub">{opt.sub}</span>
+                      </button>
+                    ))}
                   </div>
+                </div>
 
-                  {formData.billingType === 'per_plate' ? (
+                {/* Amount inputs — always 3-col row */}
+                <div className="form-grid-3" style={{ marginTop: 10 }}>
+                  {/* Col 1: food/plate/decoration depends on type */}
+                  {formData.billingType === 'table_only' ? (
                     <div className="form-field">
-                      <label>Price Per Plate (₹)</label>
+                      <label>Decoration (₹) <span style={{color:'var(--t2)',fontWeight:400}}>optional</span></label>
+                      <input 
+                        type="number"
+                        min="0"
+                        placeholder="e.g. 1500"
+                        value={formData.decorationAmount}
+                        onChange={e => setFormData({ ...formData, decorationAmount: e.target.value })}
+                        className="d-input"
+                      />
+                    </div>
+                  ) : formData.billingType === 'per_plate' ? (
+                    <div className="form-field">
+                      <label>Per Plate (₹)</label>
                       <input 
                         type="number"
                         min="0"
@@ -953,7 +978,7 @@ export default function BookingsPage() {
                     </div>
                   ) : (
                     <div className="form-field">
-                      <label>Food / Catering Amount (₹)</label>
+                      <label>Food / Catering (₹)</label>
                       <input 
                         type="number"
                         min="0"
@@ -965,125 +990,92 @@ export default function BookingsPage() {
                     </div>
                   )}
 
-                  <div className="form-field">
-                    <label>Decoration Amount (₹)</label>
-                    <input 
-                      type="number"
-                      min="0"
-                      placeholder="e.g. 2000"
-                      value={formData.decorationAmount}
-                      onChange={e => updateBillingAmounts({ decorationAmount: e.target.value })}
-                      className="d-input"
-                    />
-                  </div>
-
-                  <div className="form-field">
-                    <label>Estimated / Agreed Total Amount (₹)
-                      <span style={{ fontSize: 10, color: 'var(--t2)', fontWeight: 400, marginLeft: 4 }}>(auto-calculated)</span>
-                    </label>
-                    <input 
-                      type="number" 
-                      min="0"
-                      placeholder="e.g. 15000"
-                      value={formData.totalAmount}
-                      onChange={e => setFormData({ ...formData, totalAmount: e.target.value })}
-                      className="d-input"
-                    />
-                  </div>
-                </div>
-
-                {/* Advance Amount Row */}
-                <div className="advance-input-container" style={{ marginTop: 14, padding: 14, background: 'var(--s2)', borderRadius: 10, border: '1px solid var(--b2)' }}>
-                  <div className="form-grid-3">
+                  {/* Col 2: Decoration (only for custom/per_plate) */}
+                  {formData.billingType !== 'table_only' && (
                     <div className="form-field">
-                      <label style={{ color: 'var(--a)', fontWeight: 700 }}>Advance Payment (₹)</label>
+                      <label>Decoration (₹)</label>
                       <input 
-                        type="number" 
+                        type="number"
                         min="0"
-                        placeholder="e.g. 5000"
-                        value={formData.advancePayment}
-                        onChange={e => setFormData({ ...formData, advancePayment: e.target.value })}
-                        className="d-input"
-                        style={{ borderColor: 'var(--a)' }}
-                      />
-                    </div>
-
-                    <div className="form-field">
-                      <label>Payment Mode</label>
-                      <select 
-                        value={formData.advancePaymentMode}
-                        onChange={e => setFormData({ ...formData, advancePaymentMode: e.target.value })}
-                        className="d-input"
-                      >
-                        <option value="cash">Cash</option>
-                        <option value="upi">UPI</option>
-                        <option value="card">Card</option>
-                        <option value="split">Split (Cash + UPI)</option>
-                      </select>
-                    </div>
-
-                    <div className="form-field">
-                      <label>Advance Payment Date</label>
-                      <input 
-                        type="date" 
-                        value={formData.advancePaymentDate}
-                        onChange={e => setFormData({ ...formData, advancePaymentDate: e.target.value })}
+                        placeholder="e.g. 2000"
+                        value={formData.decorationAmount}
+                        onChange={e => updateBillingAmounts({ decorationAmount: e.target.value })}
                         className="d-input"
                       />
-                    </div>
-                  </div>
-
-                  {formData.advancePaymentMode === 'split' && (
-                    <div className="form-grid-2" style={{ marginTop: 10 }}>
-                      <div className="form-field">
-                        <label>Cash Component (₹)</label>
-                        <input 
-                          type="number"
-                          placeholder="Cash amount"
-                          value={formData.advanceCashAmount}
-                          onChange={e => setFormData({ ...formData, advanceCashAmount: e.target.value })}
-                          className="d-input"
-                        />
-                      </div>
-                      <div className="form-field">
-                        <label>UPI Component (₹)</label>
-                        <input 
-                          type="number"
-                          placeholder="UPI amount"
-                          value={formData.advanceUpiAmount}
-                          onChange={e => setFormData({ ...formData, advanceUpiAmount: e.target.value })}
-                          className="d-input"
-                        />
-                      </div>
                     </div>
                   )}
 
-                  <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 8 }}>
-                    💡 Advance collected will automatically count in the Analytics page on the payment date ({formData.advancePaymentDate}).
+                  {/* Col 3: Advance Payment */}
+                  <div className="form-field" style={{ gridColumn: formData.billingType === 'table_only' ? 'span 2' : 'auto' }}>
+                    <label style={{ color: 'var(--a)', fontWeight: 700 }}>Advance (₹)</label>
+                    <input 
+                      type="number" 
+                      min="0"
+                      placeholder="Amount collected now"
+                      value={formData.advancePayment}
+                      onChange={e => setFormData({ ...formData, advancePayment: e.target.value })}
+                      className="d-input"
+                      style={{ borderColor: 'rgba(245,158,11,0.5)' }}
+                    />
                   </div>
                 </div>
 
-                {/* Additional Info */}
-                <div className="form-grid-1" style={{ marginTop: 16 }}>
+                {/* Estimated total pill — read-only, shown when > 0 */}
+                {formData.billingType !== 'table_only' && formData.totalAmount > 0 && (
+                  <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 11, color: 'var(--t2)' }}>Est. Total:</span>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--t0)', fontFamily: 'monospace' }}>₹{Number(formData.totalAmount).toLocaleString('en-IN')}</span>
+                    {formData.advancePayment > 0 && (
+                      <span style={{ fontSize: 11, color: '#F87171', marginLeft: 4 }}>· Due: ₹{Math.max(0, Number(formData.totalAmount) - Number(formData.advancePayment)).toLocaleString('en-IN')}</span>
+                    )}
+                  </div>
+                )}
+
+                {/* Payment mode + date row */}
+                <div className="form-grid-2" style={{ marginTop: 10, padding: '10px 12px', background: 'var(--s2)', borderRadius: 8, border: '1px solid var(--b1)' }}>
                   <div className="form-field">
-                    <label>Status</label>
+                    <label>Payment Mode</label>
                     <select 
-                      value={formData.status}
-                      onChange={e => setFormData({ ...formData, status: e.target.value })}
+                      value={formData.advancePaymentMode}
+                      onChange={e => setFormData({ ...formData, advancePaymentMode: e.target.value })}
                       className="d-input"
                     >
-                      <option value="confirmed">Confirmed</option>
-                      <option value="completed">Completed</option>
-                      <option value="cancelled">Cancelled</option>
+                      <option value="cash">Cash</option>
+                      <option value="upi">UPI</option>
+                      <option value="card">Card</option>
+                      <option value="split">Split (Cash + UPI)</option>
                     </select>
+                  </div>
+                  <div className="form-field">
+                    <label>Advance Date</label>
+                    <input 
+                      type="date" 
+                      value={formData.advancePaymentDate}
+                      onChange={e => setFormData({ ...formData, advancePaymentDate: e.target.value })}
+                      className="d-input"
+                    />
                   </div>
                 </div>
 
-                <div className="form-field" style={{ marginTop: 12 }}>
-                  <label>Special Instructions / Notes</label>
+                {formData.advancePaymentMode === 'split' && (
+                  <div className="form-grid-2" style={{ marginTop: 8 }}>
+                    <div className="form-field">
+                      <label>Cash (₹)</label>
+                      <input type="number" placeholder="Cash amount" value={formData.advanceCashAmount} onChange={e => setFormData({ ...formData, advanceCashAmount: e.target.value })} className="d-input" />
+                    </div>
+                    <div className="form-field">
+                      <label>UPI (₹)</label>
+                      <input type="number" placeholder="UPI amount" value={formData.advanceUpiAmount} onChange={e => setFormData({ ...formData, advanceUpiAmount: e.target.value })} className="d-input" />
+                    </div>
+                  </div>
+                )}
+
+                {/* Notes */}
+                <div className="form-field" style={{ marginTop: 10 }}>
+                  <label>Notes</label>
                   <textarea 
                     rows="2"
-                    placeholder="e.g. Preferred music, cake arrangement, special menu items..."
+                    placeholder="Music, cake, special requests..."
                     value={formData.notes}
                     onChange={e => setFormData({ ...formData, notes: e.target.value })}
                     className="d-input"
@@ -1128,16 +1120,15 @@ export default function BookingsPage() {
       {/* Styles for Bookings page */}
       <style>{`
         .bookings-page {
-          padding: 20px;
-          max-width: 1300px;
-          margin: 0 auto;
+          padding: 0;
         }
         .bookings-header {
           display: flex;
           justify-content: space-between;
           align-items: center;
           flex-wrap: wrap;
-          gap: 16px;
+          gap: 12px;
+          margin-bottom: 14px;
         }
         .bookings-grid {
           display: grid;
@@ -1481,27 +1472,77 @@ export default function BookingsPage() {
           transform: translateY(-1px);
         }
 
-        .form-grid-1 { display: grid; grid-template-columns: 1fr; gap: 12px; }
-        .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+        .form-grid-1 { display: grid; grid-template-columns: 1fr; gap: 10px; }
+        .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
         .modal-section-title {
-          font-size: 12px;
+          font-size: 11px;
           text-transform: uppercase;
           letter-spacing: 0.6px;
           color: var(--a);
-          margin: 0 0 10px 0;
+          margin: 0 0 8px 0;
           font-weight: 700;
-          padding-bottom: 6px;
+          padding-bottom: 5px;
           border-bottom: 1px solid var(--b1);
         }
-        .form-field { display: flex; flex-direction: column; gap: 5px; }
+        .form-field { display: flex; flex-direction: column; gap: 4px; }
         .form-field label { font-size: 11px; color: var(--t1); font-weight: 500; }
+
+        /* Date picker icon visible in dark mode */
+        .booking-modal input[type="date"],
+        .booking-modal input[type="time"] {
+          color-scheme: dark;
+        }
+        .lm .booking-modal input[type="date"],
+        .lm .booking-modal input[type="time"] {
+          color-scheme: light;
+        }
+
+        /* Billing type selector */
+        .billing-type-selector {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 8px;
+          margin-bottom: 4px;
+        }
+        .billing-type-opt {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          padding: 9px 10px;
+          border-radius: 8px;
+          border: 1.5px solid var(--b2);
+          background: var(--s2);
+          cursor: pointer;
+          text-align: left;
+          transition: all 0.15s;
+        }
+        .billing-type-opt:hover {
+          border-color: var(--a);
+        }
+        .billing-type-opt.active {
+          border-color: var(--a);
+          background: rgba(245,158,11,0.1);
+        }
+        .bt-label {
+          font-size: 11.5px;
+          font-weight: 700;
+          color: var(--t0);
+        }
+        .billing-type-opt.active .bt-label { color: var(--a); }
+        .bt-sub {
+          font-size: 10px;
+          color: var(--t2);
+          line-height: 1.3;
+        }
+
         @media (max-width: 900px) {
           .bookings-kpi-grid { grid-template-columns: repeat(2, 1fr); }
         }
         @media (max-width: 600px) {
           .bookings-kpi-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
           .form-grid-2, .form-grid-3 { grid-template-columns: 1fr; }
+          .billing-type-selector { grid-template-columns: 1fr; }
           .bm-actions { flex-direction: column-reverse; gap: 8px; }
           .bm-btn { width: 100%; justify-content: center; }
         }
