@@ -406,7 +406,7 @@ export default function SalesPage() {
           <div className="kpi-value mono" style={{ color: 'var(--a)' }}>
             {loading ? '...' : `₹${((analytics?.grossRevenue ?? analytics?.totalSalesWithDue) || 0).toLocaleString('en-IN')}`}
           </div>
-          <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 4 }}>Rest + Bar + Advance</div>
+          <div style={{ fontSize: 12, color: '#94A3B8', fontWeight: 500, marginTop: 4 }}>Rest + Bar + Advance</div>
         </div>
 
         <div className="kpi" style={{ color: 'var(--t0)' }}>
@@ -414,7 +414,7 @@ export default function SalesPage() {
           <div className="kpi-value mono" style={{ color: '#34D399' }}>
             {loading ? '...' : `₹${((analytics?.collectedRevenue ?? analytics?.revenue) || 0).toLocaleString('en-IN')}`}
           </div>
-          <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 4 }}>Cash + UPI received</div>
+          <div style={{ fontSize: 12, color: '#94A3B8', fontWeight: 500, marginTop: 4 }}>Cash + UPI received</div>
         </div>
       </div>
 
@@ -425,7 +425,7 @@ export default function SalesPage() {
           <div className="kpi-value mono" style={{ color: ((analytics?.totalDue ?? analytics?.paymentBreakdown?.due) || 0) > 0 ? '#F87171' : 'var(--t1)' }}>
             {loading ? '...' : `₹${((analytics?.totalDue ?? analytics?.paymentBreakdown?.due) || 0).toLocaleString('en-IN')}`}
           </div>
-          <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 4 }}>Uncollected balances</div>
+          <div style={{ fontSize: 12, color: '#94A3B8', fontWeight: 500, marginTop: 4 }}>Uncollected balances</div>
         </div>
 
         <div className="kpi" style={{ color: 'var(--t0)' }}>
@@ -433,7 +433,7 @@ export default function SalesPage() {
           <div className="kpi-value mono" style={{ color: '#FCD34D' }}>
             {loading ? '...' : `₹${totalShotsRevenue.toLocaleString('en-IN')}`}
           </div>
-          <div style={{ fontSize: 13, color: '#FCD34D', marginTop: 5, fontWeight: 700 }}>
+          <div style={{ fontSize: 12.5, color: '#FCD34D', marginTop: 5, fontWeight: 700 }}>
             {loading ? '' : `${totalShotsCount} Shots sold`}
           </div>
         </div>
@@ -446,7 +446,7 @@ export default function SalesPage() {
           <div className="kpi-value mono" style={{ color: '#7DD3FC', fontSize: 20 }}>
             {loading ? '...' : `₹${(analytics?.restaurantSales ?? analytics?.totalRestaurantSales ?? 0).toLocaleString('en-IN')}`}
           </div>
-          <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 3 }}>Menu + GST</div>
+          <div style={{ fontSize: 11.5, color: '#94A3B8', fontWeight: 500, marginTop: 3 }}>Menu + GST</div>
         </div>
 
         <div className="kpi kpi-sm">
@@ -454,7 +454,7 @@ export default function SalesPage() {
           <div className="kpi-value mono" style={{ color: '#FDE68A', fontSize: 20 }}>
             {loading ? '...' : `₹${(analytics?.barSales ?? analytics?.totalBarSales ?? 0).toLocaleString('en-IN')}`}
           </div>
-          <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 3 }}>Alcohol - Discount</div>
+          <div style={{ fontSize: 11.5, color: '#94A3B8', fontWeight: 500, marginTop: 3 }}>Alcohol - Discount</div>
         </div>
 
         <div className="kpi kpi-sm">
@@ -462,7 +462,7 @@ export default function SalesPage() {
           <div className="kpi-value mono" style={{ color: '#C4B5FD', fontSize: 20 }}>
             {loading ? '...' : `₹${(analytics?.advancePayments ?? analytics?.totalAdvancePayment ?? 0).toLocaleString('en-IN')}`}
           </div>
-          <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 3 }}>Booking advance paid</div>
+          <div style={{ fontSize: 11.5, color: '#94A3B8', fontWeight: 500, marginTop: 3 }}>Booking advance paid</div>
         </div>
 
         <div className="kpi kpi-sm">
@@ -470,7 +470,7 @@ export default function SalesPage() {
           <div className="kpi-value mono" style={{ color: '#67E8F9', fontSize: 20 }}>
             {loading ? '...' : `₹${(analytics?.totalGst || 0).toLocaleString('en-IN')}`}
           </div>
-          <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 3 }}>SGST + CGST</div>
+          <div style={{ fontSize: 11.5, color: '#94A3B8', fontWeight: 500, marginTop: 3 }}>SGST + CGST</div>
         </div>
 
         {analytics?.eventCount > 0 && (
