@@ -807,15 +807,18 @@ Minimum version required to store current data is: `+i+`.
           gap: 5px;
           font-size: 11px;
           background: var(--s2);
+          border: 1px solid var(--b2);
           padding: 4px 10px;
           border-radius: 6px;
-          color: var(--t1);
+          color: var(--t0);
+          font-weight: 500;
         }
         .booking-details-box {
           display: grid;
           grid-template-columns: repeat(2, 1fr);
           gap: 6px 12px;
           background: var(--s2);
+          border: 1px solid var(--b1);
           padding: 8px 12px;
           border-radius: 8px;
           font-size: 11px;
@@ -825,18 +828,19 @@ Minimum version required to store current data is: `+i+`.
           justify-content: space-between;
         }
         .d-label {
-          color: var(--t2);
+          color: #94A3B8;
+          font-weight: 500;
         }
         .d-val {
           font-weight: 600;
-          color: var(--t0);
+          color: #F8FAFC;
         }
         .booking-notes-callout {
           display: flex;
           gap: 6px;
           font-size: 11px;
-          color: var(--t1);
-          background: rgba(245, 158, 11, 0.06);
+          color: var(--t0);
+          background: rgba(245, 158, 11, 0.08);
           border-left: 2px solid var(--a);
           padding: 6px 10px;
           border-radius: 0 6px 6px 0;
@@ -855,8 +859,12 @@ Minimum version required to store current data is: `+i+`.
           align-items: center;
         }
         .finance-row.sub-row {
-          font-size: 11px;
-          color: var(--t2);
+          font-size: 11.5px;
+          color: #94A3B8;
+        }
+        .finance-row.sub-row span:last-child {
+          color: #E2E8F0;
+          font-weight: 500;
         }
         .finance-row.balance-row {
           border-top: 1px solid var(--b2);
@@ -865,6 +873,7 @@ Minimum version required to store current data is: `+i+`.
         }
         .f-title {
           font-weight: 600;
+          color: var(--t0);
         }
         .f-amt {
           font-family: monospace;
@@ -968,7 +977,8 @@ Minimum version required to store current data is: `+i+`.
           align-items: center;
           gap: 5px;
           font-size: 11px;
-          color: var(--t2);
+          color: #94A3B8;
+          font-weight: 500;
           margin-top: 2px;
         }
         .kpi-indicator { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
