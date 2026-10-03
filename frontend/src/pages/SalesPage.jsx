@@ -431,10 +431,10 @@ export default function SalesPage() {
         <div className="kpi" style={{ color: 'var(--t0)' }}>
           <div className="kpi-label" style={{ color: '#FCD34D' }}>Shots Sold</div>
           <div className="kpi-value mono" style={{ color: '#FCD34D' }}>
-            {loading ? '...' : `${totalShotsCount} Shots`}
+            {loading ? '...' : `₹${totalShotsRevenue.toLocaleString('en-IN')}`}
           </div>
           <div style={{ fontSize: 13, color: '#FCD34D', marginTop: 5, fontWeight: 700 }}>
-            {loading ? '' : `₹${totalShotsRevenue.toLocaleString('en-IN')} revenue`}
+            {loading ? '' : `${totalShotsCount} Shots sold`}
           </div>
         </div>
       </div>
