@@ -169,7 +169,7 @@ const renderLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, name
 
 export default function SalesPage() {
   const { settings, role } = useApp();
-  const [gstMode, setGstMode] = useState('collected'); // 'collected' | 'estimated' — admin only
+  const [gstMode, setGstMode] = useState('estimated'); // 'collected' | 'estimated' — admin only
   
   const getBusinessTodayStr = () => {
     const d = new Date();
