@@ -506,7 +506,7 @@ export default function SalesPage() {
                 }}>
                   {[
                     { value: 'estimated', label: '5%' },
-                    { value: 'collected', label: 'Actual' },
+                    { value: 'collected', label: 'Collected' },
                   ].map(opt => (
                     <button
                       key={opt.value}
