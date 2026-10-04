@@ -493,27 +493,48 @@ export default function SalesPage() {
         <div className="kpi kpi-sm">
           {role === 'admin' ? (
             <>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              {/* Header row: label + pill toggle */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                 <div className="kpi-label" style={{ color: '#67E8F9', marginBottom: 0 }}>GST</div>
-                <select
-                  value={gstMode}
-                  onChange={e => setGstMode(e.target.value)}
-                  style={{
-                    background: 'rgba(103,232,249,0.10)',
-                    border: '1px solid rgba(103,232,249,0.30)',
-                    borderRadius: 6,
-                    color: '#67E8F9',
-                    fontSize: 10,
-                    fontWeight: 700,
-                    padding: '2px 6px',
-                    cursor: 'pointer',
-                    outline: 'none',
-                    letterSpacing: '0.04em',
-                  }}
-                >
-                  <option value="collected" style={{ background: '#1e293b', color: '#e2e8f0' }}>GST Collected (Actual)</option>
-                  <option value="estimated" style={{ background: '#1e293b', color: '#e2e8f0' }}>Estimated 5% GST</option>
-                </select>
+                <div style={{
+                  display: 'flex',
+                  background: 'rgba(0,0,0,0.35)',
+                  border: '1px solid rgba(103,232,249,0.18)',
+                  borderRadius: 20,
+                  padding: 2,
+                  gap: 2,
+                }}>
+                  {[
+                    { value: 'estimated', label: '5%' },
+                    { value: 'collected', label: 'Actual' },
+                  ].map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setGstMode(opt.value)}
+                      style={{
+                        background: gstMode === opt.value
+                          ? 'rgba(103,232,249,0.18)'
+                          : 'transparent',
+                        border: gstMode === opt.value
+                          ? '1px solid rgba(103,232,249,0.45)'
+                          : '1px solid transparent',
+                        borderRadius: 16,
+                        color: gstMode === opt.value ? '#67E8F9' : '#64748B',
+                        fontSize: 9,
+                        fontWeight: 800,
+                        padding: '2px 8px',
+                        cursor: 'pointer',
+                        letterSpacing: '0.06em',
+                        textTransform: 'uppercase',
+                        transition: 'all 0.18s ease',
+                        outline: 'none',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className="kpi-value mono" style={{ color: '#67E8F9', fontSize: 20 }}>
                 {loading ? '...' : (() => {
@@ -522,8 +543,8 @@ export default function SalesPage() {
                   return `₹${est.toLocaleString('en-IN')}`;
                 })()}
               </div>
-              <div style={{ fontSize: 11.5, color: '#94A3B8', fontWeight: 500, marginTop: 3 }}>
-                {gstMode === 'collected' ? 'SGST + CGST' : '5% of Restaurant'}
+              <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 500, marginTop: 4 }}>
+                {gstMode === 'collected' ? 'SGST + CGST collected' : '5% of Restaurant sales'}
               </div>
             </>
           ) : (
