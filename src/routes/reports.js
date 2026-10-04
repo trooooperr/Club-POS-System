@@ -552,6 +552,8 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
     const isAlcoholItem = (item) => {
       if (!item) return false;
       if (item.isAlcoholic === true || item.isAlcohol === true) return true;
+      // If explicitly stored as non-alcoholic at billing time, respect that — don't run keyword matching
+      if (item.isAlcoholic === false || item.isAlcohol === false) return false;
       if (item.department === 'bar') return true;
 
       const norm = (item.name || '').toLowerCase().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();

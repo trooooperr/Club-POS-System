@@ -545,6 +545,50 @@ body {
   margin-top: 6px;
 }
 
+/* ── Sales Page Secondary KPI Row (Restaurant | Bar | Advance | GST) ── */
+.kpi-row-secondary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.kpi-sm {
+  padding: 14px 16px;
+}
+
+.kpi-sm .kpi-label {
+  font-size: 10px;
+  margin-bottom: 6px;
+}
+
+.kpi-sm .kpi-value {
+  font-size: 20px;
+}
+
+/* GST dropdown inside kpi-sm */
+.kpi-sm select option {
+  background: #1e293b;
+}
+
+@media (max-width: 760px) {
+  .kpi-row-secondary {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+}
+
+@media (max-width: 400px) {
+  .kpi-row-secondary {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .kpi-sm {
+    padding: 12px 14px;
+  }
+}
+
 /* ── Workers KPI compact row ──────────────────────── */
 .workers-kpi-row {
   display: grid;

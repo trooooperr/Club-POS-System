@@ -218,7 +218,7 @@ router.post('/mark', requireRole(['admin', 'manager']), async (req, res) => {
 
 // GET /api/attendance/monthly?month=YYYY-MM
 // Detailed monthly breakdown with all staff members, present/absent days, and complete absence details
-// Active working days exclude restaurant closed days!
+// Restaurant closed days count as ABSENT for all staff — they are NOT excluded from working days.
 router.get('/monthly', requireRole(['admin', 'manager', 'staff']), async (req, res) => {
   try {
     const currentMonthIST = getCurrentMonthIST();
@@ -258,9 +258,9 @@ router.get('/monthly', requireRole(['admin', 'manager', 'staff']), async (req, r
       }
     }
 
-    // Active working days strictly exclude closed days!
-    const activeDays = Math.max(0, elapsedDays - elapsedClosedDays);
-    const totalActiveDaysInMonth = Math.max(0, totalDaysInMonth - totalClosedDaysInMonth);
+    // Active working days = all elapsed calendar days (closed days count as absent, NOT subtracted)
+    const activeDays = elapsedDays;
+    const totalActiveDaysInMonth = totalDaysInMonth;
 
     const workers = await Worker.find().sort({ name: 1 }).lean();
     const records = await Attendance.find({ month: queryMonth }).sort({ date: 1 }).lean();
@@ -279,18 +279,32 @@ router.get('/monthly', requireRole(['admin', 'manager', 'staff']), async (req, r
 
     const staffSummary = workers.map(w => {
       const wRecords = recordsByWorker.get(w._id.toString()) || [];
-      // Records on closed days should not penalize staff as absences
-      const activeRecords = wRecords.filter(r => !closedDatesSet.has(r.date));
-      const absences = activeRecords.filter(r => r.status === 'absent');
-      const leaves = activeRecords.filter(r => r.status === 'leave');
-      const halfDays = activeRecords.filter(r => r.status === 'half-day');
 
-      const absentCount = absences.length;
+      // All records matter — closed days count as absent, not excluded
+      const allRecords = wRecords;
+      const absences = allRecords.filter(r => r.status === 'absent');
+      const leaves = allRecords.filter(r => r.status === 'leave');
+      const halfDays = allRecords.filter(r => r.status === 'half-day');
+
+      // Count explicitly recorded absences
+      const explicitAbsentCount = absences.length;
       const leaveCount = leaves.length;
       const halfDayCount = halfDays.length;
       const totalOvertimeHours = wRecords.reduce((sum, r) => sum + (Number(r.overtimeHours) || 0), 0);
 
-      // Unrecorded days are treated as present ONLY on active working days!
+      // Closed days that were NOT already explicitly recorded as absent for this worker
+      // (avoid double-counting if someone was manually recorded as absent on a closed day)
+      const workerRecordedDates = new Set(wRecords.map(r => r.date));
+      const unrecordedClosedDays = isFutureMonth ? 0 : [...closedDatesSet].filter(cd => {
+        // Only count closed days that have already elapsed
+        if (isCurrentMonth && cd > todayIST) return false;
+        return !workerRecordedDates.has(cd);
+      }).length;
+
+      // Total absences = explicit absent records + unrecorded closed days
+      const absentCount = explicitAbsentCount + unrecordedClosedDays;
+
+      // Unrecorded non-closed days are treated as present
       const totalNonPresent = absentCount + leaveCount + (halfDayCount * 0.5);
       const presentDays = isFutureMonth ? 0 : Math.max(0, parseFloat((activeDays - totalNonPresent).toFixed(1)));
       const attendanceRate = activeDays > 0 ? Math.round((presentDays / activeDays) * 100) : (isFutureMonth ? 0 : 100);
@@ -300,6 +314,7 @@ router.get('/monthly', requireRole(['admin', 'manager', 'staff']), async (req, r
       totalOvertimeAll += totalOvertimeHours;
 
       // Full details of all days this staff member was absent, on leave, or worked overtime
+      // Include synthetic absent entries for unrecorded closed days
       const absenceDetails = wRecords
         .filter(r => r.status !== 'present' || (r.overtimeHours || 0) > 0)
         .map(r => {
@@ -319,6 +334,30 @@ router.get('/monthly', requireRole(['admin', 'manager', 'staff']), async (req, r
           };
         });
 
+      // Add synthetic absent entries for unrecorded elapsed closed days
+      const sortedClosedDays = [...closedDatesSet].filter(cd => {
+        if (isFutureMonth) return false;
+        if (isCurrentMonth && cd > todayIST) return false;
+        return !workerRecordedDates.has(cd);
+      }).sort();
+      for (const cd of sortedClosedDays) {
+        const closedInfo = closedDays.find(c => c.date === cd);
+        const d = new Date(cd + 'T00:00:00Z');
+        const dayName = d.toLocaleDateString('en-IN', { weekday: 'short', timeZone: 'UTC' });
+        absenceDetails.push({
+          _id: null,
+          date: cd,
+          dayName,
+          status: 'absent',
+          overtimeHours: 0,
+          isClosedDay: true,
+          note: closedInfo?.reason || 'Restaurant Closed',
+          markedBy: closedInfo?.markedBy || 'System',
+          updatedAt: null
+        });
+      }
+      absenceDetails.sort((a, b) => a.date.localeCompare(b.date));
+
       return {
         workerId: w._id,
         name: w.name,
@@ -326,7 +365,7 @@ router.get('/monthly', requireRole(['admin', 'manager', 'staff']), async (req, r
         contact: w.contact || '',
         salary: w.salary || 0,
         joiningDate: w.joiningDate,
-        totalDays: activeDays, // Active working days (excluding closed days)
+        totalDays: activeDays, // Full calendar elapsed days (closed days count as absent)
         calendarDays: elapsedDays,
         presentDays,
         absentDays: absentCount,

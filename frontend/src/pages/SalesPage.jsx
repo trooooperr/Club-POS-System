@@ -168,7 +168,8 @@ const renderLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, name
 };
 
 export default function SalesPage() {
-  const { settings } = useApp();
+  const { settings, role } = useApp();
+  const [gstMode, setGstMode] = useState('collected'); // 'collected' | 'estimated' — admin only
   
   const getBusinessTodayStr = () => {
     const d = new Date();
@@ -490,11 +491,50 @@ export default function SalesPage() {
         </div>
 
         <div className="kpi kpi-sm">
-          <div className="kpi-label" style={{ color: '#67E8F9' }}>GST Collected</div>
-          <div className="kpi-value mono" style={{ color: '#67E8F9', fontSize: 20 }}>
-            {loading ? '...' : `₹${(analytics?.totalGst || 0).toLocaleString('en-IN')}`}
-          </div>
-          <div style={{ fontSize: 11.5, color: '#94A3B8', fontWeight: 500, marginTop: 3 }}>SGST + CGST</div>
+          {role === 'admin' ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <div className="kpi-label" style={{ color: '#67E8F9', marginBottom: 0 }}>GST</div>
+                <select
+                  value={gstMode}
+                  onChange={e => setGstMode(e.target.value)}
+                  style={{
+                    background: 'rgba(103,232,249,0.10)',
+                    border: '1px solid rgba(103,232,249,0.30)',
+                    borderRadius: 6,
+                    color: '#67E8F9',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    padding: '2px 6px',
+                    cursor: 'pointer',
+                    outline: 'none',
+                    letterSpacing: '0.04em',
+                  }}
+                >
+                  <option value="collected" style={{ background: '#1e293b', color: '#e2e8f0' }}>GST Collected (Actual)</option>
+                  <option value="estimated" style={{ background: '#1e293b', color: '#e2e8f0' }}>Estimated 5% GST</option>
+                </select>
+              </div>
+              <div className="kpi-value mono" style={{ color: '#67E8F9', fontSize: 20 }}>
+                {loading ? '...' : (() => {
+                  if (gstMode === 'collected') return `₹${(analytics?.totalGst || 0).toLocaleString('en-IN')}`;
+                  const est = Math.round((analytics?.restaurantSales ?? 0) * 5 / 105);
+                  return `₹${est.toLocaleString('en-IN')}`;
+                })()}
+              </div>
+              <div style={{ fontSize: 11.5, color: '#94A3B8', fontWeight: 500, marginTop: 3 }}>
+                {gstMode === 'collected' ? 'SGST + CGST' : '5% of Restaurant'}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="kpi-label" style={{ color: '#67E8F9' }}>Estimated GST (5%)</div>
+              <div className="kpi-value mono" style={{ color: '#67E8F9', fontSize: 20 }}>
+                {loading ? '...' : `₹${Math.round((analytics?.restaurantSales ?? 0) * 5 / 105).toLocaleString('en-IN')}`}
+              </div>
+              <div style={{ fontSize: 11.5, color: '#94A3B8', fontWeight: 500, marginTop: 3 }}>5% of Restaurant</div>
+            </>
+          )}
         </div>
 
         {analytics?.eventCount > 0 && (
