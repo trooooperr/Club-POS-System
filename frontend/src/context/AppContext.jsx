@@ -4,6 +4,7 @@ import { formatBillDateTime } from '../lib/formatDate';
 import io from 'socket.io-client';
 import QRCode from 'qrcode';
 import { BILL_LOGO_BASE64 } from '../lib/billLogoBase64';
+import { getOfflineQueue, addToOfflineQueue, removeFromOfflineQueue, cacheMenuItemsLocally, getCachedMenuItems } from '../lib/offlineQueue';
 
 
 const playAlarmChime = () => {
@@ -260,7 +261,7 @@ export function AppProvider({ children }) {
   const [sidebarOpen,   setSidebarOpen]   = useState(false);
 
   // ── Data ────────────────────────────────────────────────────────
-  const [menuItems,    setMenuItems]    = useState([]);
+  const [menuItems,    setMenuItems]    = useState(() => getCachedMenuItems());
   const [orderHistory, setOrderHistory] = useState([]);
   const [activeSessions, setActiveSessions] = useState([]);
   const [workers,      setWorkers]      = useState([]);
@@ -268,6 +269,11 @@ export function AppProvider({ children }) {
   const [loading,      setLoading]      = useState(true);
   const [error,        setError]        = useState(null);
   const printedKotIdsRef = useRef(new Set());
+
+  // ── Offline Resilience State ─────────────────────────────────────
+  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const [offlineQueueCount, setOfflineQueueCount] = useState(() => getOfflineQueue().length);
+  const [isSyncingOffline, setIsSyncingOffline] = useState(false);
 
   const applyInventoryUpdate = useCallback((nextInventory) => {
     if (!Array.isArray(nextInventory)) return;
@@ -891,6 +897,7 @@ export function AppProvider({ children }) {
         const res = results[indexMap.menu];
         if (res && res.status === 'fulfilled' && Array.isArray(res.value)) {
           setMenuItems(res.value);
+          cacheMenuItemsLocally(res.value);
         }
       }
       if (components.includes('orders') && indexMap.orders !== undefined) {
@@ -932,6 +939,71 @@ export function AppProvider({ children }) {
     }
   }, [setMenuItems, setWorkers, setInventory, setSettings]);
 
+  // ── Offline Queue Auto-Sync ──────────────────────────────────────────
+  const flushOfflineQueue = useCallback(async () => {
+    const queue = getOfflineQueue();
+    if (!queue || queue.length === 0) {
+      setOfflineQueueCount(0);
+      return;
+    }
+    setIsSyncingOffline(true);
+    let synced = 0;
+    for (const item of queue) {
+      try {
+        const res = await authFetch(apiUrl('/api/orders/offline-sync'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(item)
+        });
+        if (res.ok) {
+          const data = await res.json();
+          removeFromOfflineQueue(item.offlineSyncId);
+          synced++;
+          if (data.order) {
+            setOrderHistory(prev => {
+              const arr = Array.isArray(prev) ? prev : [];
+              const filtered = arr.filter(o => o.offlineSyncId !== item.offlineSyncId && o._id !== data.order._id);
+              return [data.order, ...filtered];
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Sync attempt failed for offline order:', item.offlineSyncId, err.message);
+        break; // Network still disconnected, stop iteration
+      }
+    }
+    setOfflineQueueCount(getOfflineQueue().length);
+    setIsSyncingOffline(false);
+    if (synced > 0) {
+      showToast(`✅ Synced ${synced} offline ${synced === 1 ? 'order' : 'orders'} with database!`, 'success');
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      showToast('📶 Internet reconnected! Syncing offline orders...', 'info');
+      flushOfflineQueue();
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      showToast('⚡ Internet disconnected. Offline Billing Mode active.', 'amber');
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    const syncInterval = setInterval(() => {
+      if (typeof navigator !== 'undefined' && navigator.onLine && getOfflineQueue().length > 0) {
+        flushOfflineQueue();
+      }
+    }, 25000);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      clearInterval(syncInterval);
+    };
+  }, [flushOfflineQueue, showToast]);
 
   // ── Print Agent Auto Connect ─────────────────────────────────────────
   const fetchAgentPrinters = useCallback(async () => {
@@ -1768,6 +1840,9 @@ export function AppProvider({ children }) {
 
   const createKOT = useCallback(async (orderId, tableNo, items, notes = '', waiterName = '', orderType = 'dine-in') => {
     try {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        throw new TypeError('Failed to fetch (offline)');
+      }
       const res = await authFetch(apiUrl('/api/kots'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1785,9 +1860,34 @@ export function AppProvider({ children }) {
       return kot;
     } catch (err) {
       console.error('Create KOT error:', err);
+      const isNetworkError = (typeof navigator !== 'undefined' && !navigator.onLine) ||
+        err.name === 'TypeError' ||
+        err.message?.includes('fetch') ||
+        err.message?.includes('Network');
+
+      if (isNetworkError) {
+        console.warn('⚠️ Network offline during createKOT. Generating local KOT for local printing...');
+        const offlineKot = {
+          _id: `OFFLINE_KOT_${Date.now()}`,
+          kotNo: `KOT-OFF-${String(Date.now()).slice(-4)}`,
+          orderId,
+          tableNo,
+          items,
+          notes,
+          waiterName,
+          orderType,
+          status: 'PENDING',
+          createdAt: new Date().toISOString(),
+          isOffline: true
+        };
+        setKots(prev => [offlineKot, ...prev]);
+        setIsOnline(false);
+        showToast('⚡ Offline KOT generated. Printing to kitchen/bar now...', 'amber');
+        return offlineKot;
+      }
       throw err;
     }
-  }, [socket, applyInventoryUpdate]);
+  }, [socket, applyInventoryUpdate, showToast]);
 
   const updateKOTStatus = useCallback(async (kotId, status) => {
     try {
@@ -1859,15 +1959,19 @@ export function AppProvider({ children }) {
   }, [socket, applyInventoryUpdate, setOrderHistory, setInvoiceOrder]);
 
   const finalizeBill = useCallback(async (orderId, items, subtotal, sgst, cgst, serviceTax, discount, roundOff, grandTotal, waiterName = '', orderType = 'dine-in', customerName = '', customerPhone = '', paymentMode = 'cash', cashAmount = 0, upiAmount = 0, isCredit = false, paidAmount = undefined, dueAmount = undefined, discountPercent = undefined, serviceTaxRate = undefined, fine = 0, foodSubtotal = 0, alcoholSubtotal = 0) => {
+    const mappedFinalItems = (items || []).map(i => {
+      const isAlc = checkIsAlcoholic(i, allSellableItems, inventory);
+      return {
+        ...i,
+        isAlcoholic: isAlc,
+        department: isAlc ? 'bar' : (i.department || 'kitchen')
+      };
+    });
+
     try {
-      const mappedFinalItems = (items || []).map(i => {
-        const isAlc = checkIsAlcoholic(i, allSellableItems, inventory);
-        return {
-          ...i,
-          isAlcoholic: isAlc,
-          department: isAlc ? 'bar' : (i.department || 'kitchen')
-        };
-      });
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        throw new TypeError('Failed to fetch (offline)');
+      }
       const res = await authFetch(apiUrl(`/api/orders/${orderId}/finalize-bill`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -1905,9 +2009,52 @@ export function AppProvider({ children }) {
       return order;
     } catch (err) {
       console.error('Finalize bill error:', err);
+      const isNetworkError = (typeof navigator !== 'undefined' && !navigator.onLine) ||
+        err.name === 'TypeError' ||
+        err.message?.includes('fetch') ||
+        err.message?.includes('Network');
+
+      if (isNetworkError) {
+        console.warn('⚠️ Network offline during finalizeBill. Activating local offline fallback...');
+        const offlineSyncId = `offline_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        const tableNum = activeTableId ? parseInt(String(activeTableId).replace(/\D/g, ''), 10) || 1 : 1;
+        const offlineOrder = {
+          _id: (orderId && !String(orderId).startsWith('OFFLINE')) ? orderId : `OFFLINE_${Date.now()}`,
+          offlineSyncId,
+          isOffline: true,
+          tableNo: tableNum,
+          items: mappedFinalItems,
+          subtotal, foodSubtotal, alcoholSubtotal,
+          sgst, cgst, serviceTax, serviceTaxRate,
+          discount, discountPercent, fine, roundOff,
+          grandTotal, waiterName, orderType,
+          customerName, customerPhone, paymentMode,
+          cashAmount, upiAmount, isCredit,
+          paidAmount: paidAmount !== undefined ? paidAmount : grandTotal,
+          dueAmount: dueAmount !== undefined ? dueAmount : 0,
+          date: new Date().toISOString(),
+          billNo: `HTB-OFF-${String(Date.now()).slice(-4)}`,
+          orderStatus: 'COMPLETED',
+          isActive: false
+        };
+
+        addToOfflineQueue(offlineOrder);
+        setOfflineQueueCount(getOfflineQueue().length);
+        setIsOnline(false);
+
+        setOrderHistory(prev => [offlineOrder, ...(Array.isArray(prev) ? prev : [])]);
+        setInvoiceOrder(offlineOrder);
+
+        if (activeTableId) {
+          clearTable(activeTableId);
+        }
+
+        showToast('⚡ Saved in Offline Mode. Printing bill now... Will auto-sync when online.', 'amber');
+        return offlineOrder;
+      }
       throw err;
     }
-  }, [applyInventoryUpdate, socket, allSellableItems, inventory]);
+  }, [applyInventoryUpdate, socket, allSellableItems, inventory, activeTableId, clearTable, showToast]);
 
   const completeOrder = useCallback(async (orderId) => {
     try {
@@ -2016,6 +2163,8 @@ export function AppProvider({ children }) {
       kotSessions, currentSession, kots,
       openTableSession, syncTableSession, createKOT, updateKOTStatus, removeKOTItem, deleteKOT, finalizeBill, completeOrder, cancelTableSession,
       printKOTDocument, printBillDocument, checkIsAlcoholic,
+      // Offline Resilience
+      isOnline, offlineQueueCount, isSyncingOffline, flushOfflineQueue,
     }}>
       {children}
     </AppContext.Provider>

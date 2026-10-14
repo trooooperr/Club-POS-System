@@ -29,7 +29,7 @@ function Shell() {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  const { currentUser, activeSection, setActiveSection, selectTable, settings, loading, error, loadData, sidebarOpen, setSidebarOpen, invoiceOrder, activeTableId, showToast, tableBills, getTableStatus, NUM_TABLES, activeTableCount } = useApp();
+  const { currentUser, activeSection, setActiveSection, selectTable, settings, loading, error, loadData, sidebarOpen, setSidebarOpen, invoiceOrder, activeTableId, showToast, tableBills, getTableStatus, NUM_TABLES, activeTableCount, isOnline, offlineQueueCount, isSyncingOffline, flushOfflineQueue } = useApp();
 
   const pageTitles = {
     billing: 'Billing',
@@ -143,6 +143,44 @@ function Shell() {
           <div style={{ background:'rgba(239,68,68,0.07)', borderBottom:'1px solid rgba(239,68,68,0.18)', padding:'6px 18px', display:'flex', alignItems:'center', justifyContent:'space-between', fontSize:11, color:'var(--red)', flexShrink:0 }}>
             <span>⚠️ {error}</span>
             <button className="btn btn-danger btn-sm" onClick={loadData}>Retry</button>
+          </div>
+        )}
+
+        {(!isOnline || offlineQueueCount > 0) && (
+          <div style={{
+            background: !isOnline ? 'rgba(234, 179, 8, 0.12)' : 'rgba(59, 130, 246, 0.12)',
+            borderBottom: `1px solid ${!isOnline ? 'rgba(234, 179, 8, 0.3)' : 'rgba(59, 130, 246, 0.3)'}`,
+            padding: '7px 18px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontSize: '12px',
+            color: !isOnline ? '#eab308' : '#60a5fa',
+            fontWeight: '600',
+            flexShrink: 0,
+            zIndex: 99
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '14px' }}>{!isOnline ? '⚡' : '🔄'}</span>
+              <span>{!isOnline ? 'Offline Billing Mode Active' : 'Offline Orders Pending Sync'}</span>
+              <span style={{ fontWeight: 'normal', color: 'var(--t1)', fontSize: '11px' }}>
+                {!isOnline
+                  ? `(Local billing & thermal printing enabled. ${offlineQueueCount} ${offlineQueueCount === 1 ? 'order' : 'orders'} queued)`
+                  : `(${offlineQueueCount} ${offlineQueueCount === 1 ? 'order' : 'orders'} waiting to sync)`
+                }
+              </span>
+            </div>
+            {isOnline && offlineQueueCount > 0 && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={flushOfflineQueue}
+                disabled={isSyncingOffline}
+                style={{ fontSize: '11px', padding: '3px 10px', height: '26px' }}
+              >
+                {isSyncingOffline ? 'Syncing...' : 'Sync Now'}
+              </button>
+            )}
           </div>
         )}
 

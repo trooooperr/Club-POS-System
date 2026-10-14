@@ -632,6 +632,131 @@ router.patch('/:id/finalize-bill', async (req, res) => {
   }
 });
 
+// ── SYNC OFFLINE ORDER (Offline Resilience Endpoint) ────────────
+router.post('/offline-sync', async (req, res) => {
+  try {
+    const {
+      offlineSyncId,
+      orderId,
+      tableNo,
+      items,
+      subtotal,
+      foodSubtotal,
+      alcoholSubtotal,
+      sgst,
+      cgst,
+      serviceTax,
+      serviceTaxRate,
+      discount,
+      discountPercent,
+      fine,
+      roundOff,
+      grandTotal,
+      waiterName,
+      orderType,
+      customerName,
+      customerPhone,
+      paymentMode,
+      cashAmount,
+      upiAmount,
+      isCredit,
+      paidAmount,
+      dueAmount,
+      date
+    } = req.body;
+
+    // 1. Idempotency check: has this offline bill already been synced?
+    if (offlineSyncId) {
+      const existing = await Order.findOne({ offlineSyncId });
+      if (existing) {
+        return res.json({ success: true, order: existing, alreadySynced: true });
+      }
+    }
+
+    let order = null;
+    // 2. Check if an order already existed in DB for this session
+    if (orderId && mongoose.Types.ObjectId.isValid(orderId)) {
+      order = await Order.findById(orderId);
+    }
+
+    if (!order) {
+      const targetDate = date ? new Date(date) : new Date();
+      const businessDate = getBusinessDateString(targetDate);
+      order = new Order({
+        tableNo: Number(tableNo) || 1,
+        date: targetDate,
+        businessDate,
+        grandTotal: grandTotal || 0,
+        subtotal: subtotal || 0,
+        sgst: sgst || 0,
+        cgst: cgst || 0,
+        paymentMode: paymentMode || 'cash',
+        orderType: orderType || 'dine-in',
+        orderStatus: 'COMPLETED',
+        isActive: false,
+        offlineSyncId: offlineSyncId || '',
+      });
+    }
+
+    order.items = Array.isArray(items) ? items : [];
+    order.subtotal = Number(subtotal) || 0;
+    order.foodSubtotal = Number(foodSubtotal) || 0;
+    order.alcoholSubtotal = Number(alcoholSubtotal) || 0;
+    order.sgst = Number(sgst) || 0;
+    order.cgst = Number(cgst) || 0;
+    order.serviceTax = Number(serviceTax) || 0;
+    order.serviceTaxRate = Number(serviceTaxRate) || 0;
+    order.discount = Number(discount) || 0;
+    order.discountPercent = Number(discountPercent) || 0;
+    order.fine = Number(fine) || 0;
+    order.roundOff = Number(roundOff) || 0;
+    order.grandTotal = Number(grandTotal) || 0;
+    order.waiterName = waiterName || '';
+    order.orderType = orderType || 'dine-in';
+    order.customerName = customerName || '';
+    order.customerPhone = customerPhone || '';
+    order.paymentMode = paymentMode || 'cash';
+    order.cashAmount = Number(cashAmount) || 0;
+    order.upiAmount = Number(upiAmount) || 0;
+    order.isActive = false;
+    order.orderStatus = 'COMPLETED';
+    if (offlineSyncId) order.offlineSyncId = offlineSyncId;
+
+    let calculatedPaid = paidAmount !== undefined ? parseFloat(paidAmount) || 0 : order.grandTotal;
+    const calculatedDue = Math.max(0, order.grandTotal - calculatedPaid);
+    order.paidAmount = calculatedPaid;
+    order.dueAmount = calculatedDue;
+    order.paymentStatus = calculatedDue === 0 ? 'paid' : (calculatedPaid === 0 ? 'pending' : 'partial');
+    order.isCredit = isCredit || calculatedDue > 0;
+
+    await ensureUniqueBillNo(order);
+    const saved = await order.save();
+
+    if (saved.customerPhone) {
+      try {
+        const { recordCustomerVisit } = require('../lib/crmService');
+        recordCustomerVisit({
+          phone: saved.customerPhone,
+          name: saved.customerName,
+          billNo: saved.billNo,
+          amount: saved.grandTotal,
+          items: saved.items,
+          orderType: saved.orderType,
+          date: saved.date || saved.createdAt
+        }).catch(() => {});
+      } catch (e) {}
+    }
+
+    await TableSession.findOneAndDelete({ activeOrderId: order._id });
+    await deleteCache([ORDERS_CACHE_KEY, REPORT_SUMMARY_CACHE_KEY]);
+
+    res.json({ success: true, order: saved });
+  } catch (err) {
+    console.error('Offline sync error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // ── GET FULL ORDER HISTORY (including completed) ────────────────────
 router.get('/history/all', async (req, res) => {
   try {

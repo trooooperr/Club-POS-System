@@ -41,6 +41,7 @@ const orderSchema = new mongoose.Schema({
   paymentStatus: { type: String, enum: ['paid', 'partial', 'pending'], default: 'paid', index: true },
   isCredit:      { type: Boolean, default: false, index: true },
   isManualDue:   { type: Boolean, default: false, index: true },
+  offlineSyncId: { type: String, default: '', index: true },
   settlementHistory: [{
     amount: { type: Number, required: true },
     paymentMode: { type: String, default: 'cash' },
