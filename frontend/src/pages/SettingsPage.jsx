@@ -1339,7 +1339,7 @@ export default function SettingsPage() {
                       </div>
                       <div className="device-meta-row">
                         <span className="device-meta-item">
-                          <MapPin size={13} /> {s.location || 'Gorakhpur, Uttar Pradesh, India'}
+                          <MapPin size={13} /> {s.location || 'India (Approximate)'}
                         </span>
                         <span className="device-meta-item">
                           <Clock size={13} /> Signed in: {formatSessionDate(s.createdAt)}

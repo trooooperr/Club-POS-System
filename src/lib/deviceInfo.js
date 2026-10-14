@@ -103,7 +103,7 @@ async function resolveLocation(ip, clientLocationHint = null) {
   }
 
   if (!ip || isPrivateIp(ip)) {
-    return 'Gorakhpur, Uttar Pradesh (In-Store)';
+    return 'In-Store / Local Network';
   }
 
   if (geoCache.has(ip)) {
@@ -115,7 +115,6 @@ async function resolveLocation(ip, clientLocationHint = null) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 1800);
 
-    // Try ipwho.is first (accurate regional Indian ISP registry)
     const res = await fetch(`https://ipwho.is/${ip}`, {
       signal: controller.signal
     });
@@ -125,14 +124,10 @@ async function resolveLocation(ip, clientLocationHint = null) {
       const data = await res.json();
       if (data && data.success) {
         let loc = '';
-        if (data.region === 'Uttar Pradesh') {
-          // If in UP (HumTum is in Gorakhpur, UP)
-          loc = data.city && data.city !== 'Dadri' 
-            ? `${data.city}, Uttar Pradesh, India` 
-            : 'Gorakhpur, Uttar Pradesh, India';
-        } else {
-          const parts = [data.city, data.region, data.country].filter(Boolean);
-          loc = parts.join(', ');
+        if (data.region && data.country) {
+          loc = `${data.region}, ${data.country} (Approximate)`;
+        } else if (data.country) {
+          loc = `${data.country} (Approximate)`;
         }
         if (loc) {
           geoCache.set(ip, loc);
@@ -157,18 +152,17 @@ async function resolveLocation(ip, clientLocationHint = null) {
 
     if (res.ok) {
       const data = await res.json();
-      if (data && data.country === 'IN') {
-        const region = data.region || 'Uttar Pradesh';
-        const loc = region === 'Uttar Pradesh' 
-          ? 'Gorakhpur, Uttar Pradesh, India' 
-          : `${data.city ? data.city + ', ' : ''}${region}, India`;
+      if (data && data.country) {
+        const countryName = data.country === 'IN' ? 'India' : data.country;
+        const region = data.region;
+        const loc = region ? `${region}, ${countryName} (Approximate)` : `${countryName} (Approximate)`;
         geoCache.set(ip, loc);
         return loc;
       }
     }
   } catch {}
 
-  const fallback = 'Uttar Pradesh, India';
+  const fallback = 'India (Approximate)';
   geoCache.set(ip, fallback);
   return fallback;
 }
