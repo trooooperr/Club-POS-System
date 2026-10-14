@@ -37,7 +37,7 @@ function clearRefreshCookie(res) {
 // ── Login ───────────────────────────────────────────────────────
 router.post('/login', async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { username, password, locationHint } = req.body;
     if (!username || !password) {
       return res.status(400).json({ error: 'Username and password are required' });
     }
@@ -69,7 +69,7 @@ router.post('/login', async (req, res) => {
 
     // Device & Location info
     const device = getDeviceDetails(req);
-    const location = await resolveLocation(device.ip);
+    const location = await resolveLocation(device.ip, locationHint || null);
     const sessionId = crypto.randomUUID ? crypto.randomUUID() : crypto.randomBytes(16).toString('hex');
 
     const accessToken  = generateToken(user, sessionId);

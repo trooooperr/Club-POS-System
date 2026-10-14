@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { API_BASE, apiUrl, authFetch } from '../lib/api';
+import { API_BASE, apiUrl, authFetch, TOKEN_KEY, REFRESH_TOKEN_KEY, AUTH_KEY, SESSION_KEY } from '../lib/api';
+import { getGeoLocation, clearGeoCache } from '../lib/geo';
 import { formatBillDateTime } from '../lib/formatDate';
 import io from 'socket.io-client';
 import QRCode from 'qrcode';
@@ -776,11 +777,14 @@ export function AppProvider({ children }) {
   // ── Auth helpers ────────────────────────────────────────────────
   const login = useCallback(async (username, password) => {
     try {
+      // Silently try to get real GPS-based city — falls back to null if denied
+      const locationHint = await getGeoLocation().catch(() => null);
+
       const res = await fetch(apiUrl('/api/auth/login'), {
         method:      'POST',
         credentials: 'include',
         headers:     { 'Content-Type': 'application/json' },
-        body:        JSON.stringify({ username, password }),
+        body:        JSON.stringify({ username, password, locationHint }),
       });
       const data = await res.json();
 
@@ -816,6 +820,7 @@ export function AppProvider({ children }) {
         body:        JSON.stringify({ refreshToken, sessionId }),
       }).catch(() => {});
     } catch {}
+    clearGeoCache();
     localStorage.removeItem(AUTH_KEY);
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(REFRESH_TOKEN_KEY);
