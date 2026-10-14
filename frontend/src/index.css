@@ -6313,13 +6313,13 @@ textarea,
    Active Devices & Sessions (Google-style security list)
 ───────────────────────────────────────────────────────────── */
 .settings-devices-card {
-  margin-top: 10px;
+  margin-top: 14px;
 }
 
 .devices-count-badge {
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
-  padding: 2px 8px;
+  padding: 3px 10px;
   border-radius: 12px;
   background: var(--s3);
   color: var(--t1);
@@ -6329,45 +6329,46 @@ textarea,
 .devices-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-top: 8px;
+  gap: 12px;
+  margin-top: 12px;
 }
 
 .device-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 14px 16px;
-  background: var(--s2);
+  gap: 20px;
+  padding: 16px 20px;
+  background: var(--s1);
   border: 1px solid var(--b1);
-  border-radius: 10px;
+  border-radius: 12px;
   transition: all 0.2s ease;
 }
 
 .device-item:hover {
   border-color: var(--b2);
-  background: var(--s3);
+  background: var(--s2);
 }
 
 .device-item.is-current {
-  border-color: rgba(16, 185, 129, 0.4);
-  background: rgba(16, 185, 129, 0.04);
+  border-color: rgba(16, 185, 129, 0.5);
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.09) 0%, rgba(16, 185, 129, 0.02) 100%);
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.08);
 }
 
 .device-item-left {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   flex: 1;
   min-width: 0;
 }
 
 .device-icon-wrap {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
-  background: var(--s3);
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: var(--s2);
   border: 1px solid var(--b1);
   display: flex;
   align-items: center;
@@ -6377,108 +6378,138 @@ textarea,
 }
 
 .device-item.is-current .device-icon-wrap {
-  background: rgba(16, 185, 129, 0.15);
-  border-color: rgba(16, 185, 129, 0.3);
+  background: rgba(16, 185, 129, 0.18);
+  border-color: rgba(16, 185, 129, 0.4);
   color: var(--green);
 }
 
 .device-info {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
 }
 
 .device-title-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
 .device-name {
-  font-size: 13.5px;
-  font-weight: 700;
+  font-size: 14.5px;
+  font-weight: 800;
   color: var(--t0);
+  letter-spacing: -0.01em;
 }
 
 .device-current-badge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: 11px;
+  gap: 6px;
+  font-size: 11.5px;
   font-weight: 700;
   color: var(--green);
   background: var(--green-bg);
   border: 1px solid var(--green-border);
-  padding: 2px 7px;
+  padding: 3px 9px;
   border-radius: 6px;
 }
 
 .device-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green);
+}
+
+.device-active-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--green);
+}
+
+.device-active-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: var(--green);
-  box-shadow: 0 0 6px var(--green);
 }
 
 .device-ip-badge {
   font-family: var(--mono);
-  font-size: 11px;
-  color: var(--t2);
-  background: var(--s4);
-  padding: 1px 6px;
+  font-size: 11.5px;
+  color: var(--t1);
+  background: var(--s3);
+  padding: 2px 7px;
   border-radius: 4px;
-  border: 1px solid var(--b0);
+  border: 1px solid var(--b1);
 }
 
 .device-meta-row {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 18px;
   flex-wrap: wrap;
-  font-size: 12px;
-  color: var(--t2);
+  font-size: 12.5px;
+  color: var(--t1);
 }
 
 .device-meta-item {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
 }
 
-.device-active-now {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--green);
-  padding: 4px 10px;
+.device-meta-item svg {
+  color: var(--t2);
+  flex-shrink: 0;
+}
+
+.device-item-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .device-logout-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   color: #ef4444 !important;
-  border-color: rgba(239, 68, 68, 0.4) !important;
-  background: rgba(239, 68, 68, 0.15) !important;
-  font-size: 12px;
-  padding: 6px 12px;
-  border-radius: 6px;
+  border: 1px solid rgba(239, 68, 68, 0.45) !important;
+  background: rgba(239, 68, 68, 0.12) !important;
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 8px 16px;
+  border-radius: 8px;
   transition: all 0.2s ease;
   cursor: pointer;
 }
 
 .device-logout-btn:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.3) !important;
+  background: rgba(239, 68, 68, 0.28) !important;
   border-color: #ef4444 !important;
+  color: #ffffff !important;
+  transform: translateY(-1px);
+}
+
+.device-logout-btn.current-logout-btn {
+  background: rgba(239, 68, 68, 0.18) !important;
+  border-color: rgba(239, 68, 68, 0.6) !important;
 }
 
 .devices-empty-state {
   text-align: center;
-  padding: 24px 10px;
+  padding: 30px 10px;
   color: var(--t2);
-  font-size: 13px;
+  font-size: 13.5px;
 }
 
 

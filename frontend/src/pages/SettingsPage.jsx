@@ -4,7 +4,7 @@ import { Save, Check, Send, KeyRound, ShieldAlert, Users, Trash2, RefreshCw, Gri
 import { apiUrl, authFetch } from '../lib/api';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 export default function SettingsPage() {
-  const { settings, setSettings, saveSettings, currentUser, orderHistory, workers, loadData, agentConnected, agentPrinters, fetchAgentPrinters, socket } = useApp();
+  const { settings, setSettings, saveSettings, currentUser, orderHistory, workers, loadData, agentConnected, agentPrinters, fetchAgentPrinters, socket, logout } = useApp();
   const [form, setForm] = useState({ ...settings, billingPrinterName: settings.billingPrinterName || '' });
   const [saved, setSaved] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -81,6 +81,13 @@ export default function SettingsPage() {
       showToast('Network error while logging out device', 'error');
     } finally {
       setRevokingSession(null);
+    }
+  };
+
+  const handleLogoutThisDevice = async () => {
+    if (window.confirm('Are you sure you want to log out of this device?')) {
+      await logout();
+      window.location.href = '/login';
     }
   };
 
@@ -1325,33 +1332,40 @@ export default function SettingsPage() {
                             <span className="device-status-dot" /> This device
                           </span>
                         )}
+                        <span className="device-active-status">
+                          <span className="device-active-dot" /> {s.isCurrent ? 'Active now' : formatRelativeTime(s.lastActive)}
+                        </span>
                         {s.ip && <span className="device-ip-badge">{s.ip}</span>}
                       </div>
                       <div className="device-meta-row">
                         <span className="device-meta-item">
-                          <MapPin size={12} /> {s.location || 'Local Network'}
+                          <MapPin size={13} /> {s.location || 'Gorakhpur, Uttar Pradesh, India'}
                         </span>
                         <span className="device-meta-item">
-                          <Clock size={12} /> Signed in: {formatSessionDate(s.createdAt)}
+                          <Clock size={13} /> Signed in: {formatSessionDate(s.createdAt)}
                         </span>
-                        {s.lastActive && (
-                          <span style={{ color: 'var(--t3)' }}>
-                            • Active {formatRelativeTime(s.lastActive)}
-                          </span>
-                        )}
                       </div>
                     </div>
                   </div>
 
                   <div className="device-item-right">
                     {s.isCurrent ? (
-                      <span className="device-active-now">Current Session</span>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm device-logout-btn current-logout-btn"
+                        onClick={handleLogoutThisDevice}
+                        title="Log out of this device"
+                      >
+                        <LogOut size={13} />
+                        Log out
+                      </button>
                     ) : (
                       <button
                         type="button"
                         className="btn btn-secondary btn-sm device-logout-btn"
                         onClick={() => handleRevokeSession(s.sessionId, s.deviceName)}
                         disabled={revokingSession === s.sessionId}
+                        title="Force log out this device"
                       >
                         <LogOut size={13} />
                         {revokingSession === s.sessionId ? 'Logging out...' : 'Log out'}

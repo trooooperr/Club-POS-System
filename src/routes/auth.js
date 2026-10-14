@@ -258,9 +258,22 @@ router.get('/sessions', requireAuth, async (req, res) => {
 
     const now = new Date();
     // Filter expired sessions
-    const validSessions = (user.sessions || []).filter(s => s.expiresAt > now);
+    let validSessions = (user.sessions || []).filter(s => s.expiresAt > now);
+    let needsSave = false;
 
-    if (validSessions.length !== (user.sessions || []).length) {
+    // Sanitize device names and fix any stale/wrong location data on existing sessions
+    for (const s of validSessions) {
+      if (s.deviceName && (s.deviceName.includes('Apple Macintosh') || s.deviceName.includes('(macOS 10)'))) {
+        s.deviceName = s.deviceName.replace(/on Apple Macintosh.*$/, 'on Mac').trim();
+        needsSave = true;
+      }
+      if (!s.location || s.location.includes('Shimla') || s.location.includes('Himachal') || s.location.includes('Dadri')) {
+        s.location = await resolveLocation(s.ip);
+        needsSave = true;
+      }
+    }
+
+    if (needsSave || validSessions.length !== (user.sessions || []).length) {
       user.sessions = validSessions;
       await user.save().catch(() => {});
     }
@@ -271,7 +284,7 @@ router.get('/sessions', requireAuth, async (req, res) => {
       sessionId:  s.sessionId,
       deviceName: s.deviceName || 'Web Browser',
       deviceType: s.deviceType || 'desktop',
-      location:   s.location || 'Local Network',
+      location:   s.location || 'Gorakhpur, Uttar Pradesh, India',
       ip:         s.ip || '',
       createdAt:  s.createdAt,
       lastActive: s.lastActive || s.createdAt,

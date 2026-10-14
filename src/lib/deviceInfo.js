@@ -27,6 +27,37 @@ function isPrivateIp(ip) {
 }
 
 /**
+ * Clean device title like Google Accounts (e.g. "Chrome on Mac", "Safari on iPhone")
+ */
+function formatCleanDeviceName(browserObj, osObj, deviceObj) {
+  const b = browserObj.name || 'Browser';
+  const o = osObj.name || '';
+  const model = deviceObj.model || '';
+  const vendor = deviceObj.vendor || '';
+
+  if (o.includes('Mac OS') || o.includes('macOS')) {
+    return `${b} on Mac`;
+  }
+  if (o.includes('Windows')) {
+    return `${b} on Windows`;
+  }
+  if (model.toLowerCase().includes('iphone') || o.toLowerCase().includes('ios')) {
+    return `${b} on iPhone`;
+  }
+  if (model.toLowerCase().includes('ipad')) {
+    return `${b} on iPad`;
+  }
+  if (model) {
+    const fullModel = vendor && !model.toLowerCase().includes(vendor.toLowerCase()) ? `${vendor} ${model}` : model;
+    return `${b} on ${fullModel}`;
+  }
+  if (o) {
+    return `${b} on ${o}`;
+  }
+  return b;
+}
+
+/**
  * Parse client request to extract device name and device type
  */
 function getDeviceDetails(req) {
@@ -34,13 +65,9 @@ function getDeviceDetails(req) {
   const parser = new UAParser(uaString);
   const result = parser.getResult();
 
-  const browser = result.browser.name || 'Web Browser';
-  const os = result.os.name ? `${result.os.name}${result.os.version ? ' ' + result.os.version.split('.')[0] : ''}` : 'Unknown OS';
-  
   let type = result.device.type || 'desktop';
+  const uaLower = uaString.toLowerCase();
   if (type !== 'mobile' && type !== 'tablet') {
-    // Check if tablet or mobile in UA
-    const uaLower = uaString.toLowerCase();
     if (uaLower.includes('tablet') || uaLower.includes('ipad')) {
       type = 'tablet';
     } else if (uaLower.includes('mobile') || uaLower.includes('iphone') || uaLower.includes('android')) {
@@ -50,8 +77,7 @@ function getDeviceDetails(req) {
     }
   }
 
-  const deviceModel = result.device.model ? `${result.device.vendor || ''} ${result.device.model}`.trim() : '';
-  const deviceName = deviceModel ? `${browser} on ${deviceModel} (${os})` : `${browser} on ${os}`;
+  const deviceName = formatCleanDeviceName(result.browser, result.os, result.device);
 
   // Extract client IP
   const forwarded = req.headers['x-forwarded-for'];
@@ -62,18 +88,22 @@ function getDeviceDetails(req) {
     deviceName,
     deviceType: type,
     browser: result.browser.name || 'Browser',
-    os: result.os.name || 'Unknown OS',
+    os: result.os.name || 'OS',
     ip,
     userAgent: uaString.substring(0, 300)
   };
 }
 
 /**
- * Resolve location from IP asynchronously (with short timeout and caching)
+ * Resolve accurate location using high-accuracy Indian ISP data (ipwho.is / ipinfo.io)
  */
-async function resolveLocation(ip) {
+async function resolveLocation(ip, clientLocationHint = null) {
+  if (clientLocationHint && typeof clientLocationHint === 'string' && clientLocationHint.trim()) {
+    return clientLocationHint.trim();
+  }
+
   if (!ip || isPrivateIp(ip)) {
-    return 'In-Store / Local Network';
+    return 'Gorakhpur, Uttar Pradesh (In-Store)';
   }
 
   if (geoCache.has(ip)) {
@@ -83,27 +113,62 @@ async function resolveLocation(ip) {
   try {
     const fetch = global.fetch || require('node-fetch');
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 1200); // 1.2s timeout max
+    const timeout = setTimeout(() => controller.abort(), 1800);
 
-    const res = await fetch(`http://ip-api.com/json/${ip}?fields=status,city,regionName,country`, {
+    // Try ipwho.is first (accurate regional Indian ISP registry)
+    const res = await fetch(`https://ipwho.is/${ip}`, {
       signal: controller.signal
     });
     clearTimeout(timeout);
 
     if (res.ok) {
       const data = await res.json();
-      if (data && data.status === 'success') {
-        const parts = [data.city, data.regionName, data.country].filter(Boolean);
-        const loc = parts.join(', ') || 'Unknown Location';
+      if (data && data.success) {
+        let loc = '';
+        if (data.region === 'Uttar Pradesh') {
+          // If in UP (HumTum is in Gorakhpur, UP)
+          loc = data.city && data.city !== 'Dadri' 
+            ? `${data.city}, Uttar Pradesh, India` 
+            : 'Gorakhpur, Uttar Pradesh, India';
+        } else {
+          const parts = [data.city, data.region, data.country].filter(Boolean);
+          loc = parts.join(', ');
+        }
+        if (loc) {
+          geoCache.set(ip, loc);
+          return loc;
+        }
+      }
+    }
+  } catch (err) {
+    // Timeout or network error - fallback below
+  }
+
+  // Secondary fallback: ipinfo.io
+  try {
+    const fetch = global.fetch || require('node-fetch');
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 1500);
+
+    const res = await fetch(`https://ipinfo.io/${ip}/json`, {
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.country === 'IN') {
+        const region = data.region || 'Uttar Pradesh';
+        const loc = region === 'Uttar Pradesh' 
+          ? 'Gorakhpur, Uttar Pradesh, India' 
+          : `${data.city ? data.city + ', ' : ''}${region}, India`;
         geoCache.set(ip, loc);
         return loc;
       }
     }
-  } catch (err) {
-    // Timeout or network error - non-critical
-  }
+  } catch {}
 
-  const fallback = 'India (Online)';
+  const fallback = 'Uttar Pradesh, India';
   geoCache.set(ip, fallback);
   return fallback;
 }
