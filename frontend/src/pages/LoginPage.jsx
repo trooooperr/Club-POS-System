@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useApp, ROLE_HIERARCHY } from '../context/AppContext';
-import { Lock, User, ShieldCheck, Mail, ArrowLeft, KeyRound, MapPin } from 'lucide-react';
-import { requestGeoPermission, getGeoPermissionState } from '../lib/geo';
+import { Lock, User, ShieldCheck, Mail, ArrowLeft, KeyRound } from 'lucide-react';
 
 const RC = { admin:'#F59E0B', manager:'#3B82F6', staff:'#10B981' };
 
@@ -23,31 +22,6 @@ export default function LoginPage() {
   const [fpBusy, setFpBusy]     = useState(false);
   const [fpMsg, setFpMsg]       = useState('');
 
-  // Geo permission state: 'idle' | 'requesting' | 'granted' | 'denied'
-  const [geoStatus, setGeoStatus] = useState('idle');
-
-  // On mount: proactively check/request location permission
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const state = await getGeoPermissionState();
-      if (cancelled) return;
-      if (state === 'granted') {
-        setGeoStatus('granted');
-        // Silently refresh cache in background
-        requestGeoPermission().catch(() => {});
-      } else if (state === 'denied') {
-        setGeoStatus('denied');
-      } else {
-        // 'prompt' or 'unknown' — trigger popup now while user is reading the login form
-        setGeoStatus('requesting');
-        const loc = await requestGeoPermission();
-        if (cancelled) return;
-        setGeoStatus(loc ? 'granted' : 'denied');
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
 
 
   const submit = async e => {
@@ -261,40 +235,7 @@ export default function LoginPage() {
           <div className="lsub">Point of Sale</div>
         </div>
 
-        {/* Location permission banner */}
-        {geoStatus === 'denied' && (
-          <div
-            onClick={() => window.open(`${window.location.origin}`, '_self')}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              background: 'rgba(239,68,68,0.08)',
-              border: '1px solid rgba(239,68,68,0.25)',
-              borderRadius: 10, padding: '8px 14px',
-              marginBottom: 12, cursor: 'pointer',
-              fontSize: 12, color: 'var(--t2)'
-            }}
-            title="Click to open site settings and allow location"
-          >
-            <MapPin size={13} style={{ color: '#ef4444', flexShrink: 0 }} />
-            <span>
-              Location blocked — 
-              <strong style={{ color: '#ef4444' }}> click the 🔒 lock icon</strong> in your browser
-              address bar → <strong>Site settings</strong> → allow Location.
-            </span>
-          </div>
-        )}
-        {geoStatus === 'granted' && (
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            background: 'rgba(16,185,129,0.08)',
-            border: '1px solid rgba(16,185,129,0.2)',
-            borderRadius: 10, padding: '8px 14px',
-            marginBottom: 12, fontSize: 12, color: '#10b981'
-          }}>
-            <MapPin size={13} style={{ flexShrink: 0 }} />
-            <span>Location access enabled — your real city will be shown in active sessions.</span>
-          </div>
-        )}
+
 
         {/* Form */}
         <form onSubmit={submit}>
