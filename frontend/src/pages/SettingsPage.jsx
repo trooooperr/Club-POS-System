@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { Save, Check, Send, KeyRound, ShieldAlert, Users, Trash2, RefreshCw, GripVertical, Download, Laptop, Smartphone, Tablet, Monitor, MapPin, Clock, LogOut, ShieldCheck, Database, UploadCloud, ExternalLink } from 'lucide-react';
+import { Save, Check, Send, KeyRound, ShieldAlert, Users, Trash2, RefreshCw, GripVertical, Download, Laptop, Smartphone, Tablet, Monitor, MapPin, Clock, LogOut, ShieldCheck, Database, UploadCloud, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
 import { apiUrl, authFetch } from '../lib/api';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 export default function SettingsPage() {
@@ -8,6 +8,8 @@ export default function SettingsPage() {
   const [form, setForm] = useState({ ...settings, billingPrinterName: settings.billingPrinterName || '' });
   const [saved, setSaved] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const [showTechnicalSettings, setShowTechnicalSettings] = useState(false);
 
   const [isCashierPos, setIsCashierPos] = useState(localStorage.getItem('is_cashier_pos') !== 'false');
 
@@ -63,8 +65,8 @@ export default function SettingsPage() {
 
   // ── Database Backup State & Handlers ───────────────────────────
   const [triggeringBackup, setTriggeringBackup] = useState(false);
+  const [restoringBackup, setRestoringBackup] = useState(false);
   const [backupResult, setBackupResult] = useState(null);
-  const [downloadingBackup, setDownloadingBackup] = useState(false);
 
   const handleTriggerDriveBackup = async () => {
     setTriggeringBackup(true);
@@ -77,13 +79,11 @@ export default function SettingsPage() {
       if (res.ok && data.success) {
         setBackupResult({
           success: true,
-          message: data.message,
-          webViewLink: data.webViewLink,
+          message: 'Instant backup created and uploaded to Google Drive!',
           elapsed: data.elapsed,
-          folderLabel: data.folderLabel,
           time: new Date().toLocaleTimeString('en-IN')
         });
-        showToast('Backup uploaded to Google Drive successfully!', 'success');
+        showToast('Instant backup created and synced to Google Drive!', 'success');
       } else {
         setBackupResult({ success: false, error: data.error || 'Failed to complete backup' });
         showToast(data.error || 'Backup failed', 'error');
@@ -96,32 +96,35 @@ export default function SettingsPage() {
     }
   };
 
-  const handleDownloadBackupArchive = async () => {
-    setDownloadingBackup(true);
+  const handleSyncFromLatestBackup = async () => {
+    if (!window.confirm('⚠️ Are you sure you want to sync MongoDB with your latest backup?\n\nThis will download the latest backup from Google Drive and sync all database collections.')) {
+      return;
+    }
+    setRestoringBackup(true);
+    setBackupResult(null);
     try {
-      showToast('Generating fresh backup archive, downloading will start in a moment...', 'info');
-      const token = localStorage.getItem('token');
-      const res = await fetch(apiUrl('/api/admin/backup/download'), {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      showToast('Downloading latest backup from Google Drive and syncing database...', 'info');
+      const res = await authFetch(apiUrl('/api/admin/backup/restore-latest'), {
+        method: 'POST'
       });
-      if (!res.ok) {
-        throw new Error('Failed to generate backup archive');
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setBackupResult({
+          success: true,
+          message: data.message || 'Database successfully synced with latest backup!',
+          time: new Date().toLocaleTimeString('en-IN')
+        });
+        showToast('Database successfully synced with latest backup!', 'success');
+        if (typeof loadData === 'function') loadData();
+      } else {
+        setBackupResult({ success: false, error: data.error || 'Failed to sync from latest backup' });
+        showToast(data.error || 'Database sync failed', 'error');
       }
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      const today = new Date().toISOString().slice(0, 10);
-      a.download = `humtum_pos_backup_${today}.tar.gz`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      showToast('Backup archive downloaded successfully!', 'success');
     } catch (err) {
-      showToast('Download error: ' + err.message, 'error');
+      setBackupResult({ success: false, error: err.message });
+      showToast('Error syncing database: ' + err.message, 'error');
     } finally {
-      setDownloadingBackup(false);
+      setRestoringBackup(false);
     }
   };
 
@@ -785,197 +788,7 @@ export default function SettingsPage() {
           </div>
         </section>
 
-
-
-        <section className="settings-card settings-full">
-          <div className="settings-card-head">
-            <div>
-              <h2>Printing Services</h2>
-              <p>Configure local silent receipt and KOT routing via Print Agent.</p>
-            </div>
-            {form.printAgentEnabled && (
-              <div className={`qz-status-badge ${agentConnected ? 'connected' : 'disconnected'}`}>
-                <div className="qz-status-dot" style={{ backgroundColor: agentConnected ? '#2ea043' : '#8b949e' }} />
-                <span>{agentConnected ? 'Print Agent Connected' : 'Print Agent Disconnected'}</span>
-              </div>
-            )}
-          </div>
-
-          <div className="settings-printing-row" style={{ marginTop: '14px' }}>
-            <label className="settings-toggle" style={{ margin: 0 }}>
-              <input type="checkbox" checked={!!form.printAgentEnabled} onChange={e => {
-                set('printAgentEnabled', e.target.checked);
-              }} />
-              <span>Use Local Print Agent (Silent Printing)</span>
-            </label>
-          </div>
-
-          {form.printAgentEnabled && (
-            <div style={{ marginTop: '16px' }}>
-              <div style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '12px', border: '1px solid var(--b1)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
-                  <h3 style={{ fontSize: '14px', fontWeight: '600', margin: 0 }}>Print Agent Configuration</h3>
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-                    <a
-                      href="/print-agent.zip"
-                      download="print-agent.zip"
-                      className="btn btn-secondary"
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', padding: '6px 14px', borderRadius: '8px', textDecoration: 'none', color: 'var(--t0)' }}
-                    >
-                      <Download size={13} />
-                      Download Agent
-                    </a>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={handleSelfUpdate}
-                      disabled={updatingAgent || !agentConnected}
-                      title={!agentConnected ? 'Print Agent must be running to update' : 'Push the latest update to the cashier laptop automatically'}
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', padding: '6px 14px', borderRadius: '8px' }}
-                    >
-                      <RefreshCw size={13} style={{ animation: updatingAgent ? 'spin 1s linear infinite' : 'none' }} />
-                      {updatingAgent ? 'Updating...' : 'Update Agent'}
-                    </button>
-                    <a
-                      href="/print-agent.js"
-                      download="print-agent.js"
-                      title="Download only the updated print-agent.js file"
-                      style={{ fontSize: '11px', color: 'var(--t2)', textDecoration: 'underline', marginLeft: '4px' }}
-                    >
-                      (or download only print-agent.js)
-                    </a>
-                  </div>
-                </div>
-                <div className="settings-printing-row" style={{ gap: '16px', marginBottom: '16px' }}>
-                  <div className="settings-field" style={{ flex: 1, minWidth: '150px' }}>
-                    <label>Agent Port</label>
-                    <input
-                      type="number"
-                      disabled
-                      value={form.printAgentPort || 5001}
-                      style={{ background: 'var(--b3)', cursor: 'not-allowed' }}
-                    />
-                  </div>
-                  <div className="settings-field" style={{ flex: 2, minWidth: '250px' }}>
-                    <label>Authorization Token (Paste into config.json)</label>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <input
-                        type="text"
-                        readOnly
-                        value={form.printAgentToken || ''}
-                        style={{ fontFamily: 'monospace', fontSize: '12px', background: 'var(--b3)' }}
-                      />
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        onClick={() => {
-                          navigator.clipboard.writeText(form.printAgentToken || '');
-                          showToast('Token copied to clipboard', 'success');
-                        }}
-                        style={{ padding: '8px 12px', fontSize: '12px' }}
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ marginTop: '24px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={handleDetectPrinters}
-                    disabled={fetchingPrinters}
-                    style={{ fontSize: '12px', padding: '6px 14px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}
-                  >
-                    <RefreshCw size={13} style={{ animation: fetchingPrinters ? 'spin 1s linear infinite' : 'none' }} />
-                    {fetchingPrinters ? 'Detecting...' : 'Detect Printers'}
-                  </button>
-                  {agentPrinters.length > 0 && (
-                    <span style={{ fontSize: '11px', color: '#8b949e' }}>{agentPrinters.length} printer(s) detected</span>
-                  )}
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  {/* Kitchen Printer */}
-                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: '12px', flexWrap: 'wrap' }}>
-                    <div className="settings-field" style={{ flex: 1, minWidth: '250px', margin: 0 }}>
-                      <label>Kitchen Printer</label>
-                      <select
-                        value={form.kitchenPrinterName || ''}
-                        onChange={e => set('kitchenPrinterName', e.target.value)}
-                        style={{ padding: '8px', borderRadius: '8px', border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)' }}
-                      >
-                        <option value="">-- Select Printer --</option>
-                        {printerOptions.map(p => <option key={p} value={p}>{p}</option>)}
-                      </select>
-                    </div>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={() => handleTestPrint(form.kitchenPrinterName, 'Kitchen Printer')}
-                      disabled={!form.kitchenPrinterName || testingPrinter !== null}
-                      style={{ height: '36px', padding: '0 16px', borderRadius: '8px', fontSize: '12px' }}
-                    >
-                      {testingPrinter === form.kitchenPrinterName ? 'Testing...' : 'Test Print'}
-                    </button>
-                  </div>
-
-                  {/* Bar Printer */}
-                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: '12px', flexWrap: 'wrap' }}>
-                    <div className="settings-field" style={{ flex: 1, minWidth: '250px', margin: 0 }}>
-                      <label>Bar Printer</label>
-                      <select
-                        value={form.barPrinterName || ''}
-                        onChange={e => set('barPrinterName', e.target.value)}
-                        style={{ padding: '8px', borderRadius: '8px', border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)' }}
-                      >
-                        <option value="">-- Select Printer --</option>
-                        {printerOptions.map(p => <option key={p} value={p}>{p}</option>)}
-                      </select>
-                    </div>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={() => handleTestPrint(form.barPrinterName, 'Bar Printer')}
-                      disabled={!form.barPrinterName || testingPrinter !== null}
-                      style={{ height: '36px', padding: '0 16px', borderRadius: '8px', fontSize: '12px' }}
-                    >
-                      {testingPrinter === form.barPrinterName ? 'Testing...' : 'Test Print'}
-                    </button>
-                  </div>
-
-                  {/* Billing Printer */}
-                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: '12px', flexWrap: 'wrap' }}>
-                    <div className="settings-field" style={{ flex: 1, minWidth: '250px', margin: 0 }}>
-                      <label>Billing Printer</label>
-                      <select
-                        value={form.billingPrinterName || ''}
-                        onChange={e => set('billingPrinterName', e.target.value)}
-                        style={{ padding: '8px', borderRadius: '8px', border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)' }}
-                      >
-                        <option value="">-- Select Printer --</option>
-                        {printerOptions.map(p => <option key={p} value={p}>{p}</option>)}
-                      </select>
-                    </div>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={() => handleTestPrint(form.billingPrinterName, 'Billing Printer')}
-                      disabled={!form.billingPrinterName || testingPrinter !== null}
-                      style={{ height: '36px', padding: '0 16px', borderRadius: '8px', fontSize: '12px' }}
-                    >
-                      {testingPrinter === form.billingPrinterName ? 'Testing...' : 'Test Print'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </section>
-
+        {/* Operational Settings: Menu Categories */}
         <section className="settings-card settings-full">
           <div className="settings-card-head">
             <div>
@@ -1036,6 +849,7 @@ export default function SettingsPage() {
           </div>
         </section>
 
+        {/* Operational Settings: Inventory Categories */}
         <section className="settings-card settings-full">
           <div className="settings-card-head">
             <div>
@@ -1096,472 +910,524 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        <section className="settings-card settings-full">
-          <div className="settings-card-head">
-            <div>
-              <h2>Daily Report</h2>
-              <p>Send today&apos;s summary to the configured administrator email.</p>
+        {/* Collapsible Technical & Advanced Settings Header */}
+        <div className="settings-full" style={{ marginTop: '12px' }}>
+          <button
+            type="button"
+            onClick={() => setShowTechnicalSettings(prev => !prev)}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '16px 20px',
+              borderRadius: '8px',
+              fontSize: '15px',
+              fontWeight: '800',
+              cursor: 'pointer',
+              background: 'var(--s1)',
+              border: '1px solid var(--b1)',
+              color: 'var(--t0)',
+              transition: 'all 0.2s ease',
+              boxShadow: 'var(--sh-sm)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              <ShieldAlert size={18} style={{ color: 'var(--a)' }} />
+              <span>Technical & Advanced Settings</span>
+              <span style={{ fontSize: '12px', color: 'var(--t2)', fontWeight: 'normal' }}>
+                (Printers, Cloud Backup, Daily Email, Active Devices, Security)
+              </span>
             </div>
-          </div>
-
-
-
-          <div className="settings-fields settings-report-fields">
-            <div className="settings-field">
-              <label>Sender Email</label>
-              <input value={form.senderEmail || settings.senderEmail || ''} readOnly className="settings-readonly" />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--a)' }}>
+              <span style={{ fontSize: '13px', fontWeight: '600' }}>{showTechnicalSettings ? 'Hide' : 'Show'}</span>
+              {showTechnicalSettings ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
             </div>
-            <div className="settings-field">
-              <label>Admin Email</label>
-              <input value={email.adminEmail || ''} onChange={e => setE('adminEmail', e.target.value)} placeholder="owner@company.com" />
-            </div>
-          </div>
-          <div className="settings-actions">
-            <button className="btn btn-primary settings-grid-action" onClick={handleSaveEmail} disabled={savingEmail}>
-              {savingEmail ? 'Saving...' : 'Save Email'}
-            </button>
-          </div>
-        </section>
+          </button>
+        </div>
 
-        {/* Database & Google Drive Backup Section */}
-        {['admin', 'manager'].includes(currentUser?.role) && (
-          <section className="settings-card settings-full" style={{ border: '1px solid #e2e8f0', borderRadius: '12px' }}>
-            <div className="settings-card-head" style={{ borderBottom: '1px solid #f1f5f9', paddingBottom: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ background: '#eff6ff', padding: '8px', borderRadius: '8px', color: '#2563eb' }}>
-                  <Database size={24} />
-                </div>
+        {/* Collapsible Technical & Advanced Content */}
+        {showTechnicalSettings && (
+          <>
+            {/* 1. Printing Services */}
+            <section className="settings-card settings-full">
+              <div className="settings-card-head">
                 <div>
-                  <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600 }}>Database & Google Drive Backup</h2>
-                  <p style={{ margin: '4px 0 0 0', color: '#64748b', fontSize: '0.875rem' }}>
-                    Automatic daily cloud backups to Google Drive. Create on-demand backups or download full archives anytime.
-                  </p>
+                  <h2>Printing Services</h2>
+                  <p>Configure local silent receipt and KOT routing via Print Agent.</p>
                 </div>
-              </div>
-            </div>
-
-            {/* Status Info Chips */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', marginTop: '16px' }}>
-              <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                <div style={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>Automated Schedule</div>
-                <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#0f172a', marginTop: '4px' }}>Daily at 05:30 AM IST</div>
-              </div>
-
-              <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                <div style={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>Cloud Retention</div>
-                <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#0f172a', marginTop: '4px' }}>5 Years (1,825 Snapshots)</div>
-              </div>
-
-              <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                <div style={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>Google Drive Folder</div>
-                <a 
-                  href="https://drive.google.com/drive/folders/1wqA5UxxtETmWMuvzXQKFBEsSv11DKYZV" 
-                  target="_blank" 
-                  rel="noreferrer"
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.95rem', fontWeight: 600, color: '#2563eb', marginTop: '4px', textDecoration: 'none' }}
-                >
-                  HumTum_DB_Backups <ExternalLink size={14} />
-                </a>
-              </div>
-            </div>
-
-            {/* Result Notification Banner */}
-            {backupResult && (
-              <div style={{
-                marginTop: '16px',
-                padding: '12px 16px',
-                borderRadius: '8px',
-                background: backupResult.success ? '#ecfdf5' : '#fef2f2',
-                border: `1px solid ${backupResult.success ? '#a7f3d0' : '#fecaca'}`,
-                color: backupResult.success ? '#065f46' : '#991b1b',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: '10px'
-              }}>
-                <div>
-                  <strong>{backupResult.success ? '✅ Success:' : '❌ Failed:'}</strong>{' '}
-                  {backupResult.message || backupResult.error}
-                  {backupResult.elapsed && <span> (Completed in {backupResult.elapsed}s at {backupResult.time})</span>}
-                </div>
-                {backupResult.webViewLink && (
-                  <a
-                    href={backupResult.webViewLink}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{ color: '#047857', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px', textDecoration: 'underline' }}
-                  >
-                    View File on Google Drive <ExternalLink size={14} />
-                  </a>
+                {form.printAgentEnabled && (
+                  <div className={`qz-status-badge ${agentConnected ? 'connected' : 'disconnected'}`}>
+                    <div className="qz-status-dot" style={{ backgroundColor: agentConnected ? '#2ea043' : '#8b949e' }} />
+                    <span>{agentConnected ? 'Print Agent Connected' : 'Print Agent Disconnected'}</span>
+                  </div>
                 )}
               </div>
-            )}
 
-            {/* Action Buttons */}
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '20px' }}>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleTriggerDriveBackup}
-                disabled={triggeringBackup || downloadingBackup}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 20px', fontWeight: 600 }}
-              >
-                {triggeringBackup ? (
-                  <>
-                    <RefreshCw size={18} className="spin" />
-                    Backing Up & Uploading to Drive...
-                  </>
-                ) : (
-                  <>
-                    <UploadCloud size={18} />
-                    Backup to Google Drive Now
-                  </>
-                )}
-              </button>
-
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={handleDownloadBackupArchive}
-                disabled={triggeringBackup || downloadingBackup}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 20px', fontWeight: 600 }}
-              >
-                {downloadingBackup ? (
-                  <>
-                    <RefreshCw size={18} className="spin" />
-                    Generating Archive...
-                  </>
-                ) : (
-                  <>
-                    <Download size={18} />
-                    Download Backup File (.tar.gz)
-                  </>
-                )}
-              </button>
-            </div>
-          </section>
-        )}
-
-
-        {false && currentUser?.role === 'admin' && (
-          <section className="settings-card settings-full">
-            <div className="settings-card-head">
-              <div>
-                <h2>WhatsApp Business Integration</h2>
-                <p>Send automated thank-you messages and review/social media links on bill finalization.</p>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginTop: '16px' }}>
-              
-              {/* Left Column: Settings Configuration */}
-              <div style={{ flex: '1 1 450px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                <div className="settings-field">
-                  <label>Thank You Message Template</label>
-                  <textarea
-                    rows={10}
-                    value={form.whatsappTemplate || ''}
-                    onChange={e => set('whatsappTemplate', e.target.value)}
-                    style={{
-                      width: '100%',
-                      minHeight: '200px',
-                      background: 'var(--b2)',
-                      border: '1px solid var(--border)',
-                      borderRadius: '8px',
-                      color: 'var(--t0)',
-                      padding: '10px',
-                      fontFamily: 'monospace',
-                      fontSize: '13px',
-                      resize: 'vertical'
-                    }}
-                    placeholder="Write your template..."
-                  />
-                </div>
-              </div>
-
-              {/* Right Column: Connection State / QR Code */}
-              <div style={{
-                flex: '1 1 300px',
-                background: 'var(--b2)',
-                borderRadius: '12px',
-                padding: '20px',
-                border: '1px solid var(--border)',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                minHeight: '300px',
-                textAlign: 'center'
-              }}>
-                <h3 style={{ marginBottom: '10px', color: 'var(--t0)' }}>WhatsApp Connection Status</h3>
-                
-                {/* Status Indicator */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
-                  <div style={{
-                    width: '12px',
-                    height: '12px',
-                    borderRadius: '50%',
-                    backgroundColor: whatsappStatus.status === 'CONNECTED' ? '#4ade80' : whatsappStatus.status === 'CONNECTING' ? '#facc15' : '#f87171'
+              <div className="settings-printing-row" style={{ marginTop: '14px' }}>
+                <label className="settings-toggle" style={{ margin: 0 }}>
+                  <input type="checkbox" checked={!!form.printAgentEnabled} onChange={e => {
+                    set('printAgentEnabled', e.target.checked);
                   }} />
-                  <span style={{ fontWeight: '600', color: 'var(--t1)', textTransform: 'uppercase', fontSize: '14px' }}>
-                    {whatsappStatus.status}
-                  </span>
+                  <span>Use Local Print Agent (Silent Printing)</span>
+                </label>
+              </div>
+
+              {form.printAgentEnabled && (
+                <div style={{ marginTop: '16px' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '12px', border: '1px solid var(--b1)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+                      <h3 style={{ fontSize: '14px', fontWeight: '600', margin: 0 }}>Print Agent Configuration</h3>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                        <a
+                          href="/print-agent.zip"
+                          download="print-agent.zip"
+                          className="btn btn-secondary"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', padding: '6px 14px', borderRadius: '8px', textDecoration: 'none', color: 'var(--t0)' }}
+                        >
+                          <Download size={13} />
+                          Download Agent
+                        </a>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={handleSelfUpdate}
+                          disabled={updatingAgent || !agentConnected}
+                          title={!agentConnected ? 'Print Agent must be running to update' : 'Push the latest update to the cashier laptop automatically'}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', padding: '6px 14px', borderRadius: '8px' }}
+                        >
+                          <RefreshCw size={13} style={{ animation: updatingAgent ? 'spin 1s linear infinite' : 'none' }} />
+                          {updatingAgent ? 'Updating...' : 'Update Agent'}
+                        </button>
+                        <a
+                          href="/print-agent.js"
+                          download="print-agent.js"
+                          title="Download only the updated print-agent.js file"
+                          style={{ fontSize: '11px', color: 'var(--t2)', textDecoration: 'underline', marginLeft: '4px' }}
+                        >
+                          (or download only print-agent.js)
+                        </a>
+                      </div>
+                    </div>
+                    <div className="settings-printing-row" style={{ gap: '16px', marginBottom: '16px' }}>
+                      <div className="settings-field" style={{ flex: 1, minWidth: '150px' }}>
+                        <label>Agent Port</label>
+                        <input
+                          type="number"
+                          disabled
+                          value={form.printAgentPort || 5001}
+                          style={{ background: 'var(--b3)', cursor: 'not-allowed' }}
+                        />
+                      </div>
+                      <div className="settings-field" style={{ flex: 2, minWidth: '250px' }}>
+                        <label>Authorization Token (Paste into config.json)</label>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <input
+                            type="text"
+                            readOnly
+                            value={form.printAgentToken || ''}
+                            style={{ fontFamily: 'monospace', fontSize: '12px', background: 'var(--b3)' }}
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() => {
+                              navigator.clipboard.writeText(form.printAgentToken || '');
+                              showToast('Token copied to clipboard', 'success');
+                            }}
+                            style={{ padding: '8px 12px', fontSize: '12px' }}
+                          >
+                            Copy
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: '24px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={handleDetectPrinters}
+                        disabled={fetchingPrinters}
+                        style={{ fontSize: '12px', padding: '6px 14px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                      >
+                        <RefreshCw size={13} style={{ animation: fetchingPrinters ? 'spin 1s linear infinite' : 'none' }} />
+                        {fetchingPrinters ? 'Detecting...' : 'Detect Printers'}
+                      </button>
+                      {agentPrinters.length > 0 && (
+                        <span style={{ fontSize: '11px', color: '#8b949e' }}>{agentPrinters.length} printer(s) detected</span>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      {/* Kitchen Printer */}
+                      <div style={{ display: 'flex', alignItems: 'flex-end', gap: '12px', flexWrap: 'wrap' }}>
+                        <div className="settings-field" style={{ flex: 1, minWidth: '250px', margin: 0 }}>
+                          <label>Kitchen Printer</label>
+                          <select
+                            value={form.kitchenPrinterName || ''}
+                            onChange={e => set('kitchenPrinterName', e.target.value)}
+                            style={{ padding: '8px', borderRadius: '8px', border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)' }}
+                          >
+                            <option value="">-- Select Printer --</option>
+                            {printerOptions.map(p => <option key={p} value={p}>{p}</option>)}
+                          </select>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={() => handleTestPrint(form.kitchenPrinterName, 'Kitchen Printer')}
+                          disabled={!form.kitchenPrinterName || testingPrinter !== null}
+                          style={{ height: '36px', padding: '0 16px', borderRadius: '8px', fontSize: '12px' }}
+                        >
+                          {testingPrinter === form.kitchenPrinterName ? 'Testing...' : 'Test Print'}
+                        </button>
+                      </div>
+
+                      {/* Bar Printer */}
+                      <div style={{ display: 'flex', alignItems: 'flex-end', gap: '12px', flexWrap: 'wrap' }}>
+                        <div className="settings-field" style={{ flex: 1, minWidth: '250px', margin: 0 }}>
+                          <label>Bar Printer</label>
+                          <select
+                            value={form.barPrinterName || ''}
+                            onChange={e => set('barPrinterName', e.target.value)}
+                            style={{ padding: '8px', borderRadius: '8px', border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)' }}
+                          >
+                            <option value="">-- Select Printer --</option>
+                            {printerOptions.map(p => <option key={p} value={p}>{p}</option>)}
+                          </select>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={() => handleTestPrint(form.barPrinterName, 'Bar Printer')}
+                          disabled={!form.barPrinterName || testingPrinter !== null}
+                          style={{ height: '36px', padding: '0 16px', borderRadius: '8px', fontSize: '12px' }}
+                        >
+                          {testingPrinter === form.barPrinterName ? 'Testing...' : 'Test Print'}
+                        </button>
+                      </div>
+
+                      {/* Billing Printer */}
+                      <div style={{ display: 'flex', alignItems: 'flex-end', gap: '12px', flexWrap: 'wrap' }}>
+                        <div className="settings-field" style={{ flex: 1, minWidth: '250px', margin: 0 }}>
+                          <label>Billing Printer</label>
+                          <select
+                            value={form.billingPrinterName || ''}
+                            onChange={e => set('billingPrinterName', e.target.value)}
+                            style={{ padding: '8px', borderRadius: '8px', border: '1px solid var(--b1)', background: 'var(--s2)', color: 'var(--t0)' }}
+                          >
+                            <option value="">-- Select Printer --</option>
+                            {printerOptions.map(p => <option key={p} value={p}>{p}</option>)}
+                          </select>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={() => handleTestPrint(form.billingPrinterName, 'Billing Printer')}
+                          disabled={!form.billingPrinterName || testingPrinter !== null}
+                          style={{ height: '36px', padding: '0 16px', borderRadius: '8px', fontSize: '12px' }}
+                        >
+                          {testingPrinter === form.billingPrinterName ? 'Testing...' : 'Test Print'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
+
+            {/* 2. Daily Report */}
+            <section className="settings-card settings-full">
+              <div className="settings-card-head">
+                <div>
+                  <h2>Daily Report</h2>
+                  <p>Send today&apos;s summary to the configured administrator email.</p>
+                </div>
+              </div>
+
+              <div className="settings-fields settings-report-fields">
+                <div className="settings-field">
+                  <label>Sender Email</label>
+                  <input value={form.senderEmail || settings.senderEmail || ''} readOnly className="settings-readonly" />
+                </div>
+                <div className="settings-field">
+                  <label>Admin Email</label>
+                  <input value={email.adminEmail || ''} onChange={e => setE('adminEmail', e.target.value)} placeholder="owner@company.com" />
+                </div>
+              </div>
+              <div className="settings-actions">
+                <button className="btn btn-primary settings-grid-action" onClick={handleSaveEmail} disabled={savingEmail}>
+                  {savingEmail ? 'Saving...' : 'Save Email'}
+                </button>
+              </div>
+            </section>
+
+            {/* 3. Database Backup & Sync Section */}
+            {['admin', 'manager'].includes(currentUser?.role) && (
+              <section className="settings-card settings-full">
+                <div className="settings-card-head">
+                  <div>
+                    <h2>Database Backup & Sync</h2>
+                    <p>Instant cloud backup and one-click database restore from your latest Google Drive backup.</p>
+                  </div>
+                  <Database size={20} style={{ color: 'var(--a)' }} />
                 </div>
 
-                {whatsappStatus.status === 'CONNECTED' ? (
-                  <div>
-                    <p style={{ color: 'var(--t2)', fontSize: '13px', marginBottom: '15px' }}>
-                      Connected to WhatsApp Business account: <strong>{whatsappStatus.user}</strong>
-                    </p>
-                    <button
-                      className="btn btn-secondary"
-                      onClick={handleWhatsappDisconnect}
-                      disabled={loadingWhatsapp}
-                      style={{ background: '#f87171', color: 'white' }}
-                    >
-                      {loadingWhatsapp ? 'Disconnecting...' : 'Disconnect WhatsApp'}
+                <div className="settings-actions" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '16px' }}>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={handleTriggerDriveBackup}
+                    disabled={triggeringBackup || restoringBackup}
+                  >
+                    {triggeringBackup ? (
+                      <>
+                        <RefreshCw size={14} className="spin" />
+                        Backing Up...
+                      </>
+                    ) : (
+                      <>
+                        <UploadCloud size={14} />
+                        Instant Backup
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={handleSyncFromLatestBackup}
+                    disabled={triggeringBackup || restoringBackup}
+                  >
+                    {restoringBackup ? (
+                      <>
+                        <RefreshCw size={14} className="spin" />
+                        Syncing Database...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw size={14} />
+                        Sync from Latest Backup
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {backupResult && (
+                  <div style={{
+                    marginTop: '14px',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    fontSize: '0.85rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    background: backupResult.success ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                    border: `1px solid ${backupResult.success ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+                    color: backupResult.success ? '#4ade80' : '#f87171'
+                  }}>
+                    <span>{backupResult.success ? '✅' : '❌'}</span>
+                    <span>{backupResult.message || backupResult.error} {backupResult.time ? `(${backupResult.time})` : ''}</span>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* 4. Account & Security */}
+            <section className="settings-card settings-full settings-security-card">
+              <div className="settings-card-head">
+                <div>
+                  <h2>Account & Security</h2>
+                  <p>Manage your profile, update passwords, and control team access.</p>
+                </div>
+                <ShieldAlert size={20} />
+              </div>
+
+              {/* My Profile */}
+              <div className="settings-subsection">
+                <h3 className="settings-subsection-title">My Profile</h3>
+                <div className="profile-row-pro">
+                  <div className="settings-field">
+                    <label>Username</label>
+                    <input value={profileForm.username} onChange={e => setProfileForm(f => ({ ...f, username: e.target.value }))} />
+                  </div>
+                  <div className="settings-field">
+                    <label>New Password</label>
+                    <input type="password" value={profileForm.password} onChange={e => setProfileForm(f => ({ ...f, password: e.target.value }))} placeholder="Leave blank to keep current password" />
+                  </div>
+                  <button className="btn btn-primary settings-grid-action" onClick={handleUpdateProfile} disabled={profileSaving}>
+                    {profileSaving ? 'Updating...' : profileSaved ? <><Check size={14} />Updated</> : 'Update Profile'}
+                  </button>
+                </div>
+                {profileError && <p className="settings-error">{profileError}</p>}
+              </div>
+
+              {/* Staff & Manager Password Reset (admin only) */}
+              {currentUser?.role === 'admin' && (
+                <div className="settings-subsection">
+                  <h3 className="settings-subsection-title">Staff & Manager Passwords</h3>
+                  <div className="staff-reset-grid">
+                    <div className="settings-field">
+                      <label>Select Account</label>
+                      <select value={selectedStaffId} onChange={e => setSelectedStaffId(e.target.value)}>
+                        <option value="">Select target</option>
+                        <option value="staff_team">All Staff</option>
+                        <option value="manager_team">Manager Account</option>
+                      </select>
+                    </div>
+
+                    <div className="settings-field settings-password-field">
+                      <label>Update Password</label>
+                      <div>
+                        <KeyRound size={15} />
+                        <input type="password" value={newStaffPwd} onChange={e => setNewStaffPwd(e.target.value)} placeholder="Set 6+ chars" />
+                      </div>
+                    </div>
+
+                    <label className="settings-toggle staff-force-toggle">
+                      <input type="checkbox" checked={forceReset} onChange={e => setForceReset(e.target.checked)} />
+                      <span>Force reset on next login</span>
+                    </label>
+
+                    <button className="btn btn-primary settings-grid-action" onClick={handleStaffReset} disabled={resetBusy || !selectedStaffId}>
+                      {resetBusy ? 'Updating...' : 'Update Accounts'}
                     </button>
                   </div>
-                ) : whatsappStatus.status === 'CONNECTING' ? (
-                  <div>
-                    {whatsappStatus.qr ? (
-                      <div>
-                        <p style={{ color: 'var(--t1)', fontSize: '13px', marginBottom: '12px' }}>
-                          Scan this QR code with WhatsApp to connect your account:
-                        </p>
-                        <div style={{
-                          background: 'white',
-                          padding: '10px',
-                          borderRadius: '8px',
-                          display: 'inline-block',
-                          marginBottom: '15px'
-                        }}>
-                          <img src={whatsappStatus.qr} alt="WhatsApp QR Code" style={{ width: '200px', height: '200px' }} />
-                        </div>
-                        <p style={{ color: 'var(--t2)', fontSize: '11px' }}>
-                          Open WhatsApp on your phone &gt; Settings &gt; Linked Devices &gt; Link a Device.
-                        </p>
-                      </div>
-                    ) : (
-                      <div>
-                        <p style={{ color: 'var(--t2)', fontSize: '13px', marginBottom: '15px' }}>
-                          Generating QR code, please wait...
-                        </p>
-                        <div className="settings-spinner" style={{
-                          border: '4px solid var(--b3)',
-                          borderTop: '4px solid var(--a)',
-                          borderRadius: '50%',
-                          width: '30px',
-                          height: '30px',
-                          animation: 'spin 1s linear infinite',
-                          margin: '0 auto'
-                        }} />
-                      </div>
+                </div>
+              )}
+            </section>
+
+            {/* 5. Where You're Signed In (Active Devices) */}
+            <section className="settings-card settings-full settings-devices-card">
+              <div className="settings-card-head">
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <h2>Where You're Signed In</h2>
+                    {sessions.length > 0 && (
+                      <span className="devices-count-badge">
+                        {sessions.length} {sessions.length === 1 ? 'device' : 'devices'}
+                      </span>
                     )}
+                  </div>
+                  <p>Active devices and browsers signed in to your HumTum POS account. Log out of any device you don't recognize.</p>
+                </div>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={fetchSessions}
+                    disabled={loadingSessions}
+                    title="Refresh device list"
+                  >
+                    <RefreshCw size={13} className={loadingSessions ? 'spin' : ''} />
+                    Refresh
+                  </button>
+                  {sessions.filter(s => !s.isCurrent).length > 0 && (
                     <button
-                      className="btn btn-secondary"
-                      onClick={handleWhatsappDisconnect}
-                      disabled={loadingWhatsapp}
-                      style={{ marginTop: '15px' }}
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      style={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.1)' }}
+                      onClick={handleRevokeAllOtherSessions}
+                      disabled={revokingSession === 'all'}
                     >
-                      Cancel
+                      <LogOut size={13} />
+                      {revokingSession === 'all' ? 'Signing out...' : 'Sign out of all other devices'}
                     </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="devices-list">
+                {loadingSessions && sessions.length === 0 ? (
+                  <div className="devices-empty-state">
+                    <RefreshCw size={20} className="spin" style={{ margin: '0 auto 8px', color: 'var(--a)' }} />
+                    <p>Loading active devices...</p>
+                  </div>
+                ) : sessions.length === 0 ? (
+                  <div className="devices-empty-state">
+                    <ShieldCheck size={28} style={{ margin: '0 auto 8px', color: 'var(--green)' }} />
+                    <p>No active sessions found.</p>
                   </div>
                 ) : (
-                  <div>
-                    <p style={{ color: 'var(--t2)', fontSize: '13px', marginBottom: '20px' }}>
-                      WhatsApp is currently disconnected. Click below to display the login QR code.
-                    </p>
-                    <button
-                      className="btn btn-primary"
-                      onClick={handleWhatsappConnect}
-                      disabled={loadingWhatsapp}
-                    >
-                      {loadingWhatsapp ? 'Generating QR...' : 'Connect WhatsApp'}
-                    </button>
-                  </div>
-                )}
-              </div>
+                  sessions.map(s => (
+                    <div key={s.sessionId} className={`device-item ${s.isCurrent ? 'is-current' : ''}`}>
+                      <div className="device-item-left">
+                        <div className="device-icon-wrap">
+                          {renderDeviceIcon(s.deviceType)}
+                        </div>
+                        <div className="device-info">
+                          <div className="device-title-row">
+                            <span className="device-name">{s.deviceName}</span>
+                            {s.role && (
+                              <span style={{
+                                fontSize: '0.72rem',
+                                padding: '2px 8px',
+                                borderRadius: '10px',
+                                fontWeight: 700,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.5px',
+                                background: s.role === 'admin' ? 'rgba(255, 140, 0, 0.15)' : s.role === 'manager' ? 'rgba(234, 179, 8, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                                color: s.role === 'admin' ? '#FF8C00' : s.role === 'manager' ? '#EAB308' : '#60A5FA',
+                                border: `1px solid ${s.role === 'admin' ? 'rgba(255, 140, 0, 0.35)' : s.role === 'manager' ? 'rgba(234, 179, 8, 0.35)' : 'rgba(59, 130, 246, 0.35)'}`
+                              }}>
+                                {s.role} {s.username && s.username !== s.role ? `• ${s.username}` : ''}
+                              </span>
+                            )}
+                            {s.isCurrent && (
+                              <span className="device-current-badge">
+                                <span className="device-status-dot" /> This device
+                              </span>
+                            )}
+                            <span className="device-active-status">
+                              <span className="device-active-dot" /> {s.isCurrent ? 'Active now' : formatRelativeTime(s.lastActive)}
+                            </span>
+                            {s.ip && <span className="device-ip-badge">{s.ip}</span>}
+                          </div>
+                          <div className="device-meta-row">
+                            <span className="device-meta-item">
+                              <MapPin size={13} /> {s.location || 'India'}
+                            </span>
+                            <span className="device-meta-item">
+                              <Clock size={13} /> Signed in: {formatSessionDate(s.createdAt)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
 
-            </div>
-          </section>
-        )}
-
-        <section className="settings-card settings-full settings-security-card">
-          <div className="settings-card-head">
-            <div>
-              <h2>Account & Security</h2>
-              <p>Manage your profile, update passwords, and control team access.</p>
-            </div>
-            <ShieldAlert size={20} />
-          </div>
-
-          {/* My Profile */}
-          <div className="settings-subsection">
-            <h3 className="settings-subsection-title">My Profile</h3>
-            <div className="profile-row-pro">
-              <div className="settings-field">
-                <label>Username</label>
-                <input value={profileForm.username} onChange={e => setProfileForm(f => ({ ...f, username: e.target.value }))} />
-              </div>
-              <div className="settings-field">
-                <label>New Password</label>
-                <input type="password" value={profileForm.password} onChange={e => setProfileForm(f => ({ ...f, password: e.target.value }))} placeholder="Leave blank to keep current password" />
-              </div>
-              <button className="btn btn-primary settings-grid-action" onClick={handleUpdateProfile} disabled={profileSaving}>
-                {profileSaving ? 'Updating...' : profileSaved ? <><Check size={14} />Updated</> : 'Update Profile'}
-              </button>
-            </div>
-            {profileError && <p className="settings-error">{profileError}</p>}
-          </div>
-
-          {/* Staff & Manager Password Reset (admin only) */}
-          {currentUser?.role === 'admin' && (
-            <div className="settings-subsection">
-              <h3 className="settings-subsection-title">Staff & Manager Passwords</h3>
-              <div className="staff-reset-grid">
-                <div className="settings-field">
-                  <label>Select Account</label>
-                  <select value={selectedStaffId} onChange={e => setSelectedStaffId(e.target.value)}>
-                    <option value="">Select target</option>
-                    <option value="staff_team">All Staff</option>
-                    <option value="manager_team">Manager Account</option>
-                  </select>
-                </div>
-
-                <div className="settings-field settings-password-field">
-                  <label>Update Password</label>
-                  <div>
-                    <KeyRound size={15} />
-                    <input type="password" value={newStaffPwd} onChange={e => setNewStaffPwd(e.target.value)} placeholder="Set 6+ chars" />
-                  </div>
-                </div>
-
-                <label className="settings-toggle staff-force-toggle">
-                  <input type="checkbox" checked={forceReset} onChange={e => setForceReset(e.target.checked)} />
-                  <span>Force reset on next login</span>
-                </label>
-
-                <button className="btn btn-primary settings-grid-action" onClick={handleStaffReset} disabled={resetBusy || !selectedStaffId}>
-                  {resetBusy ? 'Updating...' : 'Update Accounts'}
-                </button>
-              </div>
-            </div>
-          )}
-        </section>
-
-        {/* ── Where You're Signed In (Active Devices) ── */}
-        <section className="settings-card settings-full settings-devices-card">
-          <div className="settings-card-head">
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <h2>Where You're Signed In</h2>
-                {sessions.length > 0 && (
-                  <span className="devices-count-badge">
-                    {sessions.length} {sessions.length === 1 ? 'device' : 'devices'}
-                  </span>
-                )}
-              </div>
-              <p>Active devices and browsers signed in to your HumTum POS account. Log out of any device you don't recognize.</p>
-            </div>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={fetchSessions}
-                disabled={loadingSessions}
-                title="Refresh device list"
-              >
-                <RefreshCw size={13} className={loadingSessions ? 'spin' : ''} />
-                Refresh
-              </button>
-              {sessions.filter(s => !s.isCurrent).length > 0 && (
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  style={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.1)' }}
-                  onClick={handleRevokeAllOtherSessions}
-                  disabled={revokingSession === 'all'}
-                >
-                  <LogOut size={13} />
-                  {revokingSession === 'all' ? 'Signing out...' : 'Sign out of all other devices'}
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="devices-list">
-            {loadingSessions && sessions.length === 0 ? (
-              <div className="devices-empty-state">
-                <RefreshCw size={20} className="spin" style={{ margin: '0 auto 8px', color: 'var(--a)' }} />
-                <p>Loading active devices...</p>
-              </div>
-            ) : sessions.length === 0 ? (
-              <div className="devices-empty-state">
-                <ShieldCheck size={28} style={{ margin: '0 auto 8px', color: 'var(--green)' }} />
-                <p>No active sessions found.</p>
-              </div>
-            ) : (
-              sessions.map(s => (
-                <div key={s.sessionId} className={`device-item ${s.isCurrent ? 'is-current' : ''}`}>
-                  <div className="device-item-left">
-                    <div className="device-icon-wrap">
-                      {renderDeviceIcon(s.deviceType)}
-                    </div>
-                    <div className="device-info">
-                      <div className="device-title-row">
-                        <span className="device-name">{s.deviceName}</span>
-                        {s.isCurrent && (
-                          <span className="device-current-badge">
-                            <span className="device-status-dot" /> This device
-                          </span>
+                      <div className="device-item-right">
+                        {s.isCurrent ? (
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm device-logout-btn current-logout-btn"
+                            onClick={handleLogoutThisDevice}
+                            title="Log out of this device"
+                          >
+                            <LogOut size={13} />
+                            Log out
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm device-logout-btn"
+                            onClick={() => handleRevokeSession(s.sessionId, s.deviceName)}
+                            disabled={revokingSession === s.sessionId}
+                            title="Force log out this device"
+                          >
+                            <LogOut size={13} />
+                            {revokingSession === s.sessionId ? 'Logging out...' : 'Log out'}
+                          </button>
                         )}
-                        <span className="device-active-status">
-                          <span className="device-active-dot" /> {s.isCurrent ? 'Active now' : formatRelativeTime(s.lastActive)}
-                        </span>
-                        {s.ip && <span className="device-ip-badge">{s.ip}</span>}
-                      </div>
-                      <div className="device-meta-row">
-                        <span className="device-meta-item">
-                          <MapPin size={13} /> {s.location || 'India'}
-                        </span>
-                        <span className="device-meta-item">
-                          <Clock size={13} /> Signed in: {formatSessionDate(s.createdAt)}
-                        </span>
                       </div>
                     </div>
-                  </div>
-
-                  <div className="device-item-right">
-                    {s.isCurrent ? (
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm device-logout-btn current-logout-btn"
-                        onClick={handleLogoutThisDevice}
-                        title="Log out of this device"
-                      >
-                        <LogOut size={13} />
-                        Log out
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm device-logout-btn"
-                        onClick={() => handleRevokeSession(s.sessionId, s.deviceName)}
-                        disabled={revokingSession === s.sessionId}
-                        title="Force log out this device"
-                      >
-                        <LogOut size={13} />
-                        {revokingSession === s.sessionId ? 'Logging out...' : 'Log out'}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </section>
+                  ))
+                )}
+              </div>
+            </section>
+          </>
+        )}
       </div>
     </div>
   );

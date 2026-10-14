@@ -78,6 +78,60 @@ async function restoreCollection(db, colName, filePath, shouldDrop) {
   }
 
   console.log(`   ✅ ${colName}: Restored ${restoredCount} documents`);
+  return restoredCount;
+}
+
+/**
+ * Programmatic restore from archive file (.tar.gz) or directory
+ */
+async function restoreFromArchive(resolvedPath, targetUri = process.env.CLOUD_MONGO_URI, shouldDrop = false) {
+  if (!fs.existsSync(resolvedPath)) {
+    throw new Error(`Backup file not found at: ${resolvedPath}`);
+  }
+  if (!targetUri) {
+    throw new Error('Target MongoDB URI is missing');
+  }
+
+  let workDir = resolvedPath;
+  let tempExtractDir = null;
+
+  try {
+    if (resolvedPath.endsWith('.tar.gz') || resolvedPath.endsWith('.tgz')) {
+      tempExtractDir = path.join(os.tmpdir(), `humtum_restore_${Date.now()}`);
+      fs.mkdirSync(tempExtractDir, { recursive: true });
+      await tar.x({ file: resolvedPath, cwd: tempExtractDir });
+      workDir = tempExtractDir;
+    }
+
+    let dbFolder = workDir;
+    const subdirs = fs.readdirSync(workDir, { withFileTypes: true });
+    const posDir = subdirs.find(d => d.isDirectory() && (d.name.includes('pos') || d.name === 'humtum_pos'));
+    if (posDir) {
+      dbFolder = path.join(workDir, posDir.name);
+    }
+
+    const jsonFiles = fs.readdirSync(dbFolder).filter(f => f.endsWith('.json'));
+    if (jsonFiles.length === 0) {
+      throw new Error(`No .json collection dumps found in ${dbFolder}`);
+    }
+
+    const conn = await mongoose.createConnection(targetUri).asPromise();
+    const restoredCollections = [];
+
+    for (const file of jsonFiles) {
+      const colName = path.basename(file, '.json');
+      const fullPath = path.join(dbFolder, file);
+      const count = await restoreCollection(conn.db, colName, fullPath, shouldDrop);
+      restoredCollections.push({ collection: colName, count });
+    }
+
+    await conn.close();
+    return { success: true, restoredCollections, totalCollections: restoredCollections.length };
+  } finally {
+    if (tempExtractDir && fs.existsSync(tempExtractDir)) {
+      try { fs.rmSync(tempExtractDir, { recursive: true, force: true }); } catch (e) {}
+    }
+  }
 }
 
 async function main() {
@@ -94,16 +148,7 @@ async function main() {
   }
 
   const resolvedPath = path.resolve(targetArg);
-  if (!fs.existsSync(resolvedPath)) {
-    console.error(`\n❌ Backup file not found at: ${resolvedPath}\n`);
-    process.exit(1);
-  }
-
   const targetUri = useLocal ? process.env.LOCAL_MONGO_URI : process.env.CLOUD_MONGO_URI;
-  if (!targetUri) {
-    console.error(`\n❌ Target MongoDB URI not found in .env\n`);
-    process.exit(1);
-  }
 
   console.log(`\n${'═'.repeat(60)}`);
   console.log(`  🔄 HumTum Database Restoration Tool`);
@@ -113,57 +158,19 @@ async function main() {
   console.log(`Clean Overwrite : ${shouldDrop ? 'YES (--drop enabled)' : 'NO (safe upsert/merge)'}`);
   console.log(`${'═'.repeat(60)}\n`);
 
-  let workDir = resolvedPath;
-  let tempExtractDir = null;
-
-  // If it's a tar.gz archive, extract it to a temporary directory
-  if (resolvedPath.endsWith('.tar.gz') || resolvedPath.endsWith('.tgz')) {
-    tempExtractDir = path.join(os.tmpdir(), `humtum_restore_${Date.now()}`);
-    fs.mkdirSync(tempExtractDir, { recursive: true });
-    console.log(`📦 Unpacking archive to temporary folder...`);
-    await tar.x({ file: resolvedPath, cwd: tempExtractDir });
-    workDir = tempExtractDir;
-  }
-
-  // Look for the database folder inside workDir (e.g. humtum_pos)
-  let dbFolder = workDir;
-  const subdirs = fs.readdirSync(workDir, { withFileTypes: true });
-  const posDir = subdirs.find(d => d.isDirectory() && (d.name.includes('pos') || d.name === 'humtum_pos'));
-  if (posDir) {
-    dbFolder = path.join(workDir, posDir.name);
-  }
-
-  console.log(`📂 Reading collection dumps from: ${dbFolder}\n`);
-
-  const jsonFiles = fs.readdirSync(dbFolder).filter(f => f.endsWith('.json'));
-  if (jsonFiles.length === 0) {
-    console.error(`❌ No .json collection dumps found in ${dbFolder}`);
-    if (tempExtractDir) fs.rmSync(tempExtractDir, { recursive: true, force: true });
-    process.exit(1);
-  }
-
-  console.log(`🔌 Connecting to target database...`);
-  const conn = await mongoose.createConnection(targetUri).asPromise();
-  console.log(`✅ Connected successfully to ${conn.name || 'database'}\n`);
-
-  console.log(`Restoring ${jsonFiles.length} collections:`);
-  for (const file of jsonFiles) {
-    const colName = path.basename(file, '.json');
-    const fullPath = path.join(dbFolder, file);
-    await restoreCollection(conn.db, colName, fullPath, shouldDrop);
-  }
-
-  await conn.close();
-  if (tempExtractDir) {
-    fs.rmSync(tempExtractDir, { recursive: true, force: true });
-  }
+  await restoreFromArchive(resolvedPath, targetUri, shouldDrop);
 
   console.log(`\n${'═'.repeat(60)}`);
   console.log(`🎉 RESTORATION COMPLETED SUCCESSFULLY!`);
   console.log(`${'═'.repeat(60)}\n`);
 }
 
-main().catch(err => {
-  console.error('\n❌ Restoration failed:', err);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch(err => {
+    console.error('\n❌ Restoration failed:', err);
+    process.exit(1);
+  });
+}
+
+module.exports = { restoreFromArchive, restoreCollection };
+

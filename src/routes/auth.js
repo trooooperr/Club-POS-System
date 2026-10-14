@@ -256,56 +256,56 @@ router.post('/logout', async (req, res) => {
 // ── Active Sessions Management ──────────────────────────────────
 router.get('/sessions', requireAuth, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
-    if (!user) return res.status(404).json({ error: 'User not found' });
-
     const now = new Date();
-    // Filter expired sessions
-    let validSessions = (user.sessions || []).filter(s => s.expiresAt > now);
-    let needsSave = false;
-
     const currentSessionId = req.user.sessionId;
     const currentDevice = getDeviceDetails(req);
+    const list = [];
 
-    // Sanitize device names, update IP/location on network change, and fix stale data
-    for (const s of validSessions) {
-      // If current device's IP has changed (e.g. switched Wi-Fi or mobile data), update IP & location immediately
-      if (currentSessionId && s.sessionId === currentSessionId && currentDevice.ip && currentDevice.ip !== s.ip) {
-        s.ip = currentDevice.ip;
-        s.location = await resolveLocation(currentDevice.ip);
-        needsSave = true;
+    // Admins see all active sessions across all accounts; others see their own
+    const users = req.user.role === 'admin'
+      ? await User.find({ 'sessions.0': { $exists: true } })
+      : [await User.findById(req.user.id)].filter(Boolean);
+
+    for (const u of users) {
+      let validSessions = (u.sessions || []).filter(s => s.expiresAt > now);
+      let needsSave = false;
+
+      for (const s of validSessions) {
+        if (currentSessionId && s.sessionId === currentSessionId && currentDevice.ip && currentDevice.ip !== s.ip) {
+          s.ip = currentDevice.ip;
+          s.location = await resolveLocation(currentDevice.ip);
+          needsSave = true;
+        }
+        if (s.deviceName && (s.deviceName.includes('Apple Macintosh') || s.deviceName.includes('(macOS 10)'))) {
+          s.deviceName = s.deviceName.replace(/on Apple Macintosh.*$/, 'on Mac').trim();
+          needsSave = true;
+        }
+        const badCities = ['Gorakhpur', 'Shimla', 'Dadri', 'Kanpur'];
+        const hasBadCity = badCities.some(c => s.location?.includes(c));
+        if (!s.location || s.location.includes('(Approximate)') || hasBadCity) {
+          s.location = await resolveLocation(s.ip);
+          needsSave = true;
+        }
+
+        list.push({
+          sessionId:  s.sessionId,
+          deviceName: s.deviceName || 'Web Browser',
+          deviceType: s.deviceType || 'desktop',
+          location:   s.location || 'India',
+          ip:         s.ip || '',
+          createdAt:  s.createdAt,
+          lastActive: s.lastActive || s.createdAt,
+          isCurrent:  Boolean(currentSessionId && s.sessionId === currentSessionId),
+          username:   u.username,
+          role:       u.role,
+        });
       }
-      if (s.deviceName && (s.deviceName.includes('Apple Macintosh') || s.deviceName.includes('(macOS 10)'))) {
-        s.deviceName = s.deviceName.replace(/on Apple Macintosh.*$/, 'on Mac').trim();
-        needsSave = true;
-      }
-      // Re-resolve location if it's clearly wrong/stale:
-      // - old hardcoded bad cities (Gorakhpur, Shimla, Dadri, Kanpur)
-      // - old "(Approximate)" label
-      // - missing entirely
-      const badCities = ['Gorakhpur', 'Shimla', 'Dadri', 'Kanpur'];
-      const hasBadCity = badCities.some(c => s.location?.includes(c));
-      if (!s.location || s.location.includes('(Approximate)') || hasBadCity) {
-        s.location = await resolveLocation(s.ip);
-        needsSave = true;
+
+      if (needsSave || validSessions.length !== (u.sessions || []).length) {
+        u.sessions = validSessions;
+        await u.save().catch(() => {});
       }
     }
-
-    if (needsSave || validSessions.length !== (user.sessions || []).length) {
-      user.sessions = validSessions;
-      await user.save().catch(() => {});
-    }
-
-    const list = validSessions.map(s => ({
-      sessionId:  s.sessionId,
-      deviceName: s.deviceName || 'Web Browser',
-      deviceType: s.deviceType || 'desktop',
-      location:   s.location || 'India',
-      ip:         s.ip || '',
-      createdAt:  s.createdAt,
-      lastActive: s.lastActive || s.createdAt,
-      isCurrent:  Boolean(currentSessionId && s.sessionId === currentSessionId)
-    }));
 
     // Sort by current session first, then last active descending
     list.sort((a, b) => {
@@ -324,11 +324,18 @@ router.get('/sessions', requireAuth, async (req, res) => {
 router.delete('/sessions/:sessionId', requireAuth, async (req, res) => {
   try {
     const { sessionId } = req.params;
-    const user = await User.findById(req.user.id);
-    if (!user) return res.status(404).json({ error: 'User not found' });
-
-    user.sessions = (user.sessions || []).filter(s => s.sessionId !== sessionId);
-    await user.save();
+    if (req.user.role === 'admin') {
+      await User.updateOne(
+        { 'sessions.sessionId': sessionId },
+        { $pull: { sessions: { sessionId } } }
+      );
+    } else {
+      const user = await User.findById(req.user.id);
+      if (user) {
+        user.sessions = (user.sessions || []).filter(s => s.sessionId !== sessionId);
+        await user.save();
+      }
+    }
 
     if (req.user.sessionId === sessionId) {
       clearRefreshCookie(res);

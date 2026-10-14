@@ -58,4 +58,35 @@ router.get('/backup/download', requireRole(['admin', 'manager']), async (req, re
   }
 });
 
+// SYNC MONGODB WITH LATEST BACKUP FROM GOOGLE DRIVE (Admin & Manager)
+router.post('/backup/restore-latest', requireRole(['admin', 'manager']), async (req, res) => {
+  let downloaded = null;
+  try {
+    console.log(`🔄 Restore/sync from latest backup initiated by: ${req.user?.username || 'admin'}`);
+    const { downloadLatestBackup } = require('../lib/driveBackup');
+    const { restoreFromArchive } = require('../../scripts/restore-db');
+
+    downloaded = await downloadLatestBackup();
+    const result = await restoreFromArchive(downloaded.filePath, process.env.CLOUD_MONGO_URI, false);
+
+    // Clear caches so the app immediately reflects restored data
+    await deleteCache(['menu:all', 'inventory:all', 'workers:all', 'settings:current', 'orders:all']);
+
+    res.json({
+      success: true,
+      message: `MongoDB successfully synced with latest backup (${downloaded.fileName} from ${downloaded.folderName})!`,
+      fileName: downloaded.fileName,
+      folderName: downloaded.folderName,
+      restoredCollections: result.restoredCollections,
+    });
+  } catch (err) {
+    console.error('Error during database sync from latest backup:', err);
+    res.status(500).json({ success: false, error: err.message });
+  } finally {
+    if (downloaded && downloaded.filePath && fs.existsSync(downloaded.filePath)) {
+      try { fs.unlinkSync(downloaded.filePath); } catch (e) {}
+    }
+  }
+});
+
 module.exports = router;

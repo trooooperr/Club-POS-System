@@ -15,6 +15,7 @@
 const { google } = require('googleapis');
 const fs   = require('fs');
 const path = require('path');
+const os   = require('os');
 
 const CLIENT_ID     = process.env.GOOGLE_OAUTH_CLIENT_ID;
 const CLIENT_SECRET = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
@@ -136,5 +137,67 @@ async function uploadBackupFile(localFilePath, driveFolderName) {
   return res.data.id;
 }
 
-module.exports = { uploadBackupFile, cleanOldBackups };
+/**
+ * Finds and downloads the latest backup archive (.tar.gz) from Google Drive.
+ * Returns { filePath, fileName, folderName, fileId }.
+ */
+async function downloadLatestBackup() {
+  const drive = getDriveClient();
+  if (!FOLDER_ID) throw new Error('GOOGLE_DRIVE_BACKUP_FOLDER_ID is not configured in .env');
+
+  // List all dated subfolders, newest first
+  const folderRes = await drive.files.list({
+    q: `'${FOLDER_ID}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+    fields: 'files(id, name, createdTime)',
+    orderBy: 'name desc',
+    pageSize: 15,
+    spaces: 'drive',
+  });
+
+  const folders = (folderRes.data.files || []).filter(f => /^\d{4}-\d{2}-\d{2}/.test(f.name));
+  if (folders.length === 0) {
+    throw new Error('No backup folders found in your Google Drive');
+  }
+
+  // Find the first .tar.gz in the most recent folder
+  for (const folder of folders) {
+    const fileRes = await drive.files.list({
+      q: `'${folder.id}' in parents and trashed=false and name contains '.tar.gz'`,
+      fields: 'files(id, name, size, createdTime)',
+      orderBy: 'createdTime desc',
+      pageSize: 5,
+      spaces: 'drive',
+    });
+
+    const backupFile = (fileRes.data.files || [])[0];
+    if (backupFile) {
+      console.log(`📥 Downloading latest backup from Google Drive: ${folder.name}/${backupFile.name}`);
+      const tmpPath = path.join(os.tmpdir(), `latest_download_${Date.now()}_${backupFile.name}`);
+      const dest = fs.createWriteStream(tmpPath);
+
+      const streamRes = await drive.files.get(
+        { fileId: backupFile.id, alt: 'media' },
+        { responseType: 'stream' }
+      );
+
+      await new Promise((resolve, reject) => {
+        streamRes.data
+          .pipe(dest)
+          .on('finish', resolve)
+          .on('error', reject);
+      });
+
+      return {
+        filePath: tmpPath,
+        fileName: backupFile.name,
+        folderName: folder.name,
+        fileId: backupFile.id,
+      };
+    }
+  }
+
+  throw new Error('No .tar.gz backup files found in Google Drive');
+}
+
+module.exports = { uploadBackupFile, cleanOldBackups, downloadLatestBackup };
 
