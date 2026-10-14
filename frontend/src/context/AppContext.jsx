@@ -79,10 +79,6 @@ export const checkIsAlcoholic = (i, sellableList = [], invList = []) => {
 
 const AppContext = createContext(null);
 const TABLES_KEY        = 'humtum_table_bills_v2';
-const AUTH_KEY          = 'humtum_auth_v2';
-const TOKEN_KEY         = 'humtum_token_v2';
-const REFRESH_TOKEN_KEY = 'humtum_refresh_token_v2';
-const SESSION_KEY       = 'humtum_session_id';
 
 // ── Role hierarchy ──────────────────────────────────────────────
 // admin > manager > staff  (admin can access all lower role views)

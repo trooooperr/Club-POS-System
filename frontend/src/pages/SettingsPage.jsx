@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { Save, Check, Send, KeyRound, ShieldAlert, Users, Trash2, RefreshCw, GripVertical, Download, Laptop, Smartphone, Tablet, Monitor, MapPin, Clock, LogOut, ShieldCheck } from 'lucide-react';
+import { Save, Check, Send, KeyRound, ShieldAlert, Users, Trash2, RefreshCw, GripVertical, Download, Laptop, Smartphone, Tablet, Monitor, MapPin, Clock, LogOut, ShieldCheck, Database, UploadCloud, ExternalLink } from 'lucide-react';
 import { apiUrl, authFetch } from '../lib/api';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 export default function SettingsPage() {
@@ -60,6 +60,70 @@ export default function SettingsPage() {
   useEffect(() => {
     fetchSessions();
   }, []);
+
+  // ── Database Backup State & Handlers ───────────────────────────
+  const [triggeringBackup, setTriggeringBackup] = useState(false);
+  const [backupResult, setBackupResult] = useState(null);
+  const [downloadingBackup, setDownloadingBackup] = useState(false);
+
+  const handleTriggerDriveBackup = async () => {
+    setTriggeringBackup(true);
+    setBackupResult(null);
+    try {
+      const res = await authFetch(apiUrl('/api/admin/backup/trigger'), {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setBackupResult({
+          success: true,
+          message: data.message,
+          webViewLink: data.webViewLink,
+          elapsed: data.elapsed,
+          folderLabel: data.folderLabel,
+          time: new Date().toLocaleTimeString('en-IN')
+        });
+        showToast('Backup uploaded to Google Drive successfully!', 'success');
+      } else {
+        setBackupResult({ success: false, error: data.error || 'Failed to complete backup' });
+        showToast(data.error || 'Backup failed', 'error');
+      }
+    } catch (err) {
+      setBackupResult({ success: false, error: err.message });
+      showToast('Network error during backup: ' + err.message, 'error');
+    } finally {
+      setTriggeringBackup(false);
+    }
+  };
+
+  const handleDownloadBackupArchive = async () => {
+    setDownloadingBackup(true);
+    try {
+      showToast('Generating fresh backup archive, downloading will start in a moment...', 'info');
+      const token = localStorage.getItem('token');
+      const res = await fetch(apiUrl('/api/admin/backup/download'), {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
+      if (!res.ok) {
+        throw new Error('Failed to generate backup archive');
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const today = new Date().toISOString().slice(0, 10);
+      a.download = `humtum_pos_backup_${today}.tar.gz`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      showToast('Backup archive downloaded successfully!', 'success');
+    } catch (err) {
+      showToast('Download error: ' + err.message, 'error');
+    } finally {
+      setDownloadingBackup(false);
+    }
+  };
 
   const handleRevokeSession = async (sessionId, deviceName) => {
     if (!window.confirm(`Are you sure you want to log out ${deviceName || 'this device'}?`)) {
@@ -1058,6 +1122,127 @@ export default function SettingsPage() {
             </button>
           </div>
         </section>
+
+        {/* Database & Google Drive Backup Section */}
+        {['admin', 'manager'].includes(currentUser?.role) && (
+          <section className="settings-card settings-full" style={{ border: '1px solid #e2e8f0', borderRadius: '12px' }}>
+            <div className="settings-card-head" style={{ borderBottom: '1px solid #f1f5f9', paddingBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ background: '#eff6ff', padding: '8px', borderRadius: '8px', color: '#2563eb' }}>
+                  <Database size={24} />
+                </div>
+                <div>
+                  <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600 }}>Database & Google Drive Backup</h2>
+                  <p style={{ margin: '4px 0 0 0', color: '#64748b', fontSize: '0.875rem' }}>
+                    Automatic daily cloud backups to Google Drive. Create on-demand backups or download full archives anytime.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Status Info Chips */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', marginTop: '16px' }}>
+              <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>Automated Schedule</div>
+                <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#0f172a', marginTop: '4px' }}>Daily at 05:30 AM IST</div>
+              </div>
+
+              <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>Cloud Retention</div>
+                <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#0f172a', marginTop: '4px' }}>5 Years (1,825 Snapshots)</div>
+              </div>
+
+              <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>Google Drive Folder</div>
+                <a 
+                  href="https://drive.google.com/drive/folders/1wqA5UxxtETmWMuvzXQKFBEsSv11DKYZV" 
+                  target="_blank" 
+                  rel="noreferrer"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.95rem', fontWeight: 600, color: '#2563eb', marginTop: '4px', textDecoration: 'none' }}
+                >
+                  HumTum_DB_Backups <ExternalLink size={14} />
+                </a>
+              </div>
+            </div>
+
+            {/* Result Notification Banner */}
+            {backupResult && (
+              <div style={{
+                marginTop: '16px',
+                padding: '12px 16px',
+                borderRadius: '8px',
+                background: backupResult.success ? '#ecfdf5' : '#fef2f2',
+                border: `1px solid ${backupResult.success ? '#a7f3d0' : '#fecaca'}`,
+                color: backupResult.success ? '#065f46' : '#991b1b',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '10px'
+              }}>
+                <div>
+                  <strong>{backupResult.success ? '✅ Success:' : '❌ Failed:'}</strong>{' '}
+                  {backupResult.message || backupResult.error}
+                  {backupResult.elapsed && <span> (Completed in {backupResult.elapsed}s at {backupResult.time})</span>}
+                </div>
+                {backupResult.webViewLink && (
+                  <a
+                    href={backupResult.webViewLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ color: '#047857', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px', textDecoration: 'underline' }}
+                  >
+                    View File on Google Drive <ExternalLink size={14} />
+                  </a>
+                )}
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '20px' }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleTriggerDriveBackup}
+                disabled={triggeringBackup || downloadingBackup}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 20px', fontWeight: 600 }}
+              >
+                {triggeringBackup ? (
+                  <>
+                    <RefreshCw size={18} className="spin" />
+                    Backing Up & Uploading to Drive...
+                  </>
+                ) : (
+                  <>
+                    <UploadCloud size={18} />
+                    Backup to Google Drive Now
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={handleDownloadBackupArchive}
+                disabled={triggeringBackup || downloadingBackup}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 20px', fontWeight: 600 }}
+              >
+                {downloadingBackup ? (
+                  <>
+                    <RefreshCw size={18} className="spin" />
+                    Generating Archive...
+                  </>
+                ) : (
+                  <>
+                    <Download size={18} />
+                    Download Backup File (.tar.gz)
+                  </>
+                )}
+              </button>
+            </div>
+          </section>
+        )}
+
 
         {false && currentUser?.role === 'admin' && (
           <section className="settings-card settings-full">

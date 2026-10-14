@@ -111,57 +111,71 @@ function cleanup(dir) {
 }
 
 /**
- * Main backup routine — called by cron or directly.
+ * Generates local export files and compresses them into a tar.gz archive.
+ * Returns { tmpDir, tarPath, tarName, folderLabel, elapsed }.
+ * Caller is responsible for calling cleanup(tmpDir) if not using runBackup().
  */
-async function runBackup() {
+async function createBackupArchive() {
   const startTime = Date.now();
-  console.log(`\n${'═'.repeat(55)}`);
-  console.log(`  🗄️  HumTum DB Backup — ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST`);
-  console.log(`${'═'.repeat(55)}`);
 
   if (DATABASES.length === 0) {
-    console.error('❌ No database URIs configured. Check CLOUD_MONGO_URI / MONGODB_URI in .env');
-    return { success: false, error: 'No database URIs' };
+    throw new Error('No database URIs configured. Check CLOUD_MONGO_URI in .env');
   }
 
   const dateStr     = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const tmpDir      = path.join(os.tmpdir(), `humtum_backup_${dateStr}_${process.pid}`);
   const tarName     = `humtum_pos_backup_${dateStr}.tar.gz`;
   const tarPath     = path.join(tmpDir, tarName);
-  const folderLabel = dateStr.slice(0, 10); // "2026-10-14" — Drive sub-folder name
+  const folderLabel = dateStr.slice(0, 10);
 
-  // Prepare tmp directories
   fs.mkdirSync(tmpDir, { recursive: true });
   const exportDir = path.join(tmpDir, 'export');
   fs.mkdirSync(exportDir, { recursive: true });
 
+  for (const db of DATABASES) {
+    console.log(`\n📂 Backing up: ${db.label}`);
+    await exportDatabase(db.uri, db.name, exportDir);
+  }
+
+  await createArchive(exportDir, tarPath);
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
+  return { tmpDir, tarPath, tarName, folderLabel, elapsed };
+}
+
+/**
+ * Main backup routine — called by cron, API, or CLI.
+ */
+async function runBackup() {
+  console.log(`\n${'═'.repeat(55)}`);
+  console.log(`  🗄️  HumTum DB Backup — ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST`);
+  console.log(`${'═'.repeat(55)}`);
+
+  let backupContext = null;
+
   try {
-    // 1. Export each database
-    for (const db of DATABASES) {
-      console.log(`\n📂 Backing up: ${db.label}`);
-      await exportDatabase(db.uri, db.name, exportDir);
-    }
+    backupContext = await createBackupArchive();
+    const { tmpDir, tarPath, folderLabel, elapsed } = backupContext;
 
-    // 2. Compress
-    await createArchive(exportDir, tarPath);
-
-    // 3. Upload to Google Drive
     console.log(`\n☁️  Uploading to Google Drive → HumTum_DB_Backups/${folderLabel}...`);
-    const driveFileId = await uploadBackupFile(tarPath, folderLabel);
+    const driveResult = await uploadBackupFile(tarPath, folderLabel);
+    const driveFileId = typeof driveResult === 'object' ? driveResult.id : driveResult;
+    const webViewLink = typeof driveResult === 'object' ? driveResult.webViewLink : `https://drive.google.com/file/d/${driveFileId}/view`;
 
-    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`\n✅ Backup complete in ${elapsed}s`);
     console.log(`   Drive file ID: ${driveFileId}`);
     console.log(`${'═'.repeat(55)}\n`);
 
-    return { success: true, driveFileId, elapsed };
+    return { success: true, driveFileId, webViewLink, elapsed, folderLabel };
 
   } catch (err) {
     console.error(`\n❌ Backup FAILED: ${err.message}`);
     console.error(err.stack);
     return { success: false, error: err.message };
   } finally {
-    cleanup(tmpDir);
+    if (backupContext && backupContext.tmpDir) {
+      cleanup(backupContext.tmpDir);
+    }
   }
 }
 
@@ -172,4 +186,4 @@ if (require.main === module) {
     .catch(err   => { console.error(err); process.exitCode = 1; });
 }
 
-module.exports = { runBackup };
+module.exports = { runBackup, createBackupArchive, cleanup };
