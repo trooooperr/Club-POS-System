@@ -279,7 +279,13 @@ router.get('/sessions', requireAuth, async (req, res) => {
         s.deviceName = s.deviceName.replace(/on Apple Macintosh.*$/, 'on Mac').trim();
         needsSave = true;
       }
-      if (!s.location || s.location.includes('(Approximate)') || s.location.includes('Shimla') || s.location.includes('Gorakhpur')) {
+      // Re-resolve location if it's clearly wrong/stale:
+      // - old hardcoded bad cities (Gorakhpur, Shimla, Dadri, Kanpur)
+      // - old "(Approximate)" label
+      // - missing entirely
+      const badCities = ['Gorakhpur', 'Shimla', 'Dadri', 'Kanpur'];
+      const hasBadCity = badCities.some(c => s.location?.includes(c));
+      if (!s.location || s.location.includes('(Approximate)') || hasBadCity) {
         s.location = await resolveLocation(s.ip);
         needsSave = true;
       }

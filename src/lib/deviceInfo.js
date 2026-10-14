@@ -123,7 +123,9 @@ async function resolveLocation(ip, clientLocationHint = null) {
     if (res.ok) {
       const data = await res.json();
       if (data && data.success) {
-        const parts = [data.city, data.region, data.country].filter(Boolean);
+        // ⚠️ Skip city — IP-city mapping is unreliable for Indian ISPs.
+        // State + Country are consistent across providers.
+        const parts = [data.region, data.country].filter(Boolean);
         const loc = parts.join(', ');
         if (loc) {
           geoCache.set(ip, loc);
@@ -150,7 +152,8 @@ async function resolveLocation(ip, clientLocationHint = null) {
       const data = await res.json();
       if (data && data.country) {
         const countryName = data.country === 'IN' ? 'India' : data.country;
-        const parts = [data.city, data.region, countryName].filter(Boolean);
+        // ⚠️ Skip city — only state + country from IP lookup
+        const parts = [data.region, countryName].filter(Boolean);
         const loc = parts.join(', ');
         if (loc) {
           geoCache.set(ip, loc);
