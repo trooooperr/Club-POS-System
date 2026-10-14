@@ -1,20 +1,49 @@
-const jwt = require('jsonwebtoken');
+const jwt    = require('jsonwebtoken');
+const crypto = require('crypto');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'humtum-pos-secret-key-change-in-production';
 
+// ── Access token (short-lived: 15 minutes) ───────────────────────
 /**
- * Generate JWT access token for a user (1 day expiry)
+ * Generate a short-lived JWT access token (15 min) with optional sessionId.
  */
-function generateToken(user) {
-  return jwt.sign(
-    { id: user._id, username: user.username, role: user.role },
-    JWT_SECRET,
-    { expiresIn: '1d' }
-  );
+function generateToken(user, sessionId = null) {
+  const payload = {
+    id: user._id,
+    username: user.username,
+    role: user.role
+  };
+  if (sessionId) {
+    payload.sessionId = sessionId;
+  }
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: '15m' });
+}
+
+// ── Refresh token (long-lived opaque token: 30 days) ─────────────
+const REFRESH_TOKEN_BYTES = 48;
+const REFRESH_TOKEN_EXPIRY_DAYS = 30;
+
+/**
+ * Generate a cryptographically random refresh token (opaque, not JWT).
+ * Returns { raw, hash, expiresAt } — store hash+expiresAt in DB, send raw to client.
+ */
+function generateRefreshToken() {
+  const raw       = crypto.randomBytes(REFRESH_TOKEN_BYTES).toString('hex');
+  const hash      = crypto.createHash('sha256').update(raw).digest('hex');
+  const expiresAt = new Date(Date.now() + REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
+  return { raw, hash, expiresAt };
 }
 
 /**
- * Middleware: require valid JWT token
+ * Hash a raw refresh token for comparison against stored hash.
+ */
+function hashRefreshToken(raw) {
+  return crypto.createHash('sha256').update(raw).digest('hex');
+}
+
+// ── requireAuth middleware ────────────────────────────────────────
+/**
+ * Middleware: require valid JWT access token
  */
 function requireAuth(req, res, next) {
   const header = req.headers.authorization;
@@ -29,7 +58,7 @@ function requireAuth(req, res, next) {
     next();
   } catch (err) {
     if (err.name === 'TokenExpiredError') {
-      return res.status(401).json({ message: 'Token expired, please login again' });
+      return res.status(401).json({ message: 'Token expired, please login again', code: 'TOKEN_EXPIRED' });
     }
     return res.status(401).json({ message: 'Invalid token' });
   }
@@ -67,4 +96,13 @@ function allowCronSecret(req, res, next) {
   return requireAuth(req, res, next);
 }
 
-module.exports = { generateToken, requireAuth, requireRole, allowCronSecret, JWT_SECRET };
+module.exports = {
+  generateToken,
+  generateRefreshToken,
+  hashRefreshToken,
+  requireAuth,
+  requireRole,
+  allowCronSecret,
+  JWT_SECRET,
+  REFRESH_TOKEN_EXPIRY_DAYS
+};

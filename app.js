@@ -1,6 +1,7 @@
-const express    = require('express');
-const cors       = require('cors');
-const bodyParser = require('body-parser');
+const express      = require('express');
+const cors         = require('cors');
+const bodyParser   = require('body-parser');
+const cookieParser = require('cookie-parser');
 const path       = require('path');
 const fs         = require('fs');
 const helmet     = require('helmet');
@@ -75,8 +76,9 @@ app.use(cors((req, callback) => {
   }
 }));
 
-// ── Body parsing ─────────────────────────────────────────────────
+// ── Body & Cookie parsing ──────────────────────────────────────────
 app.use(bodyParser.json({ limit: '2mb' }));
+app.use(cookieParser());
 
 // ── General API rate limiter ─────────────────────────────────────
 const apiLimiter = rateLimit({

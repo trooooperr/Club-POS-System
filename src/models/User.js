@@ -1,6 +1,20 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
+const sessionSchema = new mongoose.Schema({
+  sessionId:            { type: String, required: true },
+  refreshTokenHash:     { type: String, required: true },
+  prevRefreshTokenHash: { type: String, default: '' }, // For token reuse detection
+  expiresAt:            { type: Date, required: true },
+  ip:                   { type: String, default: '' },
+  location:             { type: String, default: 'Local Network' },
+  userAgent:            { type: String, default: '' },
+  deviceName:           { type: String, default: 'Web Browser' },
+  deviceType:           { type: String, default: 'desktop' }, // 'desktop' | 'mobile' | 'tablet'
+  lastActive:           { type: Date, default: Date.now },
+  createdAt:            { type: Date, default: Date.now }
+}, { _id: false });
+
 const userSchema = new mongoose.Schema({
   name:         { type: String, required: true, trim: true },
   username:     { type: String, required: true, unique: true, trim: true, lowercase: true },
@@ -9,8 +23,11 @@ const userSchema = new mongoose.Schema({
   email:        { type: String, trim: true, lowercase: true, unique: true, sparse: true },
   isActive:     { type: Boolean, default: true, index: true },
   mustChangePassword: { type: Boolean, default: false },
-  resetOtp:     { type: String, default: '' },
-  resetOtpExp:  { type: Date },
+  resetOtp:         { type: String, default: '' },
+  resetOtpExp:      { type: Date },
+  refreshTokenHash: { type: String, default: '' },
+  refreshTokenExp:  { type: Date },
+  sessions:         [sessionSchema],
 }, { timestamps: true });
 
 // Hash password before saving

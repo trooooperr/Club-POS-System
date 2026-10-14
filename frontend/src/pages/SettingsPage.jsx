@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { Save, Check, Send, KeyRound, ShieldAlert, Users, Trash2, RefreshCw, GripVertical, Download } from 'lucide-react';
+import { Save, Check, Send, KeyRound, ShieldAlert, Users, Trash2, RefreshCw, GripVertical, Download, Laptop, Smartphone, Tablet, Monitor, MapPin, Clock, LogOut, ShieldCheck } from 'lucide-react';
 import { apiUrl, authFetch } from '../lib/api';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 export default function SettingsPage() {
@@ -34,6 +34,118 @@ export default function SettingsPage() {
 
   const [whatsappStatus, setWhatsappStatus] = useState({ status: 'DISCONNECTED', qr: null, user: null });
   const [loadingWhatsapp, setLoadingWhatsapp] = useState(false);
+
+  // ── Active Sessions / Devices ──────────────────────────────────
+  const [sessions, setSessions] = useState([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+  const [revokingSession, setRevokingSession] = useState(null);
+
+  const fetchSessions = async () => {
+    setLoadingSessions(true);
+    try {
+      const res = await authFetch(apiUrl('/api/auth/sessions'));
+      if (res.ok) {
+        const data = await res.json();
+        if (data.sessions) {
+          setSessions(data.sessions);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load active sessions:', err);
+    } finally {
+      setLoadingSessions(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSessions();
+  }, []);
+
+  const handleRevokeSession = async (sessionId, deviceName) => {
+    if (!window.confirm(`Are you sure you want to log out ${deviceName || 'this device'}?`)) {
+      return;
+    }
+    setRevokingSession(sessionId);
+    try {
+      const res = await authFetch(apiUrl(`/api/auth/sessions/${sessionId}`), {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        showToast('Device logged out successfully', 'success');
+        setSessions(prev => prev.filter(s => s.sessionId !== sessionId));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        showToast(data.error || 'Failed to logout device', 'error');
+      }
+    } catch (err) {
+      showToast('Network error while logging out device', 'error');
+    } finally {
+      setRevokingSession(null);
+    }
+  };
+
+  const handleRevokeAllOtherSessions = async () => {
+    if (!window.confirm('Are you sure you want to sign out of all other devices?')) {
+      return;
+    }
+    setRevokingSession('all');
+    try {
+      const res = await authFetch(apiUrl('/api/auth/sessions'), {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        showToast('Signed out of all other devices', 'success');
+        setSessions(prev => prev.filter(s => s.isCurrent));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        showToast(data.error || 'Failed to sign out other devices', 'error');
+      }
+    } catch (err) {
+      showToast('Network error while signing out other devices', 'error');
+    } finally {
+      setRevokingSession(null);
+    }
+  };
+
+  const formatSessionDate = (dateStr) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const formatRelativeTime = (dateStr) => {
+    if (!dateStr) return '';
+    try {
+      const diffMs = Date.now() - new Date(dateStr).getTime();
+      const mins = Math.floor(diffMs / (1000 * 60));
+      if (mins < 2) return 'Just now';
+      if (mins < 60) return `${mins}m ago`;
+      const hours = Math.floor(mins / 60);
+      if (hours < 24) return `${hours}h ago`;
+      const days = Math.floor(hours / 24);
+      return `${days}d ago`;
+    } catch {
+      return '';
+    }
+  };
+
+  const renderDeviceIcon = (deviceType) => {
+    const t = (deviceType || '').toLowerCase();
+    if (t === 'mobile') return <Smartphone size={22} />;
+    if (t === 'tablet') return <Tablet size={22} />;
+    return <Laptop size={22} />;
+  };
 
   const fetchWhatsappStatus = async () => {
     try {
@@ -1145,6 +1257,111 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
+        </section>
+
+        {/* ── Where You're Signed In (Active Devices) ── */}
+        <section className="settings-card settings-full settings-devices-card">
+          <div className="settings-card-head">
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h2>Where You're Signed In</h2>
+                {sessions.length > 0 && (
+                  <span className="devices-count-badge">
+                    {sessions.length} {sessions.length === 1 ? 'device' : 'devices'}
+                  </span>
+                )}
+              </div>
+              <p>Active devices and browsers signed in to your HumTum POS account. Log out of any device you don't recognize.</p>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={fetchSessions}
+                disabled={loadingSessions}
+                title="Refresh device list"
+              >
+                <RefreshCw size={13} className={loadingSessions ? 'spin' : ''} />
+                Refresh
+              </button>
+              {sessions.filter(s => !s.isCurrent).length > 0 && (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  style={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.1)' }}
+                  onClick={handleRevokeAllOtherSessions}
+                  disabled={revokingSession === 'all'}
+                >
+                  <LogOut size={13} />
+                  {revokingSession === 'all' ? 'Signing out...' : 'Sign out of all other devices'}
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="devices-list">
+            {loadingSessions && sessions.length === 0 ? (
+              <div className="devices-empty-state">
+                <RefreshCw size={20} className="spin" style={{ margin: '0 auto 8px', color: 'var(--a)' }} />
+                <p>Loading active devices...</p>
+              </div>
+            ) : sessions.length === 0 ? (
+              <div className="devices-empty-state">
+                <ShieldCheck size={28} style={{ margin: '0 auto 8px', color: 'var(--green)' }} />
+                <p>No active sessions found.</p>
+              </div>
+            ) : (
+              sessions.map(s => (
+                <div key={s.sessionId} className={`device-item ${s.isCurrent ? 'is-current' : ''}`}>
+                  <div className="device-item-left">
+                    <div className="device-icon-wrap">
+                      {renderDeviceIcon(s.deviceType)}
+                    </div>
+                    <div className="device-info">
+                      <div className="device-title-row">
+                        <span className="device-name">{s.deviceName}</span>
+                        {s.isCurrent && (
+                          <span className="device-current-badge">
+                            <span className="device-status-dot" /> This device
+                          </span>
+                        )}
+                        {s.ip && <span className="device-ip-badge">{s.ip}</span>}
+                      </div>
+                      <div className="device-meta-row">
+                        <span className="device-meta-item">
+                          <MapPin size={12} /> {s.location || 'Local Network'}
+                        </span>
+                        <span className="device-meta-item">
+                          <Clock size={12} /> Signed in: {formatSessionDate(s.createdAt)}
+                        </span>
+                        {s.lastActive && (
+                          <span style={{ color: 'var(--t3)' }}>
+                            • Active {formatRelativeTime(s.lastActive)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="device-item-right">
+                    {s.isCurrent ? (
+                      <span className="device-active-now">Current Session</span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm device-logout-btn"
+                        onClick={() => handleRevokeSession(s.sessionId, s.deviceName)}
+                        disabled={revokingSession === s.sessionId}
+                      >
+                        <LogOut size={13} />
+                        {revokingSession === s.sessionId ? 'Logging out...' : 'Log out'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </section>
       </div>
     </div>

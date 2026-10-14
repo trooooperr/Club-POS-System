@@ -1,13 +1,38 @@
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const User = require('../models/User');
-const { generateToken, requireAuth } = require('../middleware/auth');
+const { generateToken, generateRefreshToken, hashRefreshToken, requireAuth } = require('../middleware/auth');
+const { getDeviceDetails, resolveLocation } = require('../lib/deviceInfo');
 const nodemailer = require('nodemailer');
 const ROLE_HIERARCHY = {
   admin: { level: 3 },
   manager: { level: 2 },
   staff: { level: 1 }
 };
+
+const REFRESH_COOKIE_NAME = 'humtum_refresh_token';
+
+function setRefreshCookie(res, token) {
+  const isProd = process.env.NODE_ENV === 'production';
+  res.cookie(REFRESH_COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax',
+    path: '/',
+    maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+  });
+}
+
+function clearRefreshCookie(res) {
+  const isProd = process.env.NODE_ENV === 'production';
+  res.clearCookie(REFRESH_COOKIE_NAME, {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax',
+    path: '/'
+  });
+}
 
 // ── Login ───────────────────────────────────────────────────────
 router.post('/login', async (req, res) => {
@@ -42,15 +67,264 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: GENERIC_AUTH_ERROR });
     }
 
-    const token = generateToken(user);
+    // Device & Location info
+    const device = getDeviceDetails(req);
+    const location = await resolveLocation(device.ip);
+    const sessionId = crypto.randomUUID ? crypto.randomUUID() : crypto.randomBytes(16).toString('hex');
+
+    const accessToken  = generateToken(user, sessionId);
+    const { raw: refreshTokenRaw, hash: refreshTokenHash, expiresAt: refreshTokenExp } = generateRefreshToken();
+
+    // Maintain multi-device sessions array (prune expired & keep max 25)
+    const now = new Date();
+    const activeSessions = (user.sessions || []).filter(s => s.expiresAt > now);
+    if (activeSessions.length >= 25) {
+      activeSessions.shift(); // Evict oldest
+    }
+    activeSessions.push({
+      sessionId,
+      refreshTokenHash,
+      prevRefreshTokenHash: '',
+      expiresAt: refreshTokenExp,
+      ip: device.ip,
+      location,
+      userAgent: device.userAgent,
+      deviceName: device.deviceName,
+      deviceType: device.deviceType,
+      lastActive: now,
+      createdAt: now
+    });
+    user.sessions = activeSessions;
+
+    // Legacy fields for backward compatibility
+    user.refreshTokenHash = refreshTokenHash;
+    user.refreshTokenExp  = refreshTokenExp;
+    await user.save();
+
+    setRefreshCookie(res, refreshTokenRaw);
+
     res.json({
       success: true,
-      token,
+      token:        accessToken,
+      refreshToken: refreshTokenRaw,
+      sessionId,
       user: { ...user.toSafeJSON(), mustChangePassword: !!user.mustChangePassword },
     });
   } catch (err) {
     console.error('Login error:', err.message);
     res.status(500).json({ error: 'Server error during login' });
+  }
+});
+
+// ── Refresh Token ────────────────────────────────────────────────
+router.post('/refresh', async (req, res) => {
+  try {
+    const refreshToken = req.cookies?.[REFRESH_COOKIE_NAME] || req.body?.refreshToken;
+    if (!refreshToken) {
+      return res.status(401).json({ error: 'Refresh token required' });
+    }
+
+    const incomingHash = hashRefreshToken(refreshToken);
+
+    // Look for user by active session or previous token
+    const user = await User.findOne({
+      $or: [
+        { 'sessions.refreshTokenHash': incomingHash },
+        { 'sessions.prevRefreshTokenHash': incomingHash },
+        { refreshTokenHash: incomingHash } // legacy
+      ],
+      isActive: true,
+    });
+
+    if (!user) {
+      clearRefreshCookie(res);
+      return res.status(401).json({ error: 'Invalid or expired session. Please login again.' });
+    }
+
+    // 🚨 TOKEN REUSE DETECTION
+    const reusedSession = (user.sessions || []).find(s => s.prevRefreshTokenHash === incomingHash);
+    if (reusedSession) {
+      console.warn(`🚨 TOKEN REUSE DETECTED for user ${user.username} on device ${reusedSession.deviceName}! Revoking session.`);
+      user.sessions = user.sessions.filter(s => s.sessionId !== reusedSession.sessionId);
+      await user.save();
+      clearRefreshCookie(res);
+      return res.status(401).json({
+        error: 'Security alert: Token reuse detected. Device session was invalidated.',
+        code: 'TOKEN_REUSE'
+      });
+    }
+
+    // Find current active session
+    let targetSession = (user.sessions || []).find(s => s.refreshTokenHash === incomingHash);
+    const now = new Date();
+
+    if (!targetSession) {
+      // Legacy fallback conversion
+      if (user.refreshTokenHash === incomingHash && user.refreshTokenExp > now) {
+        const device = getDeviceDetails(req);
+        const location = await resolveLocation(device.ip);
+        targetSession = {
+          sessionId: crypto.randomBytes(16).toString('hex'),
+          refreshTokenHash: incomingHash,
+          prevRefreshTokenHash: '',
+          expiresAt: user.refreshTokenExp,
+          ip: device.ip,
+          location,
+          userAgent: device.userAgent,
+          deviceName: device.deviceName,
+          deviceType: device.deviceType,
+          lastActive: now,
+          createdAt: now
+        };
+        user.sessions = user.sessions || [];
+        user.sessions.push(targetSession);
+      } else {
+        clearRefreshCookie(res);
+        return res.status(401).json({ error: 'Session not found or expired. Please login again.' });
+      }
+    }
+
+    if (targetSession.expiresAt < now) {
+      user.sessions = (user.sessions || []).filter(s => s.sessionId !== targetSession.sessionId);
+      await user.save();
+      clearRefreshCookie(res);
+      return res.status(401).json({ error: 'Session expired. Please login again.' });
+    }
+
+    // Token rotation
+    const { raw: newRefreshRaw, hash: newRefreshHash, expiresAt: newRefreshExp } = generateRefreshToken();
+
+    targetSession.prevRefreshTokenHash = incomingHash; // remember for reuse detection
+    targetSession.refreshTokenHash = newRefreshHash;
+    targetSession.expiresAt = newRefreshExp;
+    targetSession.lastActive = now;
+
+    // Refresh client IP / UserAgent if updated
+    const device = getDeviceDetails(req);
+    if (device.ip) targetSession.ip = device.ip;
+
+    user.refreshTokenHash = newRefreshHash;
+    user.refreshTokenExp  = newRefreshExp;
+    await user.save();
+
+    const newAccessToken = generateToken(user, targetSession.sessionId);
+    setRefreshCookie(res, newRefreshRaw);
+
+    res.json({
+      success:      true,
+      token:        newAccessToken,
+      refreshToken: newRefreshRaw,
+      sessionId:    targetSession.sessionId
+    });
+  } catch (err) {
+    console.error('Token refresh error:', err.message);
+    res.status(500).json({ error: 'Server error during token refresh' });
+  }
+});
+
+// ── Logout — invalidate current device session ───────────────────
+router.post('/logout', async (req, res) => {
+  try {
+    const refreshToken = req.cookies?.[REFRESH_COOKIE_NAME] || req.body?.refreshToken;
+    const sessionId = req.body?.sessionId;
+
+    if (refreshToken) {
+      const hash = hashRefreshToken(refreshToken);
+      await User.updateOne(
+        { 'sessions.refreshTokenHash': hash },
+        { $pull: { sessions: { refreshTokenHash: hash } } }
+      );
+    } else if (sessionId) {
+      await User.updateOne(
+        { 'sessions.sessionId': sessionId },
+        { $pull: { sessions: { sessionId: sessionId } } }
+      );
+    }
+
+    clearRefreshCookie(res);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Logout error:', err.message);
+    clearRefreshCookie(res);
+    res.json({ success: true });
+  }
+});
+
+// ── Active Sessions Management ──────────────────────────────────
+router.get('/sessions', requireAuth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const now = new Date();
+    // Filter expired sessions
+    const validSessions = (user.sessions || []).filter(s => s.expiresAt > now);
+
+    if (validSessions.length !== (user.sessions || []).length) {
+      user.sessions = validSessions;
+      await user.save().catch(() => {});
+    }
+
+    const currentSessionId = req.user.sessionId;
+
+    const list = validSessions.map(s => ({
+      sessionId:  s.sessionId,
+      deviceName: s.deviceName || 'Web Browser',
+      deviceType: s.deviceType || 'desktop',
+      location:   s.location || 'Local Network',
+      ip:         s.ip || '',
+      createdAt:  s.createdAt,
+      lastActive: s.lastActive || s.createdAt,
+      isCurrent:  Boolean(currentSessionId && s.sessionId === currentSessionId)
+    }));
+
+    // Sort by current session first, then last active descending
+    list.sort((a, b) => {
+      if (a.isCurrent) return -1;
+      if (b.isCurrent) return 1;
+      return new Date(b.lastActive) - new Date(a.lastActive);
+    });
+
+    res.json({ success: true, sessions: list });
+  } catch (err) {
+    console.error('Failed to get sessions:', err.message);
+    res.status(500).json({ error: 'Failed to retrieve active sessions' });
+  }
+});
+
+router.delete('/sessions/:sessionId', requireAuth, async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    user.sessions = (user.sessions || []).filter(s => s.sessionId !== sessionId);
+    await user.save();
+
+    if (req.user.sessionId === sessionId) {
+      clearRefreshCookie(res);
+    }
+
+    res.json({ success: true, message: 'Device session logged out successfully' });
+  } catch (err) {
+    console.error('Failed to revoke session:', err.message);
+    res.status(500).json({ error: 'Failed to logout device session' });
+  }
+});
+
+router.delete('/sessions', requireAuth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const currentSessionId = req.user.sessionId;
+    user.sessions = (user.sessions || []).filter(s => s.sessionId === currentSessionId);
+    await user.save();
+
+    res.json({ success: true, message: 'Logged out of all other devices' });
+  } catch (err) {
+    console.error('Failed to revoke other sessions:', err.message);
+    res.status(500).json({ error: 'Failed to revoke other devices' });
   }
 });
 

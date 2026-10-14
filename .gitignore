@@ -2,6 +2,8 @@ node_modules/
 frontend/node_modules/
 .env
 .DS_Store
+**/.DS_Store
+Thumbs.db
 *.log
 # Allow frontend/dist to be tracked in git for Render build
 !frontend/dist/
@@ -17,3 +19,7 @@ print-agent/SumatraPDF.exe
 print-agent/print-agent.exe
 print-agent/print-agent.log
 print-agent/bin/
+
+# DB Backup
+.backup_tmp/
+keys/google-service-account.json

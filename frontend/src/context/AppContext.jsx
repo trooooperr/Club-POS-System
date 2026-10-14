@@ -78,9 +78,11 @@ export const checkIsAlcoholic = (i, sellableList = [], invList = []) => {
 };
 
 const AppContext = createContext(null);
-const TABLES_KEY = 'humtum_table_bills_v2';
-const AUTH_KEY   = 'humtum_auth_v2';
-const TOKEN_KEY  = 'humtum_token_v2';
+const TABLES_KEY        = 'humtum_table_bills_v2';
+const AUTH_KEY          = 'humtum_auth_v2';
+const TOKEN_KEY         = 'humtum_token_v2';
+const REFRESH_TOKEN_KEY = 'humtum_refresh_token_v2';
+const SESSION_KEY       = 'humtum_session_id';
 
 // ── Role hierarchy ──────────────────────────────────────────────
 // admin > manager > staff  (admin can access all lower role views)
@@ -775,9 +777,10 @@ export function AppProvider({ children }) {
   const login = useCallback(async (username, password) => {
     try {
       const res = await fetch(apiUrl('/api/auth/login'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        method:      'POST',
+        credentials: 'include',
+        headers:     { 'Content-Type': 'application/json' },
+        body:        JSON.stringify({ username, password }),
       });
       const data = await res.json();
 
@@ -785,8 +788,14 @@ export function AppProvider({ children }) {
         return { error: data.error || 'Invalid username or password' };
       }
 
-      // Store token and user info
+      // Store access token, refresh token, session id, and user info
       localStorage.setItem(TOKEN_KEY, data.token);
+      if (data.refreshToken) {
+        localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
+      }
+      if (data.sessionId) {
+        localStorage.setItem(SESSION_KEY, data.sessionId);
+      }
       localStorage.setItem(AUTH_KEY, JSON.stringify(data.user));
       setCurrentUser(data.user);
       return { success: true };
@@ -795,9 +804,22 @@ export function AppProvider({ children }) {
     }
   }, []);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    // Invalidate session & refresh token on server (fire-and-forget)
+    try {
+      const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+      const sessionId    = localStorage.getItem(SESSION_KEY);
+      fetch(apiUrl('/api/auth/logout'), {
+        method:      'POST',
+        credentials: 'include',
+        headers:     { 'Content-Type': 'application/json' },
+        body:        JSON.stringify({ refreshToken, sessionId }),
+      }).catch(() => {});
+    } catch {}
     localStorage.removeItem(AUTH_KEY);
     localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    localStorage.removeItem(SESSION_KEY);
     setCurrentUser(null);
   }, []);
 

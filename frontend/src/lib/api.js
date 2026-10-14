@@ -35,16 +35,82 @@ export function apiUrl(path) {
   return `${API_BASE}${path}`;
 }
 
+// ── Token storage keys ───────────────────────────────────────────
+export const TOKEN_KEY         = 'humtum_token_v2';
+export const REFRESH_TOKEN_KEY = 'humtum_refresh_token_v2';
+export const AUTH_KEY          = 'humtum_auth_v2';
+export const SESSION_KEY       = 'humtum_session_id';
+
+// Prevent multiple simultaneous refresh calls
+let _refreshPromise = null;
+
 /**
- * Authenticated fetch — automatically includes JWT token
+ * Attempt to silently refresh the access token using the HttpOnly cookie or stored refresh token.
+ * Uses a shared promise so concurrent 401s don't trigger multiple refresh calls.
+ * Returns the new access token on success, or null on failure.
+ */
+async function tryRefreshToken() {
+  if (_refreshPromise) return _refreshPromise;
+
+  _refreshPromise = (async () => {
+    try {
+      const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+
+      const res = await fetch(`${API_BASE}/api/auth/refresh`, {
+        method:      'POST',
+        credentials: 'include',
+        headers:     { 'Content-Type': 'application/json' },
+        body:        JSON.stringify({ refreshToken: refreshToken || undefined }),
+      });
+
+      if (!res.ok) return null;
+
+      const data = await res.json();
+      if (!data.token) return null;
+
+      // Rotate tokens in storage
+      localStorage.setItem(TOKEN_KEY, data.token);
+      if (data.refreshToken) {
+        localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
+      }
+      if (data.sessionId) {
+        localStorage.setItem(SESSION_KEY, data.sessionId);
+      }
+      return data.token;
+    } catch {
+      return null;
+    } finally {
+      _refreshPromise = null;
+    }
+  })();
+
+  return _refreshPromise;
+}
+
+/**
+ * Force logout — clear all auth state and redirect to login.
+ */
+export function forceLogout() {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+  localStorage.removeItem(AUTH_KEY);
+  localStorage.removeItem(SESSION_KEY);
+  if (window.location.pathname !== '/login') {
+    window.location.reload();
+  }
+}
+
+/**
+ * Authenticated fetch — automatically includes JWT access token & credentials (cookies).
+ * On 401 it silently refreshes the token once and retries; only then does it force logout.
  */
 export async function authFetch(url, options = {}) {
-  const token = localStorage.getItem('humtum_token_v2');
+  const token = localStorage.getItem(TOKEN_KEY);
   const headers = {
     ...options.headers,
     'Cache-Control': 'no-cache, no-store, must-revalidate',
     'Pragma': 'no-cache',
-    'Expires': '0'
+    'Expires': '0',
   };
 
   if (token) {
@@ -56,17 +122,30 @@ export async function authFetch(url, options = {}) {
     headers['Content-Type'] = 'application/json';
   }
 
-  const res = await fetch(url, { cache: 'no-store', ...options, headers });
+  const fetchOptions = {
+    cache:       'no-store',
+    credentials: 'include',
+    ...options,
+    headers,
+  };
 
-  // Auto-logout on 401 (token expired)
+  let res = await fetch(url, fetchOptions);
+
+  // ── Silent refresh on 401 ────────────────────────────────────────
   if (res.status === 401) {
-    localStorage.removeItem('humtum_token_v2');
-    localStorage.removeItem('humtum_auth_v2');
-    // Don't reload if we're already on the login page
-    if (window.location.pathname !== '/login') {
-      window.location.reload();
+    const newToken = await tryRefreshToken();
+
+    if (newToken) {
+      // Retry the original request with the new access token
+      const retryHeaders = { ...headers, 'Authorization': `Bearer ${newToken}` };
+      res = await fetch(url, { ...fetchOptions, headers: retryHeaders });
     }
-    throw new Error('Session expired');
+
+    // If still 401 after refresh attempt → force logout
+    if (res.status === 401) {
+      forceLogout();
+      throw new Error('Session expired');
+    }
   }
 
   return res;

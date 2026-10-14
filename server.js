@@ -131,6 +131,25 @@ function scheduleBookingReminders() {
   console.log('🔔 Booking reminder cron scheduled: 09:00 AM IST daily');
 }
 
+// ── Cron: Daily DB backup to Google Drive ────────────────────────
+function scheduleDbBackup() {
+  const BACKUP_CRON = process.env.BACKUP_CRON || '30 5 * * *'; // 05:30 AM IST (30 min after report)
+  cron.schedule(BACKUP_CRON, async () => {
+    console.log('🗄️  Running scheduled DB backup to Google Drive...');
+    try {
+      const { runBackup } = require('./scripts/backup-db');
+      const result = await runBackup();
+      if (result.success) {
+        console.log(`✅ DB backup uploaded to Google Drive (file: ${result.driveFileId})`);
+      } else {
+        console.error(`❌ DB backup failed: ${result.error}`);
+      }
+    } catch (err) {
+      console.error('❌ DB backup cron error:', err.message);
+    }
+  }, { timezone: 'Asia/Kolkata' });
+  console.log(`📅 DB backup cron scheduled: ${BACKUP_CRON} IST (→ Google Drive)`);
+}
 
 
 // ── Cache warmup ─────────────────────────────────────────────────
@@ -471,6 +490,7 @@ async function startServer() {
       console.log(`🔗 Socket.IO ready`);
       scheduleDailyReport();
       scheduleBookingReminders();
+      scheduleDbBackup();
     });
 
   } catch (err) {
