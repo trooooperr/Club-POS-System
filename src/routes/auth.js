@@ -199,9 +199,12 @@ router.post('/refresh', async (req, res) => {
     targetSession.expiresAt = newRefreshExp;
     targetSession.lastActive = now;
 
-    // Refresh client IP / UserAgent if updated
+    // Refresh client IP & location if device IP changed
     const device = getDeviceDetails(req);
-    if (device.ip) targetSession.ip = device.ip;
+    if (device.ip && device.ip !== targetSession.ip) {
+      targetSession.ip = device.ip;
+      targetSession.location = await resolveLocation(device.ip);
+    }
 
     user.refreshTokenHash = newRefreshHash;
     user.refreshTokenExp  = newRefreshExp;
@@ -261,8 +264,17 @@ router.get('/sessions', requireAuth, async (req, res) => {
     let validSessions = (user.sessions || []).filter(s => s.expiresAt > now);
     let needsSave = false;
 
-    // Sanitize device names and fix any stale/wrong location data on existing sessions
+    const currentSessionId = req.user.sessionId;
+    const currentDevice = getDeviceDetails(req);
+
+    // Sanitize device names, update IP/location on network change, and fix stale data
     for (const s of validSessions) {
+      // If current device's IP has changed (e.g. switched Wi-Fi or mobile data), update IP & location immediately
+      if (currentSessionId && s.sessionId === currentSessionId && currentDevice.ip && currentDevice.ip !== s.ip) {
+        s.ip = currentDevice.ip;
+        s.location = await resolveLocation(currentDevice.ip);
+        needsSave = true;
+      }
       if (s.deviceName && (s.deviceName.includes('Apple Macintosh') || s.deviceName.includes('(macOS 10)'))) {
         s.deviceName = s.deviceName.replace(/on Apple Macintosh.*$/, 'on Mac').trim();
         needsSave = true;
@@ -277,8 +289,6 @@ router.get('/sessions', requireAuth, async (req, res) => {
       user.sessions = validSessions;
       await user.save().catch(() => {});
     }
-
-    const currentSessionId = req.user.sessionId;
 
     const list = validSessions.map(s => ({
       sessionId:  s.sessionId,
