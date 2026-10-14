@@ -65,8 +65,20 @@ router.post('/backup/restore-latest', requireRole(['admin', 'manager']), async (
     console.log(`🔄 Restore/sync from latest backup initiated by: ${req.user?.username || 'admin'}`);
     const { downloadLatestBackup } = require('../lib/driveBackup');
     const { restoreFromArchive } = require('../../scripts/restore-db');
+    const { runBackup } = require('../../scripts/backup-db');
 
+    // 1. Download target backup from Drive first (before any database modifications)
     downloaded = await downloadLatestBackup();
+
+    // 2. Automatically create a pre-restore safety snapshot of the live database
+    console.log('🛡️ Creating pre-restore safety snapshot in Google Drive...');
+    try {
+      await runBackup();
+    } catch (preErr) {
+      console.warn('⚠️ Pre-restore safety backup encountered an issue:', preErr.message);
+    }
+
+    // 3. Restore the target archive into MongoDB
     const result = await restoreFromArchive(downloaded.filePath, process.env.CLOUD_MONGO_URI, false);
 
     // Clear caches so the app immediately reflects restored data
@@ -74,7 +86,7 @@ router.post('/backup/restore-latest', requireRole(['admin', 'manager']), async (
 
     res.json({
       success: true,
-      message: `MongoDB successfully synced with latest backup (${downloaded.fileName} from ${downloaded.folderName})!`,
+      message: `MongoDB successfully synced with latest backup (${downloaded.fileName} from ${downloaded.folderName})! A safety snapshot of your previous database was also uploaded to Google Drive.`,
       fileName: downloaded.fileName,
       folderName: downloaded.folderName,
       restoredCollections: result.restoredCollections,

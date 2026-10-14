@@ -131,9 +131,10 @@ function scheduleBookingReminders() {
   console.log('🔔 Booking reminder cron scheduled: 09:00 AM IST daily');
 }
 
-// ── Cron: Daily DB backup to Google Drive ────────────────────────
+// ── Cron: Scheduled DB backups to Google Drive ───────────────────
 function scheduleDbBackup() {
-  const BACKUP_CRON = process.env.BACKUP_CRON || '30 5 * * *'; // 05:30 AM IST (30 min after report)
+  // 05:30 AM (post-closing), 04:00 PM (pre-shift), 11:30 PM (mid-shift)
+  const BACKUP_CRON = process.env.BACKUP_CRON || '30 5,16,23 * * *';
   cron.schedule(BACKUP_CRON, async () => {
     console.log('🗄️  Running scheduled DB backup to Google Drive...');
     try {

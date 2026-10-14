@@ -251,6 +251,15 @@ router.post('/send-daily', requireRole(['admin', 'manager']), async (req, res) =
   try {
     const { emailConfig, settings } = req.body;
     const result = await sendDailyReportInternal({ emailConfig, settings });
+
+    // Asynchronously trigger automatic database backup to Google Drive
+    try {
+      const { runBackup } = require('../../scripts/backup-db');
+      runBackup().catch(err => console.error('Daily report backup error:', err.message));
+    } catch (backupErr) {
+      console.warn('Could not launch daily backup:', backupErr.message);
+    }
+
     res.json({
       success:true,
       message:'Report sent',
