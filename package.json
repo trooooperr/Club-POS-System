@@ -8,7 +8,8 @@
     "start": "node --dns-result-order=ipv4first server.js",
     "dev": "NODE_OPTIONS='--dns-result-order=ipv4first' nodemon server.js",
     "test": "echo \"No tests specified\"",
-    "backup": "node scripts/backup-db.js"
+    "backup": "node scripts/backup-db.js",
+    "setup-drive-auth": "node scripts/setup-drive-auth.js"
   },
   "dependencies": {
     "@upstash/redis": "^1.37.0",

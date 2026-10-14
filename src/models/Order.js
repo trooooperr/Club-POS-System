@@ -50,5 +50,9 @@ const orderSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 orderSchema.index({ businessDate: 1, billNo: 1 });
+orderSchema.index({ customerPhone: 1, date: -1 });
+orderSchema.index({ tableNo: 1, isActive: 1 });
+orderSchema.index({ businessDate: 1, isActive: 1 });
+orderSchema.index({ businessDate: 1, isCredit: 1, dueAmount: 1 });
 
 module.exports = mongoose.model('Order', orderSchema);

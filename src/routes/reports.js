@@ -211,8 +211,8 @@ async function sendDailyReportInternal(options = {}) {
   };
 
   const businessDateStr = getBusinessDateString(new Date());
-  const orders = await Order.find({ businessDate: businessDateStr, grandTotal: { $gt: 0 }, isManualDue: { $ne: true } });
-  const inventory = await Inventory.find();
+  const orders = await Order.find({ businessDate: businessDateStr, grandTotal: { $gt: 0 }, isManualDue: { $ne: true } }).lean();
+  const inventory = await Inventory.find().lean();
   const inventoryCategories = resolvedSettings.inventoryCategories || [];
   inventory.sort((a, b) => {
     const catAIndex = inventoryCategories.indexOf(a.category);
@@ -276,8 +276,8 @@ router.get('/daily-html', async (req, res) => {
     };
 
     const businessDateStr = getBusinessDateString(new Date());
-    const orders = await Order.find({ businessDate: businessDateStr, grandTotal: { $gt: 0 }, isManualDue: { $ne: true } });
-    const inventory = await Inventory.find();
+    const orders = await Order.find({ businessDate: businessDateStr, grandTotal: { $gt: 0 }, isManualDue: { $ne: true } }).lean();
+    const inventory = await Inventory.find().lean();
     const inventoryCategories = resolvedSettings.inventoryCategories || [];
     inventory.sort((a, b) => {
       const catAIndex = inventoryCategories.indexOf(a.category);
@@ -307,7 +307,7 @@ router.get('/daily-summary', requireRole(['admin', 'manager']), async (req, res)
     if (cached) return res.json(cached);
 
     const businessDateStr = getBusinessDateString(new Date());
-    const orders = await Order.find({ businessDate: businessDateStr, grandTotal: { $gt: 0 }, isManualDue: { $ne: true } });
+    const orders = await Order.find({ businessDate: businessDateStr, grandTotal: { $gt: 0 }, isManualDue: { $ne: true } }).lean();
     const total    = orders.reduce((s,o)=>s+(o.paidAmount !== undefined ? o.paidAmount : (o.dueAmount > 0 ? Math.max(0, o.grandTotal - o.dueAmount) : o.grandTotal)),0);
     const due      = orders.reduce((s,o)=>s+(o.dueAmount||0),0);
     const pmMap    = {};
@@ -332,7 +332,7 @@ router.get('/today-discounts', requireRole(['admin', 'manager', 'staff']), async
     const rawOrders = await Order.find({
       businessDate: businessDateStr,
       discount: { $gt: 0 }
-    }).sort({ updatedAt: -1, date: -1 });
+    }).sort({ updatedAt: -1, date: -1 }).lean();
 
     // Exclude 100% discount bills (even if fine added), ₹1 unpaid bills, & pending credit bills
     const ordersWithDiscount = rawOrders.filter(o => {
@@ -388,7 +388,7 @@ router.get('/discounts', requireRole(['admin', 'manager', 'staff']), async (req,
       matchQuery.businessDate = { $gte: startDate, $lte: endDate };
     }
 
-    const rawOrders = await Order.find(matchQuery).sort({ updatedAt: -1, date: -1 });
+    const rawOrders = await Order.find(matchQuery).sort({ updatedAt: -1, date: -1 }).lean();
 
     // Exclude 100% discount bills (even if fine added), ₹1 unpaid bills, & pending credit bills
     const ordersWithDiscount = rawOrders.filter(o => {
