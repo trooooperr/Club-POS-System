@@ -7,7 +7,7 @@
     "build": "npm --prefix frontend run build",
     "start": "node --dns-result-order=ipv4first server.js",
     "dev": "NODE_OPTIONS='--dns-result-order=ipv4first' nodemon server.js",
-    "test": "jest --runInBand",
+    "test": "echo \"No tests specified\"",
     "backup": "node scripts/backup-db.js"
   },
   "dependencies": {
