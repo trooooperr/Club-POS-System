@@ -8,6 +8,9 @@ RUN npm ci --omit=dev
 COPY app.js ./
 COPY server.js ./
 COPY src ./src
+COPY scripts ./scripts
+COPY keys ./keys
+COPY print-agent ./print-agent
 
 # Use pre-built frontend dist (committed to git — no Vite build needed on Render)
 COPY frontend/dist ./frontend/dist
