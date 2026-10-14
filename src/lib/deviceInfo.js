@@ -123,12 +123,8 @@ async function resolveLocation(ip, clientLocationHint = null) {
     if (res.ok) {
       const data = await res.json();
       if (data && data.success) {
-        let loc = '';
-        if (data.region && data.country) {
-          loc = `${data.region}, ${data.country} (Approximate)`;
-        } else if (data.country) {
-          loc = `${data.country} (Approximate)`;
-        }
+        const parts = [data.city, data.region, data.country].filter(Boolean);
+        const loc = parts.join(', ');
         if (loc) {
           geoCache.set(ip, loc);
           return loc;
@@ -154,15 +150,17 @@ async function resolveLocation(ip, clientLocationHint = null) {
       const data = await res.json();
       if (data && data.country) {
         const countryName = data.country === 'IN' ? 'India' : data.country;
-        const region = data.region;
-        const loc = region ? `${region}, ${countryName} (Approximate)` : `${countryName} (Approximate)`;
-        geoCache.set(ip, loc);
-        return loc;
+        const parts = [data.city, data.region, countryName].filter(Boolean);
+        const loc = parts.join(', ');
+        if (loc) {
+          geoCache.set(ip, loc);
+          return loc;
+        }
       }
     }
   } catch {}
 
-  const fallback = 'India (Approximate)';
+  const fallback = 'India';
   geoCache.set(ip, fallback);
   return fallback;
 }

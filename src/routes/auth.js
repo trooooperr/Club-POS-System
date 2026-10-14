@@ -267,7 +267,7 @@ router.get('/sessions', requireAuth, async (req, res) => {
         s.deviceName = s.deviceName.replace(/on Apple Macintosh.*$/, 'on Mac').trim();
         needsSave = true;
       }
-      if (!s.location || s.location.includes('Shimla') || s.location.includes('Himachal') || s.location.includes('Dadri') || s.location.includes('Gorakhpur')) {
+      if (!s.location || s.location.includes('(Approximate)') || s.location.includes('Shimla') || s.location.includes('Gorakhpur')) {
         s.location = await resolveLocation(s.ip);
         needsSave = true;
       }
@@ -284,7 +284,7 @@ router.get('/sessions', requireAuth, async (req, res) => {
       sessionId:  s.sessionId,
       deviceName: s.deviceName || 'Web Browser',
       deviceType: s.deviceType || 'desktop',
-      location:   s.location || 'India (Approximate)',
+      location:   s.location || 'India',
       ip:         s.ip || '',
       createdAt:  s.createdAt,
       lastActive: s.lastActive || s.createdAt,
