@@ -9,6 +9,7 @@
     "dev": "NODE_OPTIONS='--dns-result-order=ipv4first' nodemon server.js",
     "test": "echo \"No tests specified\"",
     "backup": "node scripts/backup-db.js",
+    "restore": "node scripts/restore-db.js",
     "setup-drive-auth": "node scripts/setup-drive-auth.js"
   },
   "dependencies": {
