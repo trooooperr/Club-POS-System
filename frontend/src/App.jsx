@@ -29,7 +29,7 @@ function Shell() {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  const { currentUser, activeSection, setActiveSection, selectTable, settings, loading, error, loadData, sidebarOpen, setSidebarOpen, invoiceOrder, activeTableId, showToast, tableBills, getTableStatus, NUM_TABLES, activeTableCount, isOnline, offlineQueueCount, offlineKotQueueCount, isSyncingOffline, flushOfflineQueue } = useApp();
+  const { currentUser, activeSection, setActiveSection, selectTable, settings, loading, error, loadData, sidebarOpen, setSidebarOpen, invoiceOrder, activeTableId, showToast, tableBills, getTableStatus, NUM_TABLES, activeTableCount, isOnline, offlineQueueCount, offlineKotQueueCount, offlineMutationCount, isSyncingOffline, flushOfflineQueue, agentConnected } = useApp();
 
   const pageTitles = {
     billing: 'Billing',
@@ -146,7 +146,26 @@ function Shell() {
           </div>
         )}
 
-        {(!isOnline || offlineQueueCount > 0 || offlineKotQueueCount > 0) && (
+        {/* Printer Warning Badge (if enabled but disconnected/offline) */}
+        {settings.printAgentEnabled && !agentConnected && (
+          <div style={{
+            background: 'rgba(239, 68, 68, 0.1)',
+            borderBottom: '1px solid rgba(239, 68, 68, 0.25)',
+            padding: '5px 18px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontSize: '11px',
+            color: '#f87171',
+            fontWeight: '600',
+            flexShrink: 0
+          }}>
+            <span>🖨️ Printer Not Responding — Check USB Cable, Power, or Paper Roll</span>
+            <span style={{ fontSize: '10px', color: 'var(--t2)', fontWeight: 'normal' }}>Prints will spool in Windows automatically</span>
+          </div>
+        )}
+
+        {(!isOnline || offlineQueueCount > 0 || offlineKotQueueCount > 0 || (offlineMutationCount || 0) > 0) && (
           <div style={{
             background: !isOnline ? 'rgba(234, 179, 8, 0.12)' : 'rgba(59, 130, 246, 0.12)',
             borderBottom: `1px solid ${!isOnline ? 'rgba(234, 179, 8, 0.3)' : 'rgba(59, 130, 246, 0.3)'}`,
@@ -166,10 +185,11 @@ function Shell() {
                 {!isOnline ? 'NO INTERNET - offline billing mode' : 'ONLINE - SYNCING DATA'}
               </span>
               <span style={{ fontWeight: 'normal', color: 'var(--t1)', fontSize: '12px' }}>
-                | &nbsp;{offlineQueueCount} {offlineQueueCount === 1 ? 'order' : 'orders'} &nbsp;·&nbsp; {offlineKotQueueCount} {offlineKotQueueCount === 1 ? 'kot' : 'kots'} queued
+                | &nbsp;{offlineQueueCount} {offlineQueueCount === 1 ? 'order' : 'orders'} &nbsp;·&nbsp; {offlineKotQueueCount} {offlineKotQueueCount === 1 ? 'kot' : 'kots'}
+                {(offlineMutationCount || 0) > 0 ? ` · ${offlineMutationCount} updates` : ''} queued
               </span>
             </div>
-            {isOnline && (offlineQueueCount > 0 || offlineKotQueueCount > 0) && (
+            {isOnline && (offlineQueueCount > 0 || offlineKotQueueCount > 0 || (offlineMutationCount || 0) > 0) && (
               <button
                 type="button"
                 className="btn btn-secondary btn-sm"

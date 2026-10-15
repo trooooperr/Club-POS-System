@@ -283,6 +283,7 @@ export function AppProvider({ children }) {
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [offlineQueueCount, setOfflineQueueCount] = useState(() => getOfflineQueue().length);
   const [offlineKotQueueCount, setOfflineKotQueueCount] = useState(() => getOfflineKotQueue().length);
+  const [offlineMutationCount, setOfflineMutationCount] = useState(() => getOfflineMutationQueue().length);
   const [isSyncingOffline, setIsSyncingOffline] = useState(false);
 
   const applyInventoryUpdate = useCallback((nextInventory) => {
@@ -1066,6 +1067,7 @@ export function AppProvider({ children }) {
 
     setOfflineQueueCount(getOfflineQueue().length);
     setOfflineKotQueueCount(getOfflineKotQueue().length);
+    setOfflineMutationCount(getOfflineMutationQueue().length);
     setIsSyncingOffline(false);
     const totalSynced = syncedOrders + syncedKots;
     if (totalSynced > 0) {
@@ -2291,7 +2293,7 @@ export function AppProvider({ children }) {
       openTableSession, syncTableSession, createKOT, updateKOTStatus, removeKOTItem, deleteKOT, finalizeBill, completeOrder, cancelTableSession,
       printKOTDocument, printBillDocument, checkIsAlcoholic,
       // Offline Resilience
-      isOnline, offlineQueueCount, offlineKotQueueCount, isSyncingOffline, flushOfflineQueue,
+      isOnline, offlineQueueCount, offlineKotQueueCount, offlineMutationCount, isSyncingOffline, flushOfflineQueue,
     }}>
       {children}
     </AppContext.Provider>
