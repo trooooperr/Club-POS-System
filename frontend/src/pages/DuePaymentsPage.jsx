@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { apiUrl, authFetch } from '../lib/api';
 import { Search, Wallet, User, Phone, Edit3, Trash2, X, ArrowLeft } from 'lucide-react';
+import { saveDuePaymentsToIDB, getDuePaymentsFromIDB } from '../lib/idb';
 
 export default function DuePaymentsPage() {
   const { showToast, loadData, currency = '₹', setActiveSection } = useApp();
@@ -59,17 +60,28 @@ export default function DuePaymentsPage() {
             if (timeB !== timeA) return timeB - timeA;
             return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
           });
-          setData({ ...resData, orders: sorted });
+          const result = { ...resData, orders: sorted };
+          setData(result);
+          // Cache in IDB for offline access
+          saveDuePaymentsToIDB(result).catch(() => {});
         }
         setLoading(false);
       })
       .catch(err => {
         console.error('Failed to fetch due payments:', err);
+        // Offline fallback: load from IDB
+        getDuePaymentsFromIDB().then(cached => {
+          if (cached && cached.orders) setData(cached);
+        }).catch(() => {});
         setLoading(false);
       });
   };
 
   useEffect(() => {
+    // Try IDB first for instant load, then fetch fresh data
+    getDuePaymentsFromIDB().then(cached => {
+      if (cached && cached.orders) setData(cached);
+    }).catch(() => {});
     fetchDuePayments();
   }, []);
 

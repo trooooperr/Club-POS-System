@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { apiUrl, authFetch } from '../lib/api';
 import { Plus, CalendarDays, Trash2, Edit3, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
+import { saveExpensesToIDB, getExpensesFromIDB } from '../lib/idb';
 
 function DateField({ value, onChange, inputRef, label, max }) {
   const triggerPicker = () => {
@@ -133,6 +134,10 @@ export default function ExpensesPage() {
         if (Array.isArray(data.expenses)) {
           setExpenses(data.expenses);
           setTotalAmount(data.totalAmount || 0);
+          // Cache today's expenses in IDB for offline access
+          if (range === 'today') {
+            saveExpensesToIDB(data.expenses, { totalAmount: data.totalAmount || 0, date: start }).catch(() => {});
+          }
         } else {
           setExpenses([]);
           setTotalAmount(0);
@@ -141,6 +146,15 @@ export default function ExpensesPage() {
       })
       .catch(err => {
         console.error('Failed to fetch expenses:', err);
+        // Offline fallback: load today's snapshot from IDB
+        if (range === 'today') {
+          getExpensesFromIDB().then(cached => {
+            if (cached && Array.isArray(cached.expenses)) {
+              setExpenses(cached.expenses);
+              setTotalAmount(cached.totalAmount || 0);
+            }
+          }).catch(() => {});
+        }
         setLoading(false);
       });
   };

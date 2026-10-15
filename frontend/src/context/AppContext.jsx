@@ -14,6 +14,10 @@ import {
   incrementAndGetNextBillNo, incrementAndGetNextKotNo,
   getLocalBillCounter, getLocalKotCounter, getDeviceId
 } from '../lib/offlineQueue';
+import {
+  saveOrdersToIDB, getOrdersFromIDB, upsertOrderInIDB,
+  saveAnalyticsToIDB, saveExpensesToIDB, saveDuePaymentsToIDB, saveAttendanceToIDB
+} from '../lib/idb';
 
 
 const playAlarmChime = () => {
@@ -272,6 +276,17 @@ export function AppProvider({ children }) {
   // ── Data ────────────────────────────────────────────────────────
   const [menuItems,    setMenuItems]    = useState(() => getCachedMenuItems());
   const [orderHistory, setOrderHistory] = useState([]);
+  // Boot orders from IndexedDB instantly (no network needed — local hard disk)
+  useEffect(() => {
+    getOrdersFromIDB().then(cached => {
+      if (Array.isArray(cached) && cached.length > 0) {
+        setOrderHistory(prev =>
+          prev.length > 0 ? prev
+          : [...cached].sort((a,b) => new Date(b.updatedAt||b.date) - new Date(a.updatedAt||a.date))
+        );
+      }
+    }).catch(() => {});
+  }, []);
   const [activeSessions, setActiveSessions] = useState([]);
   const [workers,      setWorkers]      = useState([]);
   const [inventory,    setInventory]    = useState([]);
@@ -917,7 +932,8 @@ export function AppProvider({ children }) {
         const res = results[indexMap.orders];
         if (res && res.status === 'fulfilled' && Array.isArray(res.value)) {
           setOrderHistory([...res.value].sort((a,b)=>new Date(b.updatedAt || b.date)-new Date(a.updatedAt || a.date)));
-          saveMasterCache('orders', res.value);
+          // ── Save to IndexedDB (unlimited storage, instant offline reads) ──
+          saveOrdersToIDB(res.value).catch(() => {});
 
           // Update local bill counter from max existing bill number
           let maxBillNum = 0;
@@ -1017,6 +1033,8 @@ export function AppProvider({ children }) {
               const filtered = arr.filter(o => o.offlineSyncId !== item.offlineSyncId && o._id !== data.order._id);
               return [data.order, ...filtered];
             });
+            // Upsert synced order into IndexedDB
+            upsertOrderInIDB(data.order).catch(() => {});
           }
         }
       } catch (err) {

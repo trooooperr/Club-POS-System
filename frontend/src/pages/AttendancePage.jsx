@@ -23,6 +23,7 @@ import {
   Unlock
 } from 'lucide-react';
 import { apiUrl, authFetch } from '../lib/api';
+import { saveAttendanceToIDB, getAttendanceFromIDB } from '../lib/idb';
 
 export default function AttendancePage() {
   const { showToast, role, setActiveSection } = useApp();
@@ -68,17 +69,36 @@ export default function AttendancePage() {
   // Fetch Daily Attendance
   const fetchDailyAttendance = useCallback(async (date) => {
     setDailyLoading(true);
+    // Instantly load cached snapshot from IDB while fetching fresh
+    if (date === getTodayStr()) {
+      getAttendanceFromIDB().then(cached => {
+        if (cached && Array.isArray(cached.records) && cached.records.length > 0) {
+          setDailyData({ summary: cached.summary || {}, attendance: cached.records });
+        }
+      }).catch(() => {});
+    }
     try {
       const res = await authFetch(apiUrl(`/api/attendance/daily?date=${date}`));
       const data = await res.json();
       if (data.success) {
         setDailyData(data);
+        // Cache today's attendance in IDB for offline access
+        if (date === getTodayStr()) {
+          saveAttendanceToIDB(data.attendance || [], { summary: data.summary || {} }).catch(() => {});
+        }
       } else {
         showToast(data.message || 'Failed to load daily attendance', 'error');
       }
     } catch (err) {
       console.error(err);
-      showToast('Error loading attendance', 'error');
+      // Offline fallback already loaded above; just show toast if no cached data
+      if (date === getTodayStr()) {
+        getAttendanceFromIDB().then(cached => {
+          if (!cached || !cached.records?.length) showToast('Offline — no cached attendance data', 'amber');
+        });
+      } else {
+        showToast('Error loading attendance', 'error');
+      }
     } finally {
       setDailyLoading(false);
     }
