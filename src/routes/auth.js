@@ -75,25 +75,56 @@ router.post('/login', async (req, res) => {
     const accessToken  = generateToken(user, sessionId);
     const { raw: refreshTokenRaw, hash: refreshTokenHash, expiresAt: refreshTokenExp } = generateRefreshToken();
 
-    // Maintain multi-device sessions array (prune expired & keep max 25)
+    // Maintain unique device sessions array (prune expired & keep unique devices)
     const now = new Date();
-    const activeSessions = (user.sessions || []).filter(s => s.expiresAt > now);
-    if (activeSessions.length >= 25) {
-      activeSessions.shift(); // Evict oldest
+    let activeSessions = (user.sessions || []).filter(s => s.expiresAt > now);
+
+    let cleanDeviceName = device.deviceName || 'Web Browser';
+    if (cleanDeviceName.includes('Apple Macintosh') || cleanDeviceName.includes('(macOS 10)')) {
+      cleanDeviceName = cleanDeviceName.replace(/on Apple Macintosh.*$/, 'on Mac').trim();
     }
-    activeSessions.push({
-      sessionId,
-      refreshTokenHash,
-      prevRefreshTokenHash: '',
-      expiresAt: refreshTokenExp,
-      ip: device.ip,
-      location,
-      userAgent: device.userAgent,
-      deviceName: device.deviceName,
-      deviceType: device.deviceType,
-      lastActive: now,
-      createdAt: now
+
+    // Check if an active session already exists for this unique device (same deviceName & deviceType)
+    const existingIndex = activeSessions.findIndex(s => {
+      const sName = (s.deviceName || '').trim().toLowerCase();
+      const dName = cleanDeviceName.trim().toLowerCase();
+      return (sName === dName && (s.deviceType || 'desktop') === (device.deviceType || 'desktop')) ||
+             (s.userAgent && device.userAgent && s.userAgent === device.userAgent);
     });
+
+    if (existingIndex !== -1) {
+      // Existing device: update session token, IP, location, and latest activity time,
+      // while PRESERVING the original createdAt (time of first use / login)!
+      const existing = activeSessions[existingIndex];
+      existing.sessionId = sessionId;
+      existing.refreshTokenHash = refreshTokenHash;
+      existing.prevRefreshTokenHash = '';
+      existing.expiresAt = refreshTokenExp;
+      existing.ip = device.ip;
+      existing.location = location;
+      existing.userAgent = device.userAgent;
+      existing.deviceName = cleanDeviceName;
+      existing.deviceType = device.deviceType;
+      existing.lastActive = now;
+      // Note: existing.createdAt is kept as the original first login timestamp!
+    } else {
+      if (activeSessions.length >= 25) {
+        activeSessions.shift(); // Evict oldest
+      }
+      activeSessions.push({
+        sessionId,
+        refreshTokenHash,
+        prevRefreshTokenHash: '',
+        expiresAt: refreshTokenExp,
+        ip: device.ip,
+        location,
+        userAgent: device.userAgent,
+        deviceName: cleanDeviceName,
+        deviceType: device.deviceType,
+        lastActive: now,
+        createdAt: now
+      });
+    }
     user.sessions = activeSessions;
 
     // Legacy fields for backward compatibility
@@ -267,26 +298,57 @@ router.get('/sessions', requireAuth, async (req, res) => {
       : [await User.findById(req.user.id)].filter(Boolean);
 
     for (const u of users) {
-      let validSessions = (u.sessions || []).filter(s => s.expiresAt > now);
-      let needsSave = false;
+      let rawSessions = (u.sessions || []).filter(s => s.expiresAt > now);
 
-      for (const s of validSessions) {
+      for (const s of rawSessions) {
         if (currentSessionId && s.sessionId === currentSessionId && currentDevice.ip && currentDevice.ip !== s.ip) {
           s.ip = currentDevice.ip;
           s.location = await resolveLocation(currentDevice.ip);
-          needsSave = true;
         }
         if (s.deviceName && (s.deviceName.includes('Apple Macintosh') || s.deviceName.includes('(macOS 10)'))) {
           s.deviceName = s.deviceName.replace(/on Apple Macintosh.*$/, 'on Mac').trim();
-          needsSave = true;
         }
         const badCities = ['Gorakhpur', 'Shimla', 'Dadri', 'Kanpur'];
         const hasBadCity = badCities.some(c => s.location?.includes(c));
         if (!s.location || s.location.includes('(Approximate)') || hasBadCity) {
           s.location = await resolveLocation(s.ip);
-          needsSave = true;
         }
+      }
 
+      // Group by UNIQUE device for this user (keyed by deviceName + deviceType)
+      const deviceMap = new Map();
+      for (const s of rawSessions) {
+        const key = `${(s.deviceName || 'Web Browser').trim().toLowerCase()}___${(s.deviceType || 'desktop').trim().toLowerCase()}`;
+        if (!deviceMap.has(key)) {
+          deviceMap.set(key, s);
+        } else {
+          const existing = deviceMap.get(key);
+          const isThisCurrent = Boolean(currentSessionId && s.sessionId === currentSessionId);
+          const isExistingCurrent = Boolean(currentSessionId && existing.sessionId === currentSessionId);
+
+          // Earliest createdAt (time of first use / login)
+          const earliestCreated = new Date(Math.min(new Date(existing.createdAt || now).getTime(), new Date(s.createdAt || now).getTime()));
+          // Latest lastActive time
+          const latestActive = new Date(Math.max(new Date(existing.lastActive || now).getTime(), new Date(s.lastActive || now).getTime()));
+
+          if (isThisCurrent && !isExistingCurrent) {
+            s.createdAt = earliestCreated;
+            s.lastActive = latestActive;
+            deviceMap.set(key, s);
+          } else {
+            existing.createdAt = earliestCreated;
+            existing.lastActive = latestActive;
+            if (new Date(s.lastActive || 0) > new Date(existing.lastActive || 0)) {
+              existing.ip = s.ip || existing.ip;
+              existing.location = s.location || existing.location;
+            }
+          }
+        }
+      }
+
+      const uniqueSessions = Array.from(deviceMap.values());
+
+      for (const s of uniqueSessions) {
         list.push({
           sessionId:  s.sessionId,
           deviceName: s.deviceName || 'Web Browser',
@@ -301,8 +363,9 @@ router.get('/sessions', requireAuth, async (req, res) => {
         });
       }
 
-      if (needsSave || validSessions.length !== (u.sessions || []).length) {
-        u.sessions = validSessions;
+      // Automatically prune duplicate sessions in the database
+      if (uniqueSessions.length !== (u.sessions || []).length) {
+        u.sessions = uniqueSessions;
         await u.save().catch(() => {});
       }
     }
