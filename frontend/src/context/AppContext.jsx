@@ -277,7 +277,19 @@ export function AppProvider({ children }) {
   const [menuItems,    setMenuItems]    = useState(() => getCachedMenuItems());
   const [orderHistory, setOrderHistory] = useState([]);
   // Boot orders from IndexedDB instantly (no network needed — local hard disk)
+  // Also runs ONE-TIME migration: deletes old localStorage order/KOT cache keys (frees ~270 KB)
   useEffect(() => {
+    // ── One-time migration: remove bulky keys from localStorage ──
+    const OLD_KEYS = [
+      'humtum_cache_orders',   // was 270 KB — now lives in IndexedDB
+      'humtum_cache_kots',     // old KOT cache
+      'humtum_cache_sessions', // sessions not needed offline
+    ];
+    OLD_KEYS.forEach(k => {
+      try { localStorage.removeItem(k); } catch {}
+    });
+
+    // ── Load orders from IDB instantly ───────────────────────────
     getOrdersFromIDB().then(cached => {
       if (Array.isArray(cached) && cached.length > 0) {
         setOrderHistory(prev =>
@@ -287,6 +299,7 @@ export function AppProvider({ children }) {
       }
     }).catch(() => {});
   }, []);
+
   const [activeSessions, setActiveSessions] = useState([]);
   const [workers,      setWorkers]      = useState([]);
   const [inventory,    setInventory]    = useState([]);
