@@ -596,4 +596,77 @@ router.post('/remove-item', async (req, res) => {
   }
 });
 
+// ── SYNC OFFLINE KOT (Offline Resilience Endpoint) ───────────────
+router.post('/offline-sync', async (req, res) => {
+  try {
+    const { offlineSyncId, orderId, tableNo, items, notes, waiterName, orderType, kotNo, createdAt } = req.body;
+
+    // 1. Idempotency check: has this offline KOT already been synced?
+    if (offlineSyncId) {
+      const existing = await KOT.findOne({ offlineSyncId });
+      if (existing) {
+        return res.json({ success: true, kot: existing, alreadySynced: true });
+      }
+    }
+
+    // 2. Locate or create order reference
+    let targetOrderId = orderId;
+    if (!targetOrderId || !mongoose.Types.ObjectId.isValid(targetOrderId)) {
+      const activeOrder = await Order.findOne({ tableNo: Number(tableNo) || 1, isActive: true });
+      if (activeOrder) {
+        targetOrderId = activeOrder._id;
+      } else {
+        const newOrder = new Order({
+          tableNo: Number(tableNo) || 1,
+          date: createdAt ? new Date(createdAt) : new Date(),
+          grandTotal: 0,
+          subtotal: 0,
+          sgst: 0,
+          cgst: 0,
+          paymentMode: 'cash',
+          orderType: orderType || 'dine-in',
+          isActive: true
+        });
+        await newOrder.save();
+        targetOrderId = newOrder._id;
+      }
+    }
+
+    const assignedKotNo = kotNo || await generateNextKotNo();
+
+    const kot = new KOT({
+      kotNo: assignedKotNo,
+      orderId: targetOrderId,
+      tableNo: Number(tableNo) || 1,
+      items: Array.isArray(items) ? items : [],
+      notes: notes || '',
+      waiterName: waiterName || '',
+      orderType: orderType || 'dine-in',
+      offlineSyncId: offlineSyncId || '',
+      createdAt: createdAt ? new Date(createdAt) : new Date()
+    });
+
+    const savedKot = await kot.save();
+
+    await Order.findByIdAndUpdate(targetOrderId, {
+      $push: { kotIds: savedKot._id },
+      $set: { orderStatus: 'KOT_SENT' }
+    });
+
+    if (req.app.locals.io) {
+      req.app.locals.io.emit('kot-created', savedKot);
+      req.app.locals.io.emit('KOT_STATUS_UPDATED', {
+        kotId: savedKot._id,
+        status: savedKot.status,
+        tableNo: savedKot.tableNo
+      });
+    }
+
+    res.json({ success: true, kot: savedKot });
+  } catch (err) {
+    console.error('Offline KOT sync error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 module.exports = router;

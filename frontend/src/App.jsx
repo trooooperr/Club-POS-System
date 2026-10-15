@@ -29,7 +29,7 @@ function Shell() {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  const { currentUser, activeSection, setActiveSection, selectTable, settings, loading, error, loadData, sidebarOpen, setSidebarOpen, invoiceOrder, activeTableId, showToast, tableBills, getTableStatus, NUM_TABLES, activeTableCount, isOnline, offlineQueueCount, isSyncingOffline, flushOfflineQueue } = useApp();
+  const { currentUser, activeSection, setActiveSection, selectTable, settings, loading, error, loadData, sidebarOpen, setSidebarOpen, invoiceOrder, activeTableId, showToast, tableBills, getTableStatus, NUM_TABLES, activeTableCount, isOnline, offlineQueueCount, offlineKotQueueCount, isSyncingOffline, flushOfflineQueue } = useApp();
 
   const pageTitles = {
     billing: 'Billing',
@@ -146,7 +146,7 @@ function Shell() {
           </div>
         )}
 
-        {(!isOnline || offlineQueueCount > 0) && (
+        {(!isOnline || offlineQueueCount > 0 || offlineKotQueueCount > 0) && (
           <div style={{
             background: !isOnline ? 'rgba(234, 179, 8, 0.12)' : 'rgba(59, 130, 246, 0.12)',
             borderBottom: `1px solid ${!isOnline ? 'rgba(234, 179, 8, 0.3)' : 'rgba(59, 130, 246, 0.3)'}`,
@@ -160,17 +160,16 @@ function Shell() {
             flexShrink: 0,
             zIndex: 99
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '14px' }}>{!isOnline ? '⚡' : '🔄'}</span>
-              <span>{!isOnline ? 'Offline Billing Mode Active' : 'Offline Orders Pending Sync'}</span>
-              <span style={{ fontWeight: 'normal', color: 'var(--t1)', fontSize: '11px' }}>
-                {!isOnline
-                  ? `(Local billing & thermal printing enabled. ${offlineQueueCount} ${offlineQueueCount === 1 ? 'order' : 'orders'} queued)`
-                  : `(${offlineQueueCount} ${offlineQueueCount === 1 ? 'order' : 'orders'} waiting to sync)`
-                }
+              <span style={{ letterSpacing: '0.4px', fontWeight: '800' }}>
+                {!isOnline ? 'NO INTERNET - offline billing mode' : 'ONLINE - SYNCING DATA'}
+              </span>
+              <span style={{ fontWeight: 'normal', color: 'var(--t1)', fontSize: '12px' }}>
+                | &nbsp;{offlineQueueCount} {offlineQueueCount === 1 ? 'order' : 'orders'} &nbsp;·&nbsp; {offlineKotQueueCount} {offlineKotQueueCount === 1 ? 'kot' : 'kots'} queued
               </span>
             </div>
-            {isOnline && offlineQueueCount > 0 && (
+            {isOnline && (offlineQueueCount > 0 || offlineKotQueueCount > 0) && (
               <button
                 type="button"
                 className="btn btn-secondary btn-sm"

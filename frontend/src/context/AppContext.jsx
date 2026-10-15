@@ -4,7 +4,7 @@ import { formatBillDateTime } from '../lib/formatDate';
 import io from 'socket.io-client';
 import QRCode from 'qrcode';
 import { BILL_LOGO_BASE64 } from '../lib/billLogoBase64';
-import { getOfflineQueue, addToOfflineQueue, removeFromOfflineQueue, cacheMenuItemsLocally, getCachedMenuItems } from '../lib/offlineQueue';
+import { getOfflineQueue, addToOfflineQueue, removeFromOfflineQueue, getOfflineKotQueue, addToOfflineKotQueue, removeFromOfflineKotQueue, cacheMenuItemsLocally, getCachedMenuItems } from '../lib/offlineQueue';
 
 
 const playAlarmChime = () => {
@@ -273,6 +273,7 @@ export function AppProvider({ children }) {
   // ── Offline Resilience State ─────────────────────────────────────
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [offlineQueueCount, setOfflineQueueCount] = useState(() => getOfflineQueue().length);
+  const [offlineKotQueueCount, setOfflineKotQueueCount] = useState(() => getOfflineKotQueue().length);
   const [isSyncingOffline, setIsSyncingOffline] = useState(false);
 
   const applyInventoryUpdate = useCallback((nextInventory) => {
@@ -941,14 +942,37 @@ export function AppProvider({ children }) {
 
   // ── Offline Queue Auto-Sync ──────────────────────────────────────────
   const flushOfflineQueue = useCallback(async () => {
-    const queue = getOfflineQueue();
-    if (!queue || queue.length === 0) {
+    const orderQueue = getOfflineQueue();
+    const kotQueue = getOfflineKotQueue();
+    if ((!orderQueue || orderQueue.length === 0) && (!kotQueue || kotQueue.length === 0)) {
       setOfflineQueueCount(0);
+      setOfflineKotQueueCount(0);
       return;
     }
     setIsSyncingOffline(true);
-    let synced = 0;
-    for (const item of queue) {
+    let syncedOrders = 0;
+    let syncedKots = 0;
+
+    // 1. Sync offline KOTs first
+    for (const kotItem of kotQueue) {
+      try {
+        const res = await authFetch(apiUrl('/api/kots/offline-sync'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(kotItem)
+        });
+        if (res.ok) {
+          removeFromOfflineKotQueue(kotItem.offlineSyncId);
+          syncedKots++;
+        }
+      } catch (err) {
+        console.warn('Sync attempt failed for offline KOT:', kotItem.offlineSyncId, err.message);
+        break;
+      }
+    }
+
+    // 2. Sync offline Orders
+    for (const item of orderQueue) {
       try {
         const res = await authFetch(apiUrl('/api/orders/offline-sync'), {
           method: 'POST',
@@ -958,7 +982,7 @@ export function AppProvider({ children }) {
         if (res.ok) {
           const data = await res.json();
           removeFromOfflineQueue(item.offlineSyncId);
-          synced++;
+          syncedOrders++;
           if (data.order) {
             setOrderHistory(prev => {
               const arr = Array.isArray(prev) ? prev : [];
@@ -969,13 +993,16 @@ export function AppProvider({ children }) {
         }
       } catch (err) {
         console.warn('Sync attempt failed for offline order:', item.offlineSyncId, err.message);
-        break; // Network still disconnected, stop iteration
+        break;
       }
     }
+
     setOfflineQueueCount(getOfflineQueue().length);
+    setOfflineKotQueueCount(getOfflineKotQueue().length);
     setIsSyncingOffline(false);
-    if (synced > 0) {
-      showToast(`✅ Synced ${synced} offline ${synced === 1 ? 'order' : 'orders'} with database!`, 'success');
+    const totalSynced = syncedOrders + syncedKots;
+    if (totalSynced > 0) {
+      showToast(`✅ Synced ${syncedOrders} ${syncedOrders === 1 ? 'order' : 'orders'} and ${syncedKots} ${syncedKots === 1 ? 'KOT' : 'KOTs'} with database!`, 'success');
     }
   }, [showToast]);
 
@@ -1880,6 +1907,8 @@ export function AppProvider({ children }) {
           createdAt: new Date().toISOString(),
           isOffline: true
         };
+        addToOfflineKotQueue(offlineKot);
+        setOfflineKotQueueCount(getOfflineKotQueue().length);
         setKots(prev => [offlineKot, ...prev]);
         setIsOnline(false);
         showToast('⚡ Offline KOT generated. Printing to kitchen/bar now...', 'amber');
@@ -2164,7 +2193,7 @@ export function AppProvider({ children }) {
       openTableSession, syncTableSession, createKOT, updateKOTStatus, removeKOTItem, deleteKOT, finalizeBill, completeOrder, cancelTableSession,
       printKOTDocument, printBillDocument, checkIsAlcoholic,
       // Offline Resilience
-      isOnline, offlineQueueCount, isSyncingOffline, flushOfflineQueue,
+      isOnline, offlineQueueCount, offlineKotQueueCount, isSyncingOffline, flushOfflineQueue,
     }}>
       {children}
     </AppContext.Provider>

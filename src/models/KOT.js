@@ -31,6 +31,7 @@ const kotSchema = new mongoose.Schema({
   inventoryDeducted: { type: Boolean, default: false, index: true },
   inventoryDeductedAt: { type: Date },
   source:       { type: String, default: 'table', index: true },
+  offlineSyncId:{ type: String, default: '', index: true },
 }, { timestamps: true });
 
 // Index for common queries
