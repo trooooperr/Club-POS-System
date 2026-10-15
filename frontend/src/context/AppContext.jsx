@@ -277,17 +277,15 @@ export function AppProvider({ children }) {
   const [menuItems,    setMenuItems]    = useState(() => getCachedMenuItems());
   const [orderHistory, setOrderHistory] = useState([]);
   // Boot orders from IndexedDB instantly (no network needed — local hard disk)
-  // Also runs ONE-TIME migration: deletes old localStorage order/KOT cache keys (frees ~270 KB)
+  // Also runs ONE-TIME cleanup: removes all stale/bulky localStorage keys
   useEffect(() => {
-    // ── One-time migration: remove bulky keys from localStorage ──
     const OLD_KEYS = [
-      'humtum_cache_orders',   // was 270 KB — now lives in IndexedDB
-      'humtum_cache_kots',     // old KOT cache
-      'humtum_cache_sessions', // sessions not needed offline
+      'humtum_cache_orders',          // now lives in IndexedDB
+      'humtum_cache_kots',            // old KOT cache
+      'humtum_cache_sessions',        // sessions are runtime-only
+      'humtum_offline_menu_cache_v1', // orphan key
     ];
-    OLD_KEYS.forEach(k => {
-      try { localStorage.removeItem(k); } catch {}
-    });
+    OLD_KEYS.forEach(k => { try { localStorage.removeItem(k); } catch {} });
 
     // ── Load orders from IDB instantly ───────────────────────────
     getOrdersFromIDB().then(cached => {
@@ -985,7 +983,7 @@ export function AppProvider({ children }) {
         const res = results[indexMap.sessions];
         if (res && res.status === 'fulfilled' && Array.isArray(res.value)) {
           setActiveSessions(res.value);
-          saveMasterCache('sessions', res.value);
+          // Sessions are runtime-only — NOT cached to localStorage (not needed offline)
         }
       }
 
@@ -1147,12 +1145,31 @@ export function AppProvider({ children }) {
       }
     }, 25000);
 
-    // ── 2-MINUTE DEBOUNCED / THROTTLED BACKGROUND SYNC ──────────────
-    // Periodic 2-minute refresh for catalog data to keep bandwidth low
-    const twoMinSyncInterval = setInterval(() => {
-      if (typeof navigator !== 'undefined' && navigator.onLine && currentUser) {
-        loadData(true, ['menu', 'inventory', 'workers', 'settings']);
-      }
+    // ── 2-MINUTE BACKGROUND SYNC WITH CHANGE DETECTION ──────────────
+    // Only re-fetches if data has actually changed (hash comparison)
+    const syncHashes = {};
+    const quickHash = (data) => {
+      try { const s = JSON.stringify(data); return s.length + '_' + (s.charCodeAt(0) || 0) + '_' + (s.charCodeAt(Math.floor(s.length/2)) || 0); }
+      catch { return Math.random().toString(); }
+    };
+    const twoMinSyncInterval = setInterval(async () => {
+      if (typeof navigator === 'undefined' || !navigator.onLine || !currentUser) return;
+      // Fetch a lightweight summary to check if anything changed
+      try {
+        const checks = await Promise.allSettled([
+          safeFetch(apiUrl('/api/menu')),
+          safeFetch(apiUrl('/api/inventory')),
+          safeFetch(apiUrl('/api/workers')),
+          safeFetch(apiUrl('/api/settings')),
+        ]);
+        const [menuRes, invRes, workRes, setRes] = checks.map(r => r.status === 'fulfilled' ? r.value : null);
+        let anyChanged = false;
+        if (menuRes)  { const h = quickHash(menuRes);  if (h !== syncHashes.menu)     { syncHashes.menu     = h; setMenuItems(menuRes); saveMasterCache('menu', menuRes); anyChanged = true; } }
+        if (invRes)   { const h = quickHash(invRes);   if (h !== syncHashes.inv)      { syncHashes.inv      = h; applyInventoryUpdate(invRes); anyChanged = true; } }
+        if (workRes)  { const h = quickHash(workRes);  if (h !== syncHashes.workers)  { syncHashes.workers  = h; setWorkers(workRes); saveMasterCache('workers', workRes); anyChanged = true; } }
+        if (setRes)   { const h = quickHash(setRes);   if (h !== syncHashes.settings) { syncHashes.settings = h; setSettings(setRes); saveMasterCache('settings', setRes); anyChanged = true; } }
+        if (anyChanged) console.log('[BgSync] Data changed, updated local cache');
+      } catch {}
     }, 120000);
 
     return () => {
