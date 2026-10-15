@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { ArrowLeft, Search, Trash2, Printer, UtensilsCrossed, X, Menu, Clock, Tag, ChevronDown, ChevronUp, Wallet } from 'lucide-react';
 import { apiUrl, authFetch } from '../lib/api';
+import { getOfflineKotQueue } from '../lib/offlineQueue';
 import LiveKOTModal from '../components/LiveKOTModal';
 
 const qz = window.qz;
@@ -963,6 +964,15 @@ export default function BillingPage() {
         console.warn('⚠️ Network offline during ensureActiveOrder. Using local session...');
         const offlineOrderId = activeOrder || `OFFLINE_ORDER_${targetTableId}_${Date.now()}`;
         setActiveOrder(offlineOrderId);
+        // CRITICAL: Restore queued KOTs for this table so sent items remain visible in billing area!
+        const queuedKots = getOfflineKotQueue().filter(k => Number(k.tableNo) === Number(tableNo));
+        if (queuedKots.length > 0) {
+          setKots(prev => {
+            const existingIds = new Set(prev.map(k => k._id || k.offlineSyncId || k.kotNo));
+            const newKots = queuedKots.filter(k => !existingIds.has(k._id || k.offlineSyncId || k.kotNo));
+            return [...prev, ...newKots];
+          });
+        }
         return offlineOrderId;
       }
       throw err;

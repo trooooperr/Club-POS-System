@@ -3019,7 +3019,8 @@ textarea,
 }
 .billing-layout {
   width: 100%;
-  min-height: 100vh;
+  flex: 1;
+  min-height: 0;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -4151,6 +4152,7 @@ textarea,
         .bill-footer {
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
   gap: 2px;
   margin-top: 1px;
 }
@@ -4208,7 +4210,8 @@ textarea,
   display: grid;
   grid-template-columns: 1fr 1fr;
   flex: 1;
-  height: 100vh;
+  min-height: 0;
+  height: 100%;
   overflow: hidden;
   gap: 0;
   padding: 0;

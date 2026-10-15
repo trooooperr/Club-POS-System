@@ -638,7 +638,14 @@ router.post('/offline-sync', async (req, res) => {
       kotNo: assignedKotNo,
       orderId: targetOrderId,
       tableNo: Number(tableNo) || 1,
-      items: Array.isArray(items) ? items : [],
+      items: (Array.isArray(items) ? items : []).map(it => ({
+        name: it.name,
+        quantity: Number(it.quantity) || 1,
+        price: Number(it.price) || 0,
+        department: it.department || 'kitchen',
+        notes: it.notes || it.note || '',
+        menuItemId: (it.menuItemId && mongoose.Types.ObjectId.isValid(it.menuItemId)) ? it.menuItemId : undefined
+      })),
       notes: notes || '',
       waiterName: waiterName || '',
       orderType: orderType || 'dine-in',

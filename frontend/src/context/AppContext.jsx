@@ -1020,12 +1020,18 @@ export function AppProvider({ children }) {
         if (res.ok) {
           removeFromOfflineKotQueue(kotItem.offlineSyncId);
           syncedKots++;
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          console.warn('Sync failed for offline KOT:', kotItem.offlineSyncId, res.status, errData);
+          if (res.status === 409 || errData.alreadySynced) {
+            removeFromOfflineKotQueue(kotItem.offlineSyncId);
+          }
         }
       } catch (err) {
         console.warn('Sync attempt failed for offline KOT:', kotItem.offlineSyncId, err.message);
-        break;
       }
     }
+    setOfflineKotQueueCount(getOfflineKotQueue().length);
 
     // 2. Sync offline Orders
     for (const item of orderQueue) {
@@ -1048,12 +1054,18 @@ export function AppProvider({ children }) {
             // Upsert synced order into IndexedDB
             upsertOrderInIDB(data.order).catch(() => {});
           }
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          console.warn('Sync failed for offline order:', item.offlineSyncId, res.status, errData);
+          if (res.status === 409 || errData.alreadySynced) {
+            removeFromOfflineQueue(item.offlineSyncId);
+          }
         }
       } catch (err) {
         console.warn('Sync attempt failed for offline order:', item.offlineSyncId, err.message);
-        break;
       }
     }
+    setOfflineQueueCount(getOfflineQueue().length);
 
     // 3. Sync offline Mutations (Menu, Expenses, Attendance, Inventory, Staff, Settings)
     const mutationQueue = getOfflineMutationQueue();
