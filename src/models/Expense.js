@@ -42,6 +42,11 @@ const expenseSchema = new mongoose.Schema({
   createdBy: {
     type: String,
     default: 'system'
+  },
+  offlineSyncId: {
+    type: String,
+    default: '',
+    index: true
   }
 }, { timestamps: true });
 

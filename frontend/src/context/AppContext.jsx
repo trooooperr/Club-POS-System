@@ -4,7 +4,16 @@ import { formatBillDateTime } from '../lib/formatDate';
 import io from 'socket.io-client';
 import QRCode from 'qrcode';
 import { BILL_LOGO_BASE64 } from '../lib/billLogoBase64';
-import { getOfflineQueue, addToOfflineQueue, removeFromOfflineQueue, getOfflineKotQueue, addToOfflineKotQueue, removeFromOfflineKotQueue, cacheMenuItemsLocally, getCachedMenuItems } from '../lib/offlineQueue';
+import { 
+  getOfflineQueue, addToOfflineQueue, removeFromOfflineQueue, 
+  getOfflineKotQueue, addToOfflineKotQueue, removeFromOfflineKotQueue, 
+  getOfflineMutationQueue, addToOfflineMutationQueue, removeFromOfflineMutationQueue,
+  cacheMenuItemsLocally, getCachedMenuItems,
+  saveMasterCache, getMasterCache,
+  updateLocalBillCounterIfHigher, updateLocalKotCounterIfHigher,
+  incrementAndGetNextBillNo, incrementAndGetNextKotNo,
+  getLocalBillCounter, getLocalKotCounter, getDeviceId
+} from '../lib/offlineQueue';
 
 
 const playAlarmChime = () => {
@@ -516,7 +525,9 @@ export function AppProvider({ children }) {
     
     const upiId = settings.upiId || 'dummy@upi';
     const merchantName = settings.restaurantName || 'HUMTUM';
-    const includeAmount = settings.includeUpiAmount !== false;
+    // If offline, generate static counter QR (no fixed amount so customer can scan cleanly on any UPI app without network timeouts)
+    const isCurrentlyOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    const includeAmount = !isCurrentlyOffline && settings.includeUpiAmount !== false;
     const upiUrl = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(merchantName)}${includeAmount ? `&am=${total.toFixed(0)}` : ''}&cu=INR`;
     
     let qrCodeUrl = '';
@@ -898,37 +909,53 @@ export function AppProvider({ children }) {
         const res = results[indexMap.menu];
         if (res && res.status === 'fulfilled' && Array.isArray(res.value)) {
           setMenuItems(res.value);
-          cacheMenuItemsLocally(res.value);
+          saveMasterCache('menu', res.value);
         }
       }
       if (components.includes('orders') && indexMap.orders !== undefined) {
         const res = results[indexMap.orders];
         if (res && res.status === 'fulfilled' && Array.isArray(res.value)) {
           setOrderHistory([...res.value].sort((a,b)=>new Date(b.updatedAt || b.date)-new Date(a.updatedAt || a.date)));
+          saveMasterCache('orders', res.value);
+
+          // Update local bill counter from max existing bill number
+          let maxBillNum = 0;
+          for (const ord of res.value) {
+            const m = (ord.billNo || '').match(/HTB-(\d+)/);
+            if (m) {
+              const num = parseInt(m[1], 10);
+              if (num > maxBillNum) maxBillNum = num;
+            }
+          }
+          if (maxBillNum > 0) updateLocalBillCounterIfHigher(maxBillNum);
         }
       }
       if (components.includes('workers') && indexMap.workers !== undefined) {
         const res = results[indexMap.workers];
         if (res && res.status === 'fulfilled' && Array.isArray(res.value)) {
           setWorkers(res.value);
+          saveMasterCache('workers', res.value);
         }
       }
       if (components.includes('inventory') && indexMap.inventory !== undefined) {
         const res = results[indexMap.inventory];
         if (res && res.status === 'fulfilled' && Array.isArray(res.value)) {
           setInventory(res.value);
+          saveMasterCache('inventory', res.value);
         }
       }
       if (components.includes('settings') && indexMap.settings !== undefined) {
         const res = results[indexMap.settings];
         if (res && res.status === 'fulfilled' && res.value && !Array.isArray(res.value)) {
           setSettings(res.value);
+          saveMasterCache('settings', res.value);
         }
       }
       if (components.includes('sessions') && indexMap.sessions !== undefined) {
         const res = results[indexMap.sessions];
         if (res && res.status === 'fulfilled' && Array.isArray(res.value)) {
           setActiveSessions(res.value);
+          saveMasterCache('sessions', res.value);
         }
       }
 
@@ -997,6 +1024,46 @@ export function AppProvider({ children }) {
       }
     }
 
+    // 3. Sync offline Mutations (Menu, Expenses, Attendance, Inventory, Staff, Settings)
+    const mutationQueue = getOfflineMutationQueue();
+    if (mutationQueue && mutationQueue.length > 0) {
+      try {
+        const res = await authFetch(apiUrl('/api/sync/batch'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            deviceId: getDeviceId(),
+            mutations: mutationQueue
+          })
+        });
+        if (res.ok) {
+          const syncResult = await res.json();
+          if (syncResult && Array.isArray(syncResult.results)) {
+            for (const r of syncResult.results) {
+              if (r.status === 'synced') {
+                removeFromOfflineMutationQueue(r.id);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Batch mutations sync failed:', err.message);
+      }
+    }
+
+    // 4. Catch up cloud counters with highest local sequences
+    try {
+      const maxBillSeq = getLocalBillCounter();
+      const maxKotSeq = getLocalKotCounter();
+      if (maxBillSeq > 0 || maxKotSeq > 0) {
+        await authFetch(apiUrl('/api/sync/counter-catchup'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ maxBillSeq, maxKotSeq })
+        });
+      }
+    } catch {}
+
     setOfflineQueueCount(getOfflineQueue().length);
     setOfflineKotQueueCount(getOfflineKotQueue().length);
     setIsSyncingOffline(false);
@@ -1006,10 +1073,31 @@ export function AppProvider({ children }) {
     }
   }, [showToast]);
 
+  // ── Real-Time Cross-Tab Mirroring via Storage Events ───────────────
+  useEffect(() => {
+    const handleStorageEvent = (e) => {
+      if (!e.key) return;
+      if (e.key === TABLES_KEY && e.newValue) {
+        try {
+          const updated = JSON.parse(e.newValue);
+          _setTableBills(prev => ({ ...prev, ...updated }));
+        } catch {}
+      }
+      if (e.key === 'humtum_cache_inventory' && e.newValue) {
+        try {
+          const updatedInv = JSON.parse(e.newValue);
+          if (Array.isArray(updatedInv)) applyInventoryUpdate(updatedInv);
+        } catch {}
+      }
+    };
+    window.addEventListener('storage', handleStorageEvent);
+    return () => window.removeEventListener('storage', handleStorageEvent);
+  }, [applyInventoryUpdate]);
+
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
-      showToast('📶 Internet reconnected! Syncing offline orders...', 'info');
+      showToast('📶 Internet reconnected! Syncing offline data...', 'info');
       flushOfflineQueue();
     };
     const handleOffline = () => {
@@ -1019,18 +1107,28 @@ export function AppProvider({ children }) {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
+    // Sync queue every 25 seconds if items are waiting
     const syncInterval = setInterval(() => {
-      if (typeof navigator !== 'undefined' && navigator.onLine && getOfflineQueue().length > 0) {
+      if (typeof navigator !== 'undefined' && navigator.onLine && (getOfflineQueue().length > 0 || getOfflineKotQueue().length > 0 || getOfflineMutationQueue().length > 0)) {
         flushOfflineQueue();
       }
     }, 25000);
+
+    // ── 2-MINUTE DEBOUNCED / THROTTLED BACKGROUND SYNC ──────────────
+    // Periodic 2-minute refresh for catalog data to keep bandwidth low
+    const twoMinSyncInterval = setInterval(() => {
+      if (typeof navigator !== 'undefined' && navigator.onLine && currentUser) {
+        loadData(true, ['menu', 'inventory', 'workers', 'settings']);
+      }
+    }, 120000);
 
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       clearInterval(syncInterval);
+      clearInterval(twoMinSyncInterval);
     };
-  }, [flushOfflineQueue, showToast]);
+  }, [flushOfflineQueue, showToast, currentUser, loadData]);
 
   // ── Print Agent Auto Connect ─────────────────────────────────────────
   const fetchAgentPrinters = useCallback(async () => {
@@ -2062,7 +2160,7 @@ export function AppProvider({ children }) {
           paidAmount: paidAmount !== undefined ? paidAmount : grandTotal,
           dueAmount: dueAmount !== undefined ? dueAmount : 0,
           date: new Date().toISOString(),
-          billNo: `HTB-OFF-${String(Date.now()).slice(-4)}`,
+          billNo: incrementAndGetNextBillNo(),
           orderStatus: 'COMPLETED',
           isActive: false
         };
