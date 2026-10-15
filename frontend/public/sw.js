@@ -35,14 +35,19 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Network-first with cache fallback for HTML/assets
+// Network-first with cache fallback for same-origin HTML/assets only
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   const url = new URL(request.url);
 
-  // Skip caching for backend API requests, Socket.IO, and local print agent (localhost:5001)
+  // ── CRITICAL: Skip ALL cross-origin requests ───────────────────
+  // Do NOT intercept Google Fonts, CDN, or any external domain.
+  // Intercepting them causes CSP 'Failed to convert value to Response' errors.
+  if (url.origin !== self.location.origin) return;
+
+  // Skip API, Socket.IO, and local print agent
   if (
-    url.pathname.startsWith('/api/') || 
+    url.pathname.startsWith('/api/') ||
     url.pathname.startsWith('/socket.io/') ||
     url.hostname === 'localhost' ||
     url.port === '5001'
@@ -56,7 +61,7 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(request)
       .then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200) {
+        if (networkResponse && networkResponse.ok) {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(request, responseToCache);
@@ -65,12 +70,10 @@ self.addEventListener('fetch', (event) => {
         return networkResponse;
       })
       .catch(() => {
-        // Network failed (100% offline cold-start boot)
+        // Network failed — serve from cache (offline cold-start boot)
         return caches.match(request).then((cachedResponse) => {
-          if (cachedResponse) {
-            return cachedResponse;
-          }
-          // Fallback to index.html for SPA routes
+          if (cachedResponse) return cachedResponse;
+          // SPA fallback: any navigate request gets index.html
           if (request.mode === 'navigate') {
             return caches.match('/index.html');
           }

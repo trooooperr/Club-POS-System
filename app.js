@@ -30,7 +30,7 @@ app.use(helmet({
       styleSrc:    ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       fontSrc:     ["'self'", 'https://fonts.gstatic.com'],
       imgSrc:      ["'self'", 'data:', 'https:', 'blob:'], // allow Unsplash, placeholders
-      connectSrc:  ["'self'", 'wss:', 'ws:', 'https://cdn.jsdelivr.net', 'http://localhost:*', 'http://127.0.0.1:*'],               // allow Socket.IO WebSocket, CDN sourcemaps, and local hardware agents
+      connectSrc:  ["'self'", 'wss:', 'ws:', 'https://cdn.jsdelivr.net', 'http://localhost:*', 'http://127.0.0.1:*', 'https://fonts.googleapis.com', 'https://fonts.gstatic.com'],
       objectSrc:   ["'none'"],
       frameSrc:    ["'none'"],
     },
