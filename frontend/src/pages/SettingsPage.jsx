@@ -66,6 +66,7 @@ export default function SettingsPage() {
   // ── Database Backup State & Handlers ───────────────────────────
   const [triggeringBackup, setTriggeringBackup] = useState(false);
   const [restoringBackup, setRestoringBackup] = useState(false);
+  const [confirmRestoreLock, setConfirmRestoreLock] = useState(false);
   const [backupResult, setBackupResult] = useState(null);
 
   const handleTriggerDriveBackup = async () => {
@@ -1196,24 +1197,58 @@ export default function SettingsPage() {
                     )}
                   </button>
 
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={handleSyncFromLatestBackup}
-                    disabled={triggeringBackup || restoringBackup}
-                  >
-                    {restoringBackup ? (
-                      <>
-                        <RefreshCw size={14} className="spin" />
-                        Syncing Database...
-                      </>
-                    ) : (
-                      <>
-                        <RefreshCw size={14} />
-                        Sync from Latest Backup
-                      </>
-                    )}
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={async () => {
+                        await handleSyncFromLatestBackup();
+                        setConfirmRestoreLock(false);
+                      }}
+                      disabled={triggeringBackup || restoringBackup || !confirmRestoreLock}
+                      style={{
+                        opacity: (!confirmRestoreLock || triggeringBackup || restoringBackup) ? 0.45 : 1,
+                        cursor: (!confirmRestoreLock || triggeringBackup || restoringBackup) ? 'not-allowed' : 'pointer',
+                        borderColor: confirmRestoreLock ? 'rgba(239, 68, 68, 0.6)' : undefined,
+                        color: confirmRestoreLock ? '#f87171' : undefined
+                      }}
+                      title={!confirmRestoreLock ? "Check the confirmation box on the right to unlock" : "Click to sync database with latest Google Drive backup"}
+                    >
+                      {restoringBackup ? (
+                        <>
+                          <RefreshCw size={14} className="spin" />
+                          Syncing Database...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw size={14} />
+                          Sync from Latest Backup
+                        </>
+                      )}
+                    </button>
+
+                    <label style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      fontSize: '12px',
+                      color: confirmRestoreLock ? '#f87171' : 'var(--t2)',
+                      cursor: 'pointer',
+                      userSelect: 'none',
+                      background: confirmRestoreLock ? 'rgba(239, 68, 68, 0.08)' : 'rgba(255,255,255,0.03)',
+                      padding: '6px 10px',
+                      borderRadius: '6px',
+                      border: `1px solid ${confirmRestoreLock ? 'rgba(239, 68, 68, 0.3)' : 'var(--b1)'}`
+                    }}>
+                      <input
+                        type="checkbox"
+                        checked={confirmRestoreLock}
+                        onChange={e => setConfirmRestoreLock(e.target.checked)}
+                        style={{ cursor: 'pointer', width: '14px', height: '14px' }}
+                      />
+                      <span>Confirm unlock to restore</span>
+                    </label>
+                  </div>
                 </div>
 
                 {backupResult && (
