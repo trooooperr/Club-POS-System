@@ -81,8 +81,10 @@ function buildReportHTML({ date, orders, settings, inventory, dailyReport = [] }
     const actualPaid = o.paidAmount !== undefined ? o.paidAmount : (o.dueAmount > 0 ? Math.max(0, o.grandTotal - o.dueAmount) : o.grandTotal);
     if (actualPaid > 0) {
       if (o.paymentMode === 'split') {
-        pmMap['cash'] = (pmMap['cash'] || 0) + (o.cashAmount || 0);
-        pmMap['upi']  = (pmMap['upi']  || 0) + (o.upiAmount  || 0);
+        const cashPart = Math.min(o.cashAmount || 0, actualPaid);
+        const upiPart = Math.max(0, actualPaid - cashPart);
+        pmMap['cash'] = (pmMap['cash'] || 0) + cashPart;
+        pmMap['upi']  = (pmMap['upi']  || 0) + upiPart;
       } else {
         const mode = (o.paymentMode === 'due' || !o.paymentMode) ? 'cash' : o.paymentMode;
         pmMap[mode] = (pmMap[mode] || 0) + actualPaid;
@@ -622,22 +624,31 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
       dailyMap[bDate].due += Math.max(0, orderDue);
       dueTotal += Math.max(0, orderDue);
 
-      // Payment mode allocation — skip manual due records; they are
-      // uncollected IOU balances, NOT real Cash/UPI payments.
-      if (!o.isManualDue) {
+      // Payment mode allocation — only allocate actual collected money (actualPaid).
+      // Never allocate full grandTotal or uncollected due amounts to cash/upi!
+      if (!o.isManualDue && actualPaid > 0) {
         if (o.paymentMode === 'split') {
-          cashTotal += (o.cashAmount || 0);
-          upiTotal  += (o.upiAmount  || 0);
-        } else if (isDueOrder) {
-          if (o.cashAmount > 0) cashTotal += o.cashAmount;
-          if (o.upiAmount > 0) upiTotal += o.upiAmount;
-          if (!o.cashAmount && !o.upiAmount && actualPaid > 0) {
-            cashTotal += actualPaid;
-          }
+          const cashPart = Math.min(o.cashAmount || 0, actualPaid);
+          const upiPart = Math.max(0, actualPaid - cashPart);
+          cashTotal += cashPart;
+          upiTotal  += upiPart;
         } else if (o.paymentMode === 'upi') {
           upiTotal += actualPaid;
-        } else {
+        } else if (o.paymentMode === 'cash') {
           cashTotal += actualPaid;
+        } else {
+          // For due or unspecified mode with partial payment collected
+          if (o.upiAmount > 0 && (!o.cashAmount || o.cashAmount === 0)) {
+            upiTotal += actualPaid;
+          } else if (o.cashAmount > 0 && (!o.upiAmount || o.upiAmount === 0)) {
+            cashTotal += actualPaid;
+          } else if ((o.cashAmount || 0) > 0 && (o.upiAmount || 0) > 0) {
+            const cashPart = Math.min(o.cashAmount, actualPaid);
+            cashTotal += cashPart;
+            upiTotal += Math.max(0, actualPaid - cashPart);
+          } else {
+            cashTotal += actualPaid;
+          }
         }
       }
 
