@@ -115,7 +115,7 @@ function cleanup(dir) {
  * Returns { tmpDir, tarPath, tarName, folderLabel, elapsed }.
  * Caller is responsible for calling cleanup(tmpDir) if not using runBackup().
  */
-async function createBackupArchive() {
+async function createBackupArchive(prefix = 'humtum_pos_backup') {
   const startTime = Date.now();
 
   if (DATABASES.length === 0) {
@@ -124,7 +124,7 @@ async function createBackupArchive() {
 
   const dateStr     = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const tmpDir      = path.join(os.tmpdir(), `humtum_backup_${dateStr}_${process.pid}`);
-  const tarName     = `humtum_pos_backup_${dateStr}.tar.gz`;
+  const tarName     = `${prefix}_${dateStr}.tar.gz`;
   const tarPath     = path.join(tmpDir, tarName);
   const folderLabel = dateStr.slice(0, 10);
 
@@ -146,7 +146,7 @@ async function createBackupArchive() {
 /**
  * Main backup routine — called by cron, API, or CLI.
  */
-async function runBackup() {
+async function runBackup(prefix = 'humtum_pos_backup') {
   console.log(`\n${'═'.repeat(55)}`);
   console.log(`  🗄️  HumTum DB Backup — ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST`);
   console.log(`${'═'.repeat(55)}`);
@@ -154,7 +154,7 @@ async function runBackup() {
   let backupContext = null;
 
   try {
-    backupContext = await createBackupArchive();
+    backupContext = await createBackupArchive(prefix);
     const { tmpDir, tarPath, folderLabel, elapsed } = backupContext;
 
     console.log(`\n☁️  Uploading to Google Drive → HumTum_DB_Backups/${folderLabel}...`);

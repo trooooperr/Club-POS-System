@@ -165,13 +165,15 @@ async function downloadLatestBackup() {
       q: `'${folder.id}' in parents and trashed=false and name contains '.tar.gz'`,
       fields: 'files(id, name, size, createdTime)',
       orderBy: 'createdTime desc',
-      pageSize: 5,
+      pageSize: 15,
       spaces: 'drive',
     });
 
-    const backupFile = (fileRes.data.files || [])[0];
+    // Exclude safety snapshots so restore always picks true scheduled/instant backups
+    const candidateFiles = (fileRes.data.files || []).filter(f => !f.name.startsWith('PRE_RESTORE_SAFETY_SNAPSHOT'));
+    const backupFile = candidateFiles[0];
     if (backupFile) {
-      console.log(`📥 Downloading latest backup from Google Drive: ${folder.name}/${backupFile.name}`);
+      console.log(`📥 Downloading genuine scheduled backup from Google Drive: ${folder.name}/${backupFile.name}`);
       const tmpPath = path.join(os.tmpdir(), `latest_download_${Date.now()}_${backupFile.name}`);
       const dest = fs.createWriteStream(tmpPath);
 

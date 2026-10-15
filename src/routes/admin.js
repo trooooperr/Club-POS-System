@@ -73,7 +73,7 @@ router.post('/backup/restore-latest', requireRole(['admin', 'manager']), async (
     // 2. Automatically create a pre-restore safety snapshot of the live database
     console.log('🛡️ Creating pre-restore safety snapshot in Google Drive...');
     try {
-      await runBackup();
+      await runBackup('PRE_RESTORE_SAFETY_SNAPSHOT');
     } catch (preErr) {
       console.warn('⚠️ Pre-restore safety backup encountered an issue:', preErr.message);
     }
