@@ -284,6 +284,8 @@ export function AppProvider({ children }) {
       'humtum_cache_kots',            // old KOT cache
       'humtum_cache_sessions',        // sessions are runtime-only
       'humtum_offline_menu_cache_v1', // orphan key
+      'ht_inventory_cache',           // duplicate of humtum_cache_inventory (saves ~138 KB)
+      'humtum_cache_settings',        // duplicate of ht_settings_cache
     ];
     OLD_KEYS.forEach(k => { try { localStorage.removeItem(k); } catch {} });
 
@@ -335,7 +337,7 @@ export function AppProvider({ children }) {
       }
       return { ...item, available: avail };
     }));
-    localStorage.setItem(INVENTORY_CACHE, JSON.stringify(nextInventory));
+    saveMasterCache('inventory', nextInventory);
   }, []);
 
   // ── Tables — persist to localStorage ────────────────────────────
@@ -976,7 +978,6 @@ export function AppProvider({ children }) {
         const res = results[indexMap.settings];
         if (res && res.status === 'fulfilled' && res.value && !Array.isArray(res.value)) {
           setSettings(res.value);
-          saveMasterCache('settings', res.value);
         }
       }
       if (components.includes('sessions') && indexMap.sessions !== undefined) {
@@ -1167,7 +1168,7 @@ export function AppProvider({ children }) {
         if (menuRes)  { const h = quickHash(menuRes);  if (h !== syncHashes.menu)     { syncHashes.menu     = h; setMenuItems(menuRes); saveMasterCache('menu', menuRes); anyChanged = true; } }
         if (invRes)   { const h = quickHash(invRes);   if (h !== syncHashes.inv)      { syncHashes.inv      = h; applyInventoryUpdate(invRes); anyChanged = true; } }
         if (workRes)  { const h = quickHash(workRes);  if (h !== syncHashes.workers)  { syncHashes.workers  = h; setWorkers(workRes); saveMasterCache('workers', workRes); anyChanged = true; } }
-        if (setRes)   { const h = quickHash(setRes);   if (h !== syncHashes.settings) { syncHashes.settings = h; setSettings(setRes); saveMasterCache('settings', setRes); anyChanged = true; } }
+        if (setRes)   { const h = quickHash(setRes);   if (h !== syncHashes.settings) { syncHashes.settings = h; setSettings(setRes); anyChanged = true; } }
         if (anyChanged) console.log('[BgSync] Data changed, updated local cache');
       } catch {}
     }, 120000);
@@ -1984,6 +1985,30 @@ export function AppProvider({ children }) {
       return session;
     } catch (err) {
       console.error('Open table error:', err);
+      const isNetErr = (typeof navigator !== 'undefined' && !navigator.onLine) ||
+        err.name === 'TypeError' ||
+        err.message?.includes('fetch') ||
+        err.message?.includes('Load failed') ||
+        err.message?.includes('Network');
+      if (isNetErr) {
+        console.warn('⚠️ Network offline during openTableSession. Creating local offline session...');
+        const offlineSession = {
+          _id: `OFFLINE_SESSION_${tableNo}_${Date.now()}`,
+          tableNo,
+          waiterName,
+          orderType,
+          customerName,
+          customerPhone,
+          activeOrderId: `OFFLINE_ORDER_${tableNo}_${Date.now()}`,
+          isOffline: true
+        };
+        setCurrentSession(offlineSession);
+        setActiveSessions(prev => {
+          const filtered = prev.filter(s => s.tableNo !== tableNo);
+          return [...filtered, offlineSession];
+        });
+        return offlineSession;
+      }
       throw err;
     }
   }, [socket]);

@@ -954,6 +954,17 @@ export default function BillingPage() {
       return orderId;
     } catch (err) {
       console.error('Load session error:', err);
+      const isNetErr = (typeof navigator !== 'undefined' && !navigator.onLine) ||
+        err.name === 'TypeError' ||
+        err.message?.includes('fetch') ||
+        err.message?.includes('Load failed') ||
+        err.message?.includes('Network');
+      if (isNetErr) {
+        console.warn('⚠️ Network offline during ensureActiveOrder. Using local session...');
+        const offlineOrderId = activeOrder || `OFFLINE_ORDER_${targetTableId}_${Date.now()}`;
+        setActiveOrder(offlineOrderId);
+        return offlineOrderId;
+      }
       throw err;
     }
   };
@@ -1147,8 +1158,12 @@ export default function BillingPage() {
       // Clear items for next KOT
       clearTable(activeTableId);
 
-      // Clear pendingItems in DB session
-      await syncTableSession(tableNo, [], 0, selectedWaiterObj?.name || '', orderType);
+      // Clear pendingItems in DB session (offline safe)
+      try {
+        await syncTableSession(tableNo, [], 0, selectedWaiterObj?.name || '', orderType);
+      } catch (syncErr) {
+        console.warn('⚠️ Offline: table session sync deferred');
+      }
 
       setBillError('');
       setBusy(false);
