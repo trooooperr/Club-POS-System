@@ -622,20 +622,23 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
       dailyMap[bDate].due += Math.max(0, orderDue);
       dueTotal += Math.max(0, orderDue);
 
-      // Payment mode allocation
-      if (o.paymentMode === 'split') {
-        cashTotal += (o.cashAmount || 0);
-        upiTotal  += (o.upiAmount  || 0);
-      } else if (isDueOrder) {
-        if (o.cashAmount > 0) cashTotal += o.cashAmount;
-        if (o.upiAmount > 0) upiTotal += o.upiAmount;
-        if (!o.cashAmount && !o.upiAmount && actualPaid > 0) {
+      // Payment mode allocation — skip manual due records; they are
+      // uncollected IOU balances, NOT real Cash/UPI payments.
+      if (!o.isManualDue) {
+        if (o.paymentMode === 'split') {
+          cashTotal += (o.cashAmount || 0);
+          upiTotal  += (o.upiAmount  || 0);
+        } else if (isDueOrder) {
+          if (o.cashAmount > 0) cashTotal += o.cashAmount;
+          if (o.upiAmount > 0) upiTotal += o.upiAmount;
+          if (!o.cashAmount && !o.upiAmount && actualPaid > 0) {
+            cashTotal += actualPaid;
+          }
+        } else if (o.paymentMode === 'upi') {
+          upiTotal += actualPaid;
+        } else {
           cashTotal += actualPaid;
         }
-      } else if (o.paymentMode === 'upi') {
-        upiTotal += actualPaid;
-      } else {
-        cashTotal += actualPaid;
       }
 
       // Compute exact Restaurant vs Bar sales from items
