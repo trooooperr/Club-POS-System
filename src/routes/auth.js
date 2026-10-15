@@ -288,14 +288,17 @@ router.post('/logout', async (req, res) => {
 router.get('/sessions', requireAuth, async (req, res) => {
   try {
     const now = new Date();
-    const currentSessionId = req.user.sessionId;
+    const currentSessionId = req.headers['x-session-id'] || req.user.sessionId;
     const currentDevice = getDeviceDetails(req);
+    const cleanCurrentDeviceName = currentDevice.deviceName ? currentDevice.deviceName.replace(/on Apple Macintosh.*$/, 'on Mac').trim() : '';
     const list = [];
 
     // Admins see all active sessions across all accounts; others see their own
     const users = req.user.role === 'admin'
       ? await User.find({ 'sessions.0': { $exists: true } })
       : [await User.findById(req.user.id)].filter(Boolean);
+
+    let hasFoundCurrent = false;
 
     for (const u of users) {
       let rawSessions = (u.sessions || []).filter(s => s.expiresAt > now);
@@ -326,9 +329,7 @@ router.get('/sessions', requireAuth, async (req, res) => {
           const isThisCurrent = Boolean(currentSessionId && s.sessionId === currentSessionId);
           const isExistingCurrent = Boolean(currentSessionId && existing.sessionId === currentSessionId);
 
-          // Earliest createdAt (time of first use / login)
           const earliestCreated = new Date(Math.min(new Date(existing.createdAt || now).getTime(), new Date(s.createdAt || now).getTime()));
-          // Latest lastActive time
           const latestActive = new Date(Math.max(new Date(existing.lastActive || now).getTime(), new Date(s.lastActive || now).getTime()));
 
           if (isThisCurrent && !isExistingCurrent) {
@@ -349,6 +350,16 @@ router.get('/sessions', requireAuth, async (req, res) => {
       const uniqueSessions = Array.from(deviceMap.values());
 
       for (const s of uniqueSessions) {
+        let isCurrent = Boolean(currentSessionId && s.sessionId === currentSessionId);
+        if (!isCurrent && !hasFoundCurrent && u._id.toString() === req.user.id.toString()) {
+          const sName = (s.deviceName || '').trim().toLowerCase();
+          const cName = cleanCurrentDeviceName.trim().toLowerCase();
+          if (sName === cName) {
+            isCurrent = true;
+          }
+        }
+        if (isCurrent) hasFoundCurrent = true;
+
         list.push({
           sessionId:  s.sessionId,
           deviceName: s.deviceName || 'Web Browser',
@@ -357,7 +368,7 @@ router.get('/sessions', requireAuth, async (req, res) => {
           ip:         s.ip || '',
           createdAt:  s.createdAt,
           lastActive: s.lastActive || s.createdAt,
-          isCurrent:  Boolean(currentSessionId && s.sessionId === currentSessionId),
+          isCurrent,
           username:   u.username,
           role:       u.role,
         });

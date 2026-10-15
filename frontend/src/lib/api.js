@@ -117,6 +117,11 @@ export async function authFetch(url, options = {}) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
+  const activeSessionId = localStorage.getItem(SESSION_KEY);
+  if (activeSessionId) {
+    headers['X-Session-Id'] = activeSessionId;
+  }
+
   // Set Content-Type for JSON bodies if not already set
   if (options.body && typeof options.body === 'string' && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json';
