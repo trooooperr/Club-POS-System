@@ -171,12 +171,58 @@ function TableTile({ id, status, num, total, items, currency, onClick, isVip }) 
 
 /* IMAGE-FOCUS MENU ITEM */
 function MenuItem({ item, qty, add, rem, stock, minStock }) {
-  const src = item.imageUrl?.startsWith('http') ? item.imageUrl
-    : `https://placehold.co/320x320/171921/F59E0B?text=${encodeURIComponent(item.name.slice(0, 1))}`;
+  const [imgFailed, setImgFailed] = useState(false);
+  const hasValidUrl = !imgFailed && item.imageUrl && item.imageUrl.startsWith('http');
+
+  // Determine category icon for clean offline dish card
+  const getCategoryIcon = () => {
+    const cat = (item.category || '').toLowerCase();
+    if (cat.includes('beer')) return '🍺';
+    if (cat.includes('cocktail') || cat.includes('mocktail') || cat.includes('bar') || cat.includes('liquor')) return '🍹';
+    if (cat.includes('coffee') || cat.includes('tea')) return '☕';
+    if (cat.includes('shake') || cat.includes('soft') || cat.includes('beverage') || cat.includes('juice')) return '🥤';
+    if (cat.includes('pizza') || cat.includes('starter') || cat.includes('bite')) return '🍕';
+    if (cat.includes('rice') || cat.includes('noodle') || cat.includes('biryani')) return '🍚';
+    return '🍽️';
+  };
+
   return (
     <div className={`mcard-modern${!item.available ? ' na' : ''}`}>
-      <div className="mimg-container">
-        <img className="mimg-big" src={src} alt={item.name} onError={e => { e.target.src = `https://placehold.co/320x320/171921/F59E0B?text=${encodeURIComponent(item.name.slice(0, 1))}` }} />
+      <div className="mimg-container" style={{ background: 'linear-gradient(135deg, #181a20 0%, #232733 100%)' }}>
+        {hasValidUrl ? (
+          <img
+            className="mimg-big"
+            src={item.imageUrl}
+            alt=""
+            loading="lazy"
+            onError={() => setImgFailed(true)}
+          />
+        ) : (
+          <div style={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            userSelect: 'none'
+          }}>
+            <span style={{ fontSize: '38px', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.4))' }}>
+              {getCategoryIcon()}
+            </span>
+            <span style={{
+              fontSize: '11px',
+              fontWeight: '700',
+              color: 'var(--a)',
+              letterSpacing: '0.8px',
+              textTransform: 'uppercase',
+              opacity: 0.85
+            }}>
+              {item.category || 'HumTum'}
+            </span>
+          </div>
+        )}
         <div className="m-price-tag" style={{ position: 'absolute', bottom: 8, left: 8, zIndex: 5 }}>₹{item.price.toFixed(0)}</div>
         {!item.available && <div className="sold-out-badge-top" style={{ top: 8, left: 8, right: 'auto' }}>SOLD OUT</div>}
         {stock !== undefined && stock > 0 && (
