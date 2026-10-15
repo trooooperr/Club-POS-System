@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { apiUrl, authFetch } from '../lib/api';
 import { saveAttendanceToIDB, getAttendanceFromIDB } from '../lib/idb';
+import { addToOfflineMutationQueue } from '../lib/offlineQueue';
 
 export default function AttendancePage() {
   const { showToast, role, setActiveSection } = useApp();
@@ -213,17 +214,24 @@ export default function AttendancePage() {
 
   // Quick mark present
   const handleMarkPresent = async (worker) => {
+    const attPayload = {
+      workerId: worker.workerId || worker._id,
+      date: selectedDate,
+      status: 'present',
+      overtimeHours: worker.overtimeHours || 0,
+      note: ''
+    };
+    // Offline-first
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      addToOfflineMutationQueue({ entity: 'attendance', action: 'mark', payload: attPayload, clientTimestamp: new Date().toISOString() });
+      showToast(`⚡ Marked ${worker.workerName || worker.name} as Present (offline — syncs later)`, 'amber');
+      return;
+    }
     try {
       const res = await authFetch(apiUrl('/api/attendance/mark'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          workerId: worker.workerId || worker._id,
-          date: selectedDate,
-          status: 'present',
-          overtimeHours: worker.overtimeHours || 0,
-          note: ''
-        })
+        body: JSON.stringify(attPayload)
       });
       const data = await res.json();
       if (data.success) {
@@ -233,7 +241,13 @@ export default function AttendancePage() {
         showToast(data.message || 'Failed to update attendance', 'error');
       }
     } catch (err) {
-      showToast(err.message, 'error');
+      const isNetErr = !navigator.onLine || err.name === 'TypeError' || err.message?.includes('fetch') || err.message?.includes('Network') || err.message?.includes('Load failed');
+      if (isNetErr) {
+        addToOfflineMutationQueue({ entity: 'attendance', action: 'mark', payload: attPayload, clientTimestamp: new Date().toISOString() });
+        showToast(`⚡ Marked ${worker.workerName || worker.name} as Present (offline — syncs later)`, 'amber');
+      } else {
+        showToast(err.message, 'error');
+      }
     }
   };
 
@@ -241,22 +255,30 @@ export default function AttendancePage() {
   const handleSaveAbsence = async () => {
     if (!markingModal.worker) return;
     setMarkingModal(prev => ({ ...prev, submitting: true }));
+    const attPayload = {
+      workerId: markingModal.worker.workerId || markingModal.worker._id,
+      date: selectedDate,
+      status: markingModal.status,
+      overtimeHours: parseFloat(markingModal.overtimeHours) || 0,
+      note: markingModal.note
+    };
+    // Offline-first
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      addToOfflineMutationQueue({ entity: 'attendance', action: 'mark', payload: attPayload, clientTimestamp: new Date().toISOString() });
+      const otMsg = attPayload.overtimeHours > 0 ? ` (+${attPayload.overtimeHours}h OT)` : '';
+      showToast(`⚡ Saved ${markingModal.worker.workerName || markingModal.worker.name}: ${markingModal.status}${otMsg} (offline — syncs later)`, 'amber');
+      setMarkingModal({ isOpen: false, worker: null, status: 'present', overtimeHours: '', note: '', submitting: false });
+      return;
+    }
     try {
-      const otVal = parseFloat(markingModal.overtimeHours) || 0;
       const res = await authFetch(apiUrl('/api/attendance/mark'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          workerId: markingModal.worker.workerId || markingModal.worker._id,
-          date: selectedDate,
-          status: markingModal.status,
-          overtimeHours: otVal,
-          note: markingModal.note
-        })
+        body: JSON.stringify(attPayload)
       });
       const data = await res.json();
       if (data.success) {
-        const otMsg = otVal > 0 ? ` (+${otVal}h OT)` : '';
+        const otMsg = attPayload.overtimeHours > 0 ? ` (+${attPayload.overtimeHours}h OT)` : '';
         showToast(`Saved attendance for ${markingModal.worker.workerName || markingModal.worker.name}: ${markingModal.status}${otMsg}`, 'success');
         setMarkingModal({ isOpen: false, worker: null, status: 'present', overtimeHours: '', note: '', submitting: false });
         fetchDailyAttendance(selectedDate);
@@ -265,8 +287,16 @@ export default function AttendancePage() {
         setMarkingModal(prev => ({ ...prev, submitting: false }));
       }
     } catch (err) {
-      showToast(err.message, 'error');
-      setMarkingModal(prev => ({ ...prev, submitting: false }));
+      const isNetErr = !navigator.onLine || err.name === 'TypeError' || err.message?.includes('fetch') || err.message?.includes('Network') || err.message?.includes('Load failed');
+      if (isNetErr) {
+        addToOfflineMutationQueue({ entity: 'attendance', action: 'mark', payload: attPayload, clientTimestamp: new Date().toISOString() });
+        const otMsg = attPayload.overtimeHours > 0 ? ` (+${attPayload.overtimeHours}h OT)` : '';
+        showToast(`⚡ Saved ${markingModal.worker.workerName || markingModal.worker.name}: ${markingModal.status}${otMsg} (offline — syncs later)`, 'amber');
+        setMarkingModal({ isOpen: false, worker: null, status: 'present', overtimeHours: '', note: '', submitting: false });
+      } else {
+        showToast(err.message, 'error');
+        setMarkingModal(prev => ({ ...prev, submitting: false }));
+      }
     }
   };
 

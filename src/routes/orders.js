@@ -81,6 +81,17 @@ async function generateNextBillNo(businessDateStr) {
 async function ensureUniqueBillNo(order) {
   // If order already has a finalized bill number and businessDate, NEVER overwrite date, businessDate, or billNo on edit!
   if (order.billNo && order.billNo !== 'PENDING' && /^HTB-\d+$/.test(order.billNo) && order.businessDate) {
+    // Still catch up the BillCounter so the next online bill doesn't re-use this offline-assigned number
+    const match = order.billNo.match(/HTB-(\d+)/);
+    if (match) {
+      const seq = parseInt(match[1], 10);
+      // Bump counter to >= this seq (no-op if already higher)
+      await BillCounter.findOneAndUpdate(
+        { businessDate: order.businessDate },
+        [{ $set: { seq: { $max: [{ $ifNull: ['$seq', 0] }, seq] }, updatedAt: new Date() } }],
+        { upsert: true }
+      );
+    }
     return;
   }
 
@@ -728,6 +739,28 @@ router.post('/offline-sync', async (req, res) => {
     order.dueAmount = calculatedDue;
     order.paymentStatus = calculatedDue === 0 ? 'paid' : (calculatedPaid === 0 ? 'pending' : 'partial');
     order.isCredit = isCredit || calculatedDue > 0;
+
+    // ── Honor the client-assigned offline bill number ─────────────────
+    // If the offline client already stamped a valid sequential HTB-XXX number,
+    // apply it to the order before calling ensureUniqueBillNo so it is preserved
+    // (ensureUniqueBillNo only generates a new number when order.billNo is empty/invalid).
+    const clientBillNo = req.body.billNo;
+    if (clientBillNo && /^HTB-\d+$/.test(clientBillNo)) {
+      // Verify no other order already claimed this exact billNo today
+      const targetDate = date ? new Date(date) : new Date();
+      const businessDateStr = getBusinessDateString(targetDate);
+      const conflict = await Order.exists({
+        businessDate: businessDateStr,
+        billNo: clientBillNo,
+        isManualDue: { $ne: true },
+        _id: { $ne: order._id }
+      });
+      if (!conflict) {
+        order.billNo = clientBillNo;
+        // Stamp businessDate so ensureUniqueBillNo keeps it
+        if (!order.businessDate) order.businessDate = businessDateStr;
+      }
+    }
 
     await ensureUniqueBillNo(order);
     const saved = await order.save();

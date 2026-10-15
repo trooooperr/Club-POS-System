@@ -1114,8 +1114,10 @@ export function AppProvider({ children }) {
     const totalSynced = syncedOrders + syncedKots;
     if (totalSynced > 0) {
       showToast(`✅ Synced ${syncedOrders} ${syncedOrders === 1 ? 'order' : 'orders'} and ${syncedKots} ${syncedKots === 1 ? 'KOT' : 'KOTs'} with database!`, 'success');
-      loadData(true, ['sessions', 'orders']);
     }
+    // Always reload sessions + orders when coming back online so live table
+    // items that were synced (or already on the server) reappear on the grid.
+    loadData(true, ['sessions', 'orders']);
   }, [showToast, loadData]);
 
   // ── Real-Time Cross-Tab Mirroring via Storage Events ───────────────
@@ -2080,9 +2082,10 @@ export function AppProvider({ children }) {
 
       if (isNetworkError) {
         console.warn('⚠️ Network offline during createKOT. Generating local KOT for local printing...');
+        const offlineKotNo = incrementAndGetNextKotNo();
         const offlineKot = {
           _id: `OFFLINE_KOT_${Date.now()}`,
-          kotNo: `KOT-OFF-${String(Date.now()).slice(-4)}`,
+          kotNo: offlineKotNo,
           orderId,
           tableNo,
           items,

@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { apiUrl, authFetch } from '../lib/api';
 import { Plus, CalendarDays, Trash2, Edit3, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import { saveExpensesToIDB, getExpensesFromIDB } from '../lib/idb';
+import { addToOfflineMutationQueue } from '../lib/offlineQueue';
 
 function DateField({ value, onChange, inputRef, label, max }) {
   const triggerPicker = () => {
@@ -319,6 +320,35 @@ export default function ExpensesPage() {
       const url = editingExpense ? `/api/expenses/${editingExpense._id}` : '/api/expenses';
       const method = editingExpense ? 'PUT' : 'POST';
 
+      // ── Offline-first fallback ────────────────────────────────────
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        const offlineSyncId = `offline_exp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        const localExpense = {
+          ...payload,
+          _id: editingExpense?._id || `OFFLINE_${Date.now()}`,
+          offlineSyncId,
+          isOffline: true
+        };
+        addToOfflineMutationQueue({
+          entity: 'expense',
+          action: editingExpense ? 'update' : 'create',
+          targetId: editingExpense?._id,
+          payload: { ...payload, offlineSyncId },
+          clientTimestamp: new Date().toISOString()
+        });
+        // Update local list optimistically
+        if (editingExpense) {
+          setExpenses(prev => prev.map(e => e._id === editingExpense._id ? { ...e, ...payload } : e));
+        } else {
+          setExpenses(prev => [localExpense, ...prev]);
+        }
+        showToast('⚡ Saved offline — will sync when internet is back', 'amber');
+        setModalOpen(false);
+        setSaving(false);
+        return;
+      }
+      // ─────────────────────────────────────────────────────────────
+
       const res = await authFetch(apiUrl(url), {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -332,7 +362,13 @@ export default function ExpensesPage() {
       setModalOpen(false);
       fetchExpenses();
     } catch (err) {
-      showToast(err.message || 'Failed to save expense', 'error');
+      const isNetErr = !navigator.onLine || err.name === 'TypeError' || err.message?.includes('fetch') || err.message?.includes('Network') || err.message?.includes('Load failed');
+      if (isNetErr) {
+        showToast('⚡ Saved offline — will sync when internet is back', 'amber');
+        setModalOpen(false);
+      } else {
+        showToast(err.message || 'Failed to save expense', 'error');
+      }
     } finally {
       setSaving(false);
     }
