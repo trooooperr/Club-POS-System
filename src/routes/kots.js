@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
+const { getBusinessDateString } = require('../lib/businessDay');
 const KOT = require('../models/KOT');
 const Order = require('../models/Order');
 const TableSession = require('../models/TableSession');
@@ -616,9 +618,11 @@ router.post('/offline-sync', async (req, res) => {
       if (activeOrder) {
         targetOrderId = activeOrder._id;
       } else {
+        const targetDate = createdAt ? new Date(createdAt) : new Date();
         const newOrder = new Order({
           tableNo: Number(tableNo) || 1,
-          date: createdAt ? new Date(createdAt) : new Date(),
+          date: targetDate,
+          businessDate: getBusinessDateString(targetDate),
           grandTotal: 0,
           subtotal: 0,
           sgst: 0,
@@ -632,7 +636,7 @@ router.post('/offline-sync', async (req, res) => {
       }
     }
 
-    const assignedKotNo = kotNo || await generateNextKotNo();
+    const assignedKotNo = kotNo || await generateKOTNo();
 
     const kot = new KOT({
       kotNo: assignedKotNo,
@@ -660,13 +664,36 @@ router.post('/offline-sync', async (req, res) => {
       $set: { orderStatus: 'KOT_SENT' }
     });
 
-    if (req.app.locals.io) {
-      req.app.locals.io.emit('kot-created', savedKot);
-      req.app.locals.io.emit('KOT_STATUS_UPDATED', {
-        kotId: savedKot._id,
-        status: savedKot.status,
-        tableNo: savedKot.tableNo
+    // 3. Upsert TableSession so table remains active and visible upon reconnection
+    let session = await TableSession.findOne({ tableNo: Number(tableNo) || 1 });
+    if (!session) {
+      session = new TableSession({
+        tableNo: Number(tableNo) || 1,
+        activeOrderId: targetOrderId,
+        status: 'KOT_SENT',
+        kotIds: [savedKot._id],
+        waiterName: waiterName || '',
+        orderType: orderType || 'dine-in',
+        pendingItems: [],
+        lastActivityAt: new Date()
       });
+      await session.save();
+    } else {
+      session.activeOrderId = targetOrderId;
+      session.status = 'KOT_SENT';
+      if (!session.kotIds.some(id => String(id) === String(savedKot._id))) {
+        session.kotIds.push(savedKot._id);
+      }
+      session.lastActivityAt = new Date();
+      await session.save();
+    }
+
+    if (req.app.locals.io) {
+      req.app.locals.io.to('kitchen').emit('NEW_KOT', savedKot);
+      req.app.locals.io.emit('NEW_KOT', savedKot);
+      req.app.locals.io.emit('kot-created', savedKot);
+      req.app.locals.io.emit('TABLE_SESSION_UPDATED', { tableNo: Number(tableNo) || 1 });
+      req.app.locals.io.emit('table-updated', { tableNo: Number(tableNo) || 1 });
     }
 
     res.json({ success: true, kot: savedKot });

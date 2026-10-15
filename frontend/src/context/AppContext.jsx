@@ -1114,8 +1114,9 @@ export function AppProvider({ children }) {
     const totalSynced = syncedOrders + syncedKots;
     if (totalSynced > 0) {
       showToast(`✅ Synced ${syncedOrders} ${syncedOrders === 1 ? 'order' : 'orders'} and ${syncedKots} ${syncedKots === 1 ? 'KOT' : 'KOTs'} with database!`, 'success');
+      loadData(true, ['sessions', 'orders']);
     }
-  }, [showToast]);
+  }, [showToast, loadData]);
 
   // ── Real-Time Cross-Tab Mirroring via Storage Events ───────────────
   useEffect(() => {

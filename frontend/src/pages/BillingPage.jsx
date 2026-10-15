@@ -830,6 +830,13 @@ export default function BillingPage() {
       if (response.ok) {
         session = await response.json();
       } else if (response.status === 404) {
+        const queuedKots = getOfflineKotQueue().filter(k => Number(k.tableNo) === Number(tableNo));
+        if (queuedKots.length > 0) {
+          const offlineOrderId = activeOrder || `OFFLINE_ORDER_${targetTableId}_${Date.now()}`;
+          setActiveOrder(offlineOrderId);
+          setKots(queuedKots);
+          return offlineOrderId;
+        }
         if (!createIfMissing) {
           setActiveOrder(null);
           setKots([]);
@@ -842,6 +849,13 @@ export default function BillingPage() {
 
       // Check if session has a message indicating no active session (our backend returns 200 with { message: 'No active session' })
       if (session && session.message === 'No active session') {
+        const queuedKots = getOfflineKotQueue().filter(k => Number(k.tableNo) === Number(tableNo));
+        if (queuedKots.length > 0) {
+          const offlineOrderId = activeOrder || `OFFLINE_ORDER_${targetTableId}_${Date.now()}`;
+          setActiveOrder(offlineOrderId);
+          setKots(queuedKots);
+          return offlineOrderId;
+        }
         if (!createIfMissing) {
           setActiveOrder(null);
           setKots([]);
@@ -922,11 +936,11 @@ export default function BillingPage() {
             ...prev,
             [targetTableId]: {
               ...prev[targetTableId],
-              items: dbPendingItems,
+              items: (dbPendingItems.length > 0 || (prev[targetTableId]?.items?.length || 0) === 0) ? dbPendingItems : prev[targetTableId].items,
               // For customer info: only inherit from active order. If the active order
               // has no customer name/phone (fresh bill), reset to empty strings.
-              customerName: session?.activeOrderId?.customerName || '',
-              customerPhone: session?.activeOrderId?.customerPhone || '',
+              customerName: session?.activeOrderId?.customerName || prev[targetTableId]?.customerName || '',
+              customerPhone: session?.activeOrderId?.customerPhone || prev[targetTableId]?.customerPhone || '',
               discount: discountPctStr,
               fine: fineStr,
               ...(serviceTaxEnabledVal !== undefined ? { serviceTaxEnabled: serviceTaxEnabledVal } : {}),
@@ -950,7 +964,17 @@ export default function BillingPage() {
       }
 
       setActiveOrder(orderId);
-      setKots(session?.kotIds || []);
+      const serverKots = session?.kotIds || [];
+      const queuedKots = getOfflineKotQueue().filter(k => Number(k.tableNo) === Number(tableNo));
+      // Merge server KOTs with any unflushed offline KOTs for this table
+      const existingKotIds = new Set(serverKots.map(k => String(k._id || k.offlineSyncId || k.kotNo)));
+      const mergedKots = [...serverKots];
+      queuedKots.forEach(qk => {
+        if (!existingKotIds.has(String(qk._id)) && !existingKotIds.has(String(qk.offlineSyncId)) && !existingKotIds.has(String(qk.kotNo))) {
+          mergedKots.push(qk);
+        }
+      });
+      setKots(mergedKots);
 
       return orderId;
     } catch (err) {
