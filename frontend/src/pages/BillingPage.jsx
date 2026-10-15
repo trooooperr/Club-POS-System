@@ -672,19 +672,25 @@ export default function BillingPage() {
 
   // Group sent KOT items and pending items
   const combinedItems = useMemo(() => {
+    const getItemKey = (item) => {
+      const cleanName = (item.name || '').trim().toLowerCase();
+      const price = Number(item.price) || 0;
+      return `${cleanName}___${price}`;
+    };
+
     const sentMap = {};
     (kots || []).forEach(kot => {
       (kot.items || []).forEach(item => {
-        const id = item.menuItemId?._id || item.menuItemId;
-        const key = id || item.name;
+        const key = getItemKey(item);
         if (sentMap[key]) {
-          sentMap[key].quantity += item.quantity;
+          sentMap[key].quantity += (Number(item.quantity) || 1);
         } else {
           sentMap[key] = {
-            _id: id,
+            ...item,
+            _id: item.menuItemId?._id || item.menuItemId || item._id,
             name: item.name,
-            price: item.price,
-            quantity: item.quantity,
+            price: Number(item.price) || 0,
+            quantity: Number(item.quantity) || 1,
             isSent: true,
             note: item.notes || ''
           };
@@ -697,10 +703,29 @@ export default function BillingPage() {
       isSent: false
     }));
 
+    const allMap = {};
+    Object.values(sentMap).forEach(item => {
+      const key = getItemKey(item);
+      allMap[key] = { ...item };
+    });
+    pending.forEach(item => {
+      const key = getItemKey(item);
+      if (allMap[key]) {
+        allMap[key].quantity += (Number(item.quantity) || 1);
+      } else {
+        allMap[key] = {
+          ...item,
+          quantity: Number(item.quantity) || 1,
+          price: Number(item.price) || 0,
+          isSent: false
+        };
+      }
+    });
+
     return {
       sent: Object.values(sentMap),
       pending,
-      all: [...Object.values(sentMap), ...pending]
+      all: Object.values(allMap)
     };
   }, [kots, table.items]);
 

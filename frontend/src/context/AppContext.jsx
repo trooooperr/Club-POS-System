@@ -12,7 +12,8 @@ import {
   saveMasterCache, getMasterCache,
   updateLocalBillCounterIfHigher, updateLocalKotCounterIfHigher,
   incrementAndGetNextBillNo, incrementAndGetNextKotNo,
-  getLocalBillCounter, getLocalKotCounter, getDeviceId
+  getLocalBillCounter, getLocalKotCounter, getDeviceId,
+  getBusinessDateString, consolidateBillItems
 } from '../lib/offlineQueue';
 import {
   saveOrdersToIDB, getOrdersFromIDB, upsertOrderInIDB,
@@ -578,8 +579,10 @@ export function AppProvider({ children }) {
 
     const isAlc = (i) => checkIsAlcoholic(i, allSellableItems, inventory);
 
-    const foodItems = (table?.items || []).filter(i => !isAlc(i));
-    const alcoholItems = (table?.items || []).filter(i => isAlc(i));
+    const rawFoodItems = (table?.items || []).filter(i => !isAlc(i));
+    const rawAlcoholItems = (table?.items || []).filter(i => isAlc(i));
+    const foodItems = consolidateBillItems(rawFoodItems);
+    const alcoholItems = consolidateBillItems(rawAlcoholItems);
 
     const foodSubtotal = foodItems.reduce((s, i) => s + (i.price || 0) * (i.quantity || 0), 0);
     const alcoholSubtotal = alcoholItems.reduce((s, i) => s + (i.price || 0) * (i.quantity || 0), 0);
@@ -948,16 +951,20 @@ export function AppProvider({ children }) {
           // ── Save to IndexedDB (unlimited storage, instant offline reads) ──
           saveOrdersToIDB(res.value).catch(() => {});
 
-          // Update local bill counter from max existing bill number
+          // Update local bill counter from max existing bill number FOR TODAY'S BUSINESS DATE ONLY
+          const currentBizDate = getBusinessDateString();
           let maxBillNum = 0;
           for (const ord of res.value) {
-            const m = (ord.billNo || '').match(/HTB-(\d+)/);
-            if (m) {
-              const num = parseInt(m[1], 10);
-              if (num > maxBillNum) maxBillNum = num;
+            const ordBizDate = ord.businessDate || (ord.date ? getBusinessDateString(new Date(ord.date)) : '');
+            if (ordBizDate === currentBizDate) {
+              const m = (ord.billNo || '').match(/HTB-(\d+)/);
+              if (m) {
+                const num = parseInt(m[1], 10);
+                if (num > maxBillNum) maxBillNum = num;
+              }
             }
           }
-          if (maxBillNum > 0) updateLocalBillCounterIfHigher(maxBillNum);
+          if (maxBillNum > 0) updateLocalBillCounterIfHigher(maxBillNum, currentBizDate);
         }
       }
       if (components.includes('workers') && indexMap.workers !== undefined) {
@@ -1094,15 +1101,16 @@ export function AppProvider({ children }) {
       }
     }
 
-    // 4. Catch up cloud counters with highest local sequences
+    // 4. Catch up cloud counters with highest local sequences for today
     try {
-      const maxBillSeq = getLocalBillCounter();
-      const maxKotSeq = getLocalKotCounter();
+      const currentBizDate = getBusinessDateString();
+      const maxBillSeq = getLocalBillCounter(currentBizDate);
+      const maxKotSeq = getLocalKotCounter(currentBizDate);
       if (maxBillSeq > 0 || maxKotSeq > 0) {
         await authFetch(apiUrl('/api/sync/counter-catchup'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ maxBillSeq, maxKotSeq })
+          body: JSON.stringify({ businessDate: currentBizDate, maxBillSeq, maxKotSeq })
         });
       }
     } catch {}
@@ -2185,6 +2193,7 @@ export function AppProvider({ children }) {
         department: isAlc ? 'bar' : (i.department || 'kitchen')
       };
     });
+    const consolidatedFinalItems = consolidateBillItems(mappedFinalItems);
 
     try {
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -2193,7 +2202,7 @@ export function AppProvider({ children }) {
       const res = await authFetch(apiUrl(`/api/orders/${orderId}/finalize-bill`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: mappedFinalItems, subtotal, foodSubtotal, alcoholSubtotal, sgst, cgst, serviceTax, serviceTaxRate, discount, discountPercent, fine, roundOff, grandTotal, waiterName, orderType, customerName, customerPhone, paymentMode, cashAmount, upiAmount, isCredit, paidAmount, dueAmount })
+        body: JSON.stringify({ items: consolidatedFinalItems, subtotal, foodSubtotal, alcoholSubtotal, sgst, cgst, serviceTax, serviceTaxRate, discount, discountPercent, fine, roundOff, grandTotal, waiterName, orderType, customerName, customerPhone, paymentMode, cashAmount, upiAmount, isCredit, paidAmount, dueAmount })
       });
       if (!res.ok) throw new Error('Failed to finalize bill');
       const orderResponse = await res.json();

@@ -38,9 +38,58 @@ export function getDeviceId() {
   }
 }
 
+export function getBusinessDateString(d = new Date()) {
+  const dateObj = typeof d === 'string' || typeof d === 'number' ? new Date(d) : (d || new Date());
+  const istTime = new Date(dateObj.getTime() + 19800000); // +5.5 hours in ms
+  let year = istTime.getUTCFullYear();
+  let month = istTime.getUTCMonth();
+  let dateVal = istTime.getUTCDate();
+  let hour = istTime.getUTCHours();
+  if (hour < 5) {
+    const prevDay = new Date(Date.UTC(year, month, dateVal - 1));
+    year = prevDay.getUTCFullYear();
+    month = prevDay.getUTCMonth();
+    dateVal = prevDay.getUTCDate();
+  }
+  const yyyy = year;
+  const mm = String(month + 1).padStart(2, '0');
+  const dd = String(dateVal).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+export function consolidateBillItems(items) {
+  if (!Array.isArray(items)) return [];
+  const map = new Map();
+  for (const item of items) {
+    if (!item) continue;
+    const name = (item.name || '').trim();
+    if (!name) continue;
+    const price = Number(item.price) || 0;
+    const key = `${name.toLowerCase()}___${price}`;
+    if (map.has(key)) {
+      const existing = map.get(key);
+      existing.quantity = (Number(existing.quantity) || 0) + (Number(item.quantity) || 1);
+    } else {
+      map.set(key, {
+        ...item,
+        name,
+        price,
+        quantity: Number(item.quantity) || 1
+      });
+    }
+  }
+  return Array.from(map.values());
+}
+
 // ── SEQUENTIAL COUNTERS (HTB-XXX and KOT-XXX) ─────────────────────
-export function getLocalBillCounter() {
+export function getLocalBillCounter(dateStr = getBusinessDateString()) {
   try {
+    const storedDate = localStorage.getItem('humtum_offline_bill_date');
+    if (storedDate !== dateStr) {
+      localStorage.setItem('humtum_offline_bill_date', dateStr);
+      localStorage.setItem(BILL_COUNTER_KEY, '0');
+      return 0;
+    }
     const raw = localStorage.getItem(BILL_COUNTER_KEY);
     return raw ? parseInt(raw, 10) || 0 : 0;
   } catch {
@@ -48,10 +97,11 @@ export function getLocalBillCounter() {
   }
 }
 
-export function updateLocalBillCounterIfHigher(seq) {
+export function updateLocalBillCounterIfHigher(seq, dateStr = getBusinessDateString()) {
   try {
-    const current = getLocalBillCounter();
+    const current = getLocalBillCounter(dateStr);
     const nextSeq = Math.max(current, parseInt(seq, 10) || 0);
+    localStorage.setItem('humtum_offline_bill_date', dateStr);
     localStorage.setItem(BILL_COUNTER_KEY, nextSeq.toString());
     return nextSeq;
   } catch {
@@ -59,10 +109,11 @@ export function updateLocalBillCounterIfHigher(seq) {
   }
 }
 
-export function incrementAndGetNextBillNo() {
+export function incrementAndGetNextBillNo(dateStr = getBusinessDateString()) {
   try {
-    const current = getLocalBillCounter();
+    const current = getLocalBillCounter(dateStr);
     const nextSeq = current + 1;
+    localStorage.setItem('humtum_offline_bill_date', dateStr);
     localStorage.setItem(BILL_COUNTER_KEY, nextSeq.toString());
     return `HTB-${nextSeq.toString().padStart(3, '0')}`;
   } catch {
@@ -70,8 +121,14 @@ export function incrementAndGetNextBillNo() {
   }
 }
 
-export function getLocalKotCounter() {
+export function getLocalKotCounter(dateStr = getBusinessDateString()) {
   try {
+    const storedDate = localStorage.getItem('humtum_offline_kot_date');
+    if (storedDate !== dateStr) {
+      localStorage.setItem('humtum_offline_kot_date', dateStr);
+      localStorage.setItem(KOT_COUNTER_KEY, '0');
+      return 0;
+    }
     const raw = localStorage.getItem(KOT_COUNTER_KEY);
     return raw ? parseInt(raw, 10) || 0 : 0;
   } catch {
@@ -79,10 +136,11 @@ export function getLocalKotCounter() {
   }
 }
 
-export function updateLocalKotCounterIfHigher(seq) {
+export function updateLocalKotCounterIfHigher(seq, dateStr = getBusinessDateString()) {
   try {
-    const current = getLocalKotCounter();
+    const current = getLocalKotCounter(dateStr);
     const nextSeq = Math.max(current, parseInt(seq, 10) || 0);
+    localStorage.setItem('humtum_offline_kot_date', dateStr);
     localStorage.setItem(KOT_COUNTER_KEY, nextSeq.toString());
     return nextSeq;
   } catch {
@@ -90,10 +148,11 @@ export function updateLocalKotCounterIfHigher(seq) {
   }
 }
 
-export function incrementAndGetNextKotNo() {
+export function incrementAndGetNextKotNo(dateStr = getBusinessDateString()) {
   try {
-    const current = getLocalKotCounter();
+    const current = getLocalKotCounter(dateStr);
     const nextSeq = current + 1;
+    localStorage.setItem('humtum_offline_kot_date', dateStr);
     localStorage.setItem(KOT_COUNTER_KEY, nextSeq.toString());
     return `KOT-${nextSeq.toString().padStart(3, '0')}`;
   } catch {

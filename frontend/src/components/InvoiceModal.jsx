@@ -5,6 +5,7 @@ import { apiUrl, authFetch } from '../lib/api';
 import { formatBillDateTime } from '../lib/formatDate';
 import QRCode from 'qrcode';
 import { BILL_LOGO_BASE64 } from '../lib/billLogoBase64';
+import { consolidateBillItems } from '../lib/offlineQueue';
 const qz = typeof window !== 'undefined' ? window.qz : null;
 
 export default function InvoiceModal() {
@@ -59,8 +60,10 @@ export default function InvoiceModal() {
 
   const isAlc = (i) => checkIsAlcoholic ? checkIsAlcoholic(i, allSellableItems, inventory) : !!(i.isAlcoholic || i.isAlcohol);
 
-  const foodItems = (o.items || []).filter(i => !isAlc(i));
-  const alcoholItems = (o.items || []).filter(i => isAlc(i));
+  const rawFoodItems = (o.items || []).filter(i => !isAlc(i));
+  const rawAlcoholItems = (o.items || []).filter(i => isAlc(i));
+  const foodItems = consolidateBillItems(rawFoodItems);
+  const alcoholItems = consolidateBillItems(rawAlcoholItems);
 
   // ── Always trust stored DB totals for the final payable amount ──────────
   // Only use checkIsAlcoholic to visually split items into sections.

@@ -17,6 +17,30 @@ const {
   deductInventoryForItems,
 } = require('../lib/inventoryStock');
 
+function consolidateOrderItems(items) {
+  if (!Array.isArray(items)) return [];
+  const map = new Map();
+  for (const item of items) {
+    if (!item) continue;
+    const name = (item.name || '').trim();
+    if (!name) continue;
+    const price = Number(item.price) || 0;
+    const key = `${name.toLowerCase()}___${price}`;
+    if (map.has(key)) {
+      const existing = map.get(key);
+      existing.quantity = (Number(existing.quantity) || 0) + (Number(item.quantity) || 1);
+    } else {
+      map.set(key, {
+        ...item,
+        name,
+        price,
+        quantity: Number(item.quantity) || 1
+      });
+    }
+  }
+  return Array.from(map.values());
+}
+
 // Generate new Bill No based on businessDateStr (e.g. "2026-09-04")
 async function generateNextBillNo(businessDateStr) {
   // 1. Find the highest existing bill number for this business date in Order History (excluding manual due records)
@@ -528,8 +552,8 @@ router.patch('/:id/finalize-bill', async (req, res) => {
       return res.status(400).json({ message: 'Cannot finalize bill with grand total 0' });
     }
 
-    // Update order with final calculations (combine all KOT items)
-    order.items = items;
+    // Update order with final calculations (combine and consolidate all KOT items)
+    order.items = consolidateOrderItems(items);
     order.subtotal = subtotal;
     if (foodSubtotal !== undefined) order.foodSubtotal = parseFloat(foodSubtotal) || 0;
     if (alcoholSubtotal !== undefined) order.alcoholSubtotal = parseFloat(alcoholSubtotal) || 0;
@@ -709,7 +733,7 @@ router.post('/offline-sync', async (req, res) => {
       });
     }
 
-    order.items = Array.isArray(items) ? items : [];
+    order.items = consolidateOrderItems(Array.isArray(items) ? items : []);
     order.subtotal = Number(subtotal) || 0;
     order.foodSubtotal = Number(foodSubtotal) || 0;
     order.alcoholSubtotal = Number(alcoholSubtotal) || 0;

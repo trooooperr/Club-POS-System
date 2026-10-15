@@ -18,6 +18,7 @@ const Worker = require('../models/Worker');
 const Settings = require('../models/Settings');
 const BillCounter = require('../models/BillCounter');
 const KotCounter = require('../models/KotCounter');
+const { getBusinessDateString } = require('../lib/businessDay');
 
 router.post('/batch', async (req, res) => {
   try {
@@ -215,7 +216,7 @@ router.post('/batch', async (req, res) => {
 router.post('/counter-catchup', async (req, res) => {
   try {
     const { businessDate, maxBillSeq, maxKotSeq } = req.body;
-    const dateStr = businessDate || new Date().toISOString().slice(0, 10);
+    const dateStr = businessDate || getBusinessDateString(new Date());
 
     let updatedBillSeq = null;
     let updatedKotSeq = null;
