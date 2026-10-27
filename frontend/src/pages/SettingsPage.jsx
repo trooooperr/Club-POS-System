@@ -575,6 +575,8 @@ export default function SettingsPage() {
   const [profileError, setProfileError] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
   const [savingEmail, setSavingEmail] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendResult, setSendResult] = useState(null);
 
   useEffect(() => {
     setProfileForm({
@@ -1410,7 +1412,46 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* ── Table & Section Management ───────────────────────────── */}
+        {/* Collapsible Technical & Advanced Settings Header */}
+        <div className="settings-full" style={{ marginTop: '12px' }}>
+          <button
+            type="button"
+            onClick={() => setShowTechnicalSettings(prev => !prev)}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '16px 20px',
+              borderRadius: '8px',
+              fontSize: '15px',
+              fontWeight: '800',
+              cursor: 'pointer',
+              background: 'var(--s1)',
+              border: '1px solid var(--b1)',
+              color: 'var(--t0)',
+              transition: 'all 0.2s ease',
+              boxShadow: 'var(--sh-sm)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              <ShieldAlert size={18} style={{ color: 'var(--a)' }} />
+              <span>Technical & Advanced Settings</span>
+              <span style={{ fontSize: '12px', color: 'var(--t2)', fontWeight: 'normal' }}>
+                (Table Layout, QR Codes, Printing, Cloud Backup, Email Alerts, Active Devices, Security)
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--a)' }}>
+              <span style={{ fontSize: '13px', fontWeight: '600' }}>{showTechnicalSettings ? 'Hide' : 'Show'}</span>
+              {showTechnicalSettings ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+            </div>
+          </button>
+        </div>
+
+        {/* Collapsible Technical & Advanced Content */}
+        {showTechnicalSettings && (
+          <>
+            {/* ── 1. Table & Section Management ───────────────────────────── */}
         <section className="settings-card settings-full">
           <div className="settings-card-head">
             <div>
@@ -2034,46 +2075,7 @@ export default function SettingsPage() {
           )}
         </section>
 
-        {/* Collapsible Technical & Advanced Settings Header */}
-        <div className="settings-full" style={{ marginTop: '12px' }}>
-          <button
-            type="button"
-            onClick={() => setShowTechnicalSettings(prev => !prev)}
-            style={{
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '16px 20px',
-              borderRadius: '8px',
-              fontSize: '15px',
-              fontWeight: '800',
-              cursor: 'pointer',
-              background: 'var(--s1)',
-              border: '1px solid var(--b1)',
-              color: 'var(--t0)',
-              transition: 'all 0.2s ease',
-              boxShadow: 'var(--sh-sm)'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-              <ShieldAlert size={18} style={{ color: 'var(--a)' }} />
-              <span>Technical & Advanced Settings</span>
-              <span style={{ fontSize: '12px', color: 'var(--t2)', fontWeight: 'normal' }}>
-                (Printers, Cloud Backup, Daily Email, Active Devices, Security)
-              </span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--a)' }}>
-              <span style={{ fontSize: '13px', fontWeight: '600' }}>{showTechnicalSettings ? 'Hide' : 'Show'}</span>
-              {showTechnicalSettings ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-            </div>
-          </button>
-        </div>
-
-        {/* Collapsible Technical & Advanced Content */}
-        {showTechnicalSettings && (
-          <>
-            {/* 1. Printing Services */}
+        {/* 3. Printing Services */}
             <section className="settings-card settings-full">
               <div className="settings-card-head">
                 <div>
