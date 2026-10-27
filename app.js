@@ -146,47 +146,6 @@ app.get('/ready', (req, res) => {
   res.json({ ready: true });
 });
 
-// ── QZ Tray Integration Routes ──────────────────────────────────
-// Public endpoint for certificate retrieval
-app.get('/api/qz/certificate', async (req, res) => {
-  try {
-    const certPath = path.join(__dirname, 'keys/qz-certificate.crt');
-    if (!fs.existsSync(certPath)) {
-      return res.status(404).json({ message: 'QZ Certificate not found' });
-    }
-    const certificate = fs.readFileSync(certPath, 'utf8');
-    res.type('text/plain').send(certificate);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Protected endpoint to sign the print requests
-app.post('/api/qz/sign', requireAuth, async (req, res) => {
-  try {
-    const crypto = require('crypto');
-    const { toSign, request } = req.body;
-    const dataToSign = toSign || request;
-    if (!dataToSign) {
-      return res.status(400).json({ message: 'Nothing to sign' });
-    }
-
-    const keyPath = path.join(__dirname, 'keys/qz-private.key');
-    if (!fs.existsSync(keyPath)) {
-      return res.status(404).json({ message: 'QZ Private Key not found' });
-    }
-
-    const privateKey = fs.readFileSync(keyPath, 'utf8');
-    const sign = crypto.createSign('RSA-SHA512');
-    sign.update(dataToSign);
-    const signature = sign.sign(privateKey, 'base64');
-    
-    res.send(signature);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
 // ── Print Agent Self-Update Source Endpoint ──────────────────────
 // Serves the latest print-agent.js to the cashier laptop so it can
 // self-update without any manual file copying.

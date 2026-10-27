@@ -6,7 +6,7 @@ import {
   ResponsiveContainer, Legend
 } from 'recharts';
 import { apiUrl, authFetch } from '../lib/api';
-import { TrendingUp, Zap, ArrowRight, CalendarDays, Wallet, Wine, Search, Flame, ChevronLeft, ChevronRight } from 'lucide-react';
+import { TrendingUp, Zap, ArrowRight, CalendarDays, Wallet, Wine, Search, Flame, ChevronLeft, ChevronRight, Percent } from 'lucide-react';
 
 const Tip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
@@ -76,6 +76,13 @@ const Tip = ({ active, payload, label }) => {
             <span className="tip-label" style={{ color: 'var(--t1)' }}>Bar:</span>
             <span className="tip-val mono" style={{ color: 'var(--t0)' }}>&#x20B9;{itemData.barSales.toLocaleString('en-IN')}</span>
           </div>
+          {itemData.serviceTax > 0 && (
+            <div className="tip-row">
+              <span className="tip-dot" style={{ background: '#F472B6' }}></span>
+              <span className="tip-label" style={{ color: '#F472B6' }}>Service Tax:</span>
+              <span className="tip-val mono" style={{ color: '#F472B6' }}>&#x20B9;{itemData.serviceTax.toLocaleString('en-IN')}</span>
+            </div>
+          )}
         </>
       ) : (
         <>
@@ -558,6 +565,17 @@ export default function SalesPage() {
           )}
         </div>
 
+        {/* Service Tax KPI Card */}
+        <div className="kpi kpi-sm">
+          <div className="kpi-label" style={{ color: '#F472B6' }}>Service Tax Collected</div>
+          <div className="kpi-value mono" style={{ color: '#F472B6', fontSize: 20 }}>
+            {loading ? '...' : `₹${(analytics?.collectedServiceTax || 0).toLocaleString('en-IN')}`}
+          </div>
+          <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 500, marginTop: 3 }}>
+            Cash / UPI cleared only
+          </div>
+        </div>
+
         {analytics?.eventCount > 0 && (
           <>
             <div className="kpi kpi-sm">
@@ -802,6 +820,7 @@ export default function SalesPage() {
         </div>
       </div>
 
+
       <style>{`
         .sales-page { display: flex; flex-direction: column; gap: 20px; }
         .sales-header-res { 
@@ -901,7 +920,21 @@ export default function SalesPage() {
         }
 
         .kpi-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-        .kpi-row-secondary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+        .kpi-row-secondary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+        @media (max-width: 1200px) {
+          .kpi-row-secondary { grid-template-columns: repeat(3, 1fr); }
+        }
+        @media (max-width: 768px) {
+          .kpi-row-secondary { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 480px) {
+          .kpi-row-secondary { grid-template-columns: 1fr; }
+        }
+        .st-kpi-card:hover {
+          border-color: rgba(244, 114, 182, 0.55) !important;
+          box-shadow: 0 4px 20px rgba(244, 114, 182, 0.15) !important;
+          transform: translateY(-1px);
+        }
         .kpi-sm { padding: 14px 16px !important; }
         .kpi-sm .kpi-value { font-size: 20px !important; }
         .kpi-sm .kpi-label { font-size: 10px !important; margin-bottom: 4px !important; }

@@ -588,7 +588,7 @@ export default function BillingPage() {
     setItemNote: setItemNoteRaw,
     allSellableItems,
     billTotals, filteredMenu, categories, categoryFilter, setCategoryFilter,
-    menuSearch, setMenuSearch, inventory, workers, getTableStatus, getTableInfo, settings, NUM_TABLES, activeTableCount, activeSessions,
+    menuSearch, setMenuSearch, inventory, workers, getTableStatus, getTableInfo, settings, NUM_TABLES, tableSections, activeTableCount, activeSessions,
     openTableSession, createKOT, finalizeBill, completeOrder, socket, syncTableSession, cancelTableSession,
     setSidebarOpen, showToast, printKOTDocument, printBillDocument,
     removeKOTItem, deleteKOT, role, checkIsAlcoholic
@@ -1421,12 +1421,40 @@ export default function BillingPage() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [printKOT, doGen, selectTable]);
   if (!activeTableId) {
-    const ZONES = [
-      { name: 'Bottom Lounge', range: [1, 6], color: 'zone-bottom' },
-      { name: 'Top Lounge',    range: [7, 12],  color: 'zone-top' },
-      { name: 'Restaurant',    range: [13, 18], color: 'zone-rest' },
-      { name: 'VIP',    range: [19, 20], color: 'zone-vip' },
-    ];
+    const rawSections = (Array.isArray(tableSections) && tableSections.length > 0)
+      ? tableSections
+      : (Array.isArray(settings?.tableSections) && settings.tableSections.length > 0)
+        ? settings.tableSections
+        : [
+            { id: 'sec-1', name: 'Bottom Lounge', range: [1, 6], color: 'zone-bottom' },
+            { id: 'sec-2', name: 'Top Lounge',    range: [7, 12],  color: 'zone-top' },
+            { id: 'sec-3', name: 'Restaurant',    range: [13, 18], color: 'zone-rest' },
+            { id: 'sec-4', name: 'VIP',           range: [19, 20], color: 'zone-vip' },
+          ];
+
+    // Compute covered table numbers to ensure NO table is omitted
+    const coveredNums = new Set();
+    const ZONES = rawSections.map(zone => {
+      const min = Math.min(zone.range[0], zone.range[1]);
+      const max = Math.max(zone.range[0], zone.range[1]);
+      const range = [Math.max(1, min), Math.min(NUM_TABLES, max)];
+      for (let n = range[0]; n <= range[1]; n++) {
+        coveredNums.add(n);
+      }
+      return { ...zone, range };
+    }).filter(z => z.range[0] <= NUM_TABLES && z.range[0] <= z.range[1]);
+
+    // Any remaining tables from 1 to NUM_TABLES
+    const unassigned = tableList.filter(t => !coveredNums.has(t.num));
+    if (unassigned.length > 0) {
+      ZONES.push({
+        id: 'sec-extra',
+        name: 'Additional Tables',
+        range: [unassigned[0].num, unassigned[unassigned.length - 1].num],
+        color: 'zone-rest',
+        customTableIds: unassigned.map(t => t.id)
+      });
+    }
 
     return (
       <div className="fi table-picker-container">
@@ -1498,17 +1526,20 @@ export default function BillingPage() {
           {/* Zone sections — 2×2 block grid */}
           <div className="tp-zones-grid">
             {ZONES.map(zone => {
-              const zoneTables = tableList.filter(t => t.num >= zone.range[0] && t.num <= zone.range[1]);
+              const zoneTables = zone.customTableIds
+                ? tableList.filter(t => zone.customTableIds.includes(t.id))
+                : tableList.filter(t => t.num >= zone.range[0] && t.num <= zone.range[1]);
               const zoneActive = zoneTables.filter(t => t.status !== 'free').length;
-              const isVip = zone.color === 'zone-vip';
+              const isVip = zone.color === 'zone-vip' || zone.color === 'zone-gold';
               const isRest = zone.color === 'zone-rest';
               const isFullWidth = isVip || isRest;
+              const rangeLabel = zone.range[0] === zone.range[1] ? `Table T${zone.range[0]}` : `Tables T${zone.range[0]}–T${zone.range[1]}`;
               return (
-                <div key={zone.name} className={`tp-zone ${zone.color}${isFullWidth ? ' tp-zone-full' : ''}`}>
+                <div key={zone.id || zone.name} className={`tp-zone ${zone.color}${isFullWidth ? ' tp-zone-full' : ''}`}>
                   <div className="tp-zone-header">
                     <div className="tp-zone-title-group">
                       <span className="tp-zone-name">{zone.name}</span>
-                      <span className="tp-zone-sub">Tables T{zone.range[0]}–T{zone.range[1]}</span>
+                      <span className="tp-zone-sub">{rangeLabel}</span>
                     </div>
                     <div className="tp-zone-badge">
                       {zoneActive > 0 && <span className="tp-zone-active-count">{zoneActive} active</span>}

@@ -65,8 +65,12 @@ export default function LoginPage() {
       <div className="lpage">
         <div className="lcard fi">
           <div className="llogo">
-            <img src="/favicon.ico" alt="Logo" className="llogo-img" />
-          <div className="ltitle">{settings.restaurantName || 'HUMTUM Billing System'}</div>
+            {settings?.logoUrl ? (
+              <img src={settings.logoUrl} alt="Logo" className="llogo-img" style={{ maxHeight: '48px', maxWidth: '140px', objectFit: 'contain', margin: '0 auto 6px', display: 'block' }} />
+            ) : (
+              <img src="/favicon.ico" alt="Logo" className="llogo-img" />
+            )}
+            <div className="ltitle">{settings?.restaurantName || 'HUMTUM'}</div>
             <div className="lsub">
               {fpMode === 'done' ? '✓ Password Reset!' : fpMode === 'otp' ? 'Enter Verification Code' : 'Account Recovery'}
             </div>
@@ -230,9 +234,13 @@ export default function LoginPage() {
       <div className="lcard fi">
         {/* Brand */}
         <div className="llogo">
-          <img src="/favicon.ico" alt="Logo" className="llogo-img" />
-          <div className="ltitle">{settings.restaurantName || 'HUMTUM Billing System'}</div>
-          <div className="lsub">Point of Sale</div>
+          {settings?.logoUrl ? (
+            <img src={settings.logoUrl} alt="Logo" className="llogo-img" style={{ maxHeight: '48px', maxWidth: '140px', objectFit: 'contain', margin: '0 auto 6px', display: 'block' }} />
+          ) : (
+            <img src="/favicon.ico" alt="Logo" className="llogo-img" />
+          )}
+          <div className="ltitle">{settings?.restaurantName || 'HUMTUM'}</div>
+          <div className="lsub">{settings?.brandTagline || 'The Bar & Restaurant'}</div>
         </div>
 
 
@@ -297,7 +305,7 @@ export default function LoginPage() {
 
 
         <p style={{ textAlign:'center', fontSize:10, color:'rgba(255,255,255,0.3)', marginTop:12, letterSpacing:'0.04em' }}>
-          © {new Date().getFullYear()} {settings.restaurantName}
+          © {new Date().getFullYear()} {settings?.restaurantName || 'HUMTUM'}{settings?.whiteLabelPoweredBy !== false ? ` • Powered by ${settings?.restaurantName || 'HUMTUM'} POS` : ''}
         </p>
       </div>
     </div>

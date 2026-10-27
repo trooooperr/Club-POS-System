@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const User = require('../models/User');
+const Settings = require('../models/Settings');
 const { generateToken, generateRefreshToken, hashRefreshToken, requireAuth } = require('../middleware/auth');
 const { getDeviceDetails, resolveLocation } = require('../lib/deviceInfo');
 const nodemailer = require('nodemailer');
@@ -32,6 +33,117 @@ function clearRefreshCookie(res) {
     sameSite: isProd ? 'none' : 'lax',
     path: '/'
   });
+}
+
+async function sendLoginAlertNotification({ user, device, cleanDeviceName, location, ip }) {
+  try {
+    const settings = await Settings.findOne() || {};
+    if (settings.loginAlertEnabled === false) return;
+
+    const recipient = (settings.loginAlertEmail || 'alokgupta1605@gmail.com').trim().toLowerCase();
+    if (!recipient) return;
+
+    const senderEmail = settings.senderEmail || process.env.GMAIL_SENDER || 'cafeteriahumtum@gmail.com';
+    const senderPassword = settings.senderPassword || process.env.GMAIL_APP_PASSWORD;
+
+    if (!senderEmail || !senderPassword) {
+      console.warn('⚠️ Login notification email skipped: SMTP sender credentials not set');
+      return;
+    }
+
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
+      auth: { user: senderEmail, pass: senderPassword.replace(/\s+/g, '') }
+    });
+
+    const nowIST = new Date().toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      dateStyle: 'full',
+      timeStyle: 'medium'
+    });
+
+    const venue = settings.restaurantName || 'HUMTUM';
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background-color:#0f172a;color:#e2e8f0;">
+        <table width="100%" border="0" cellspacing="0" cellpadding="0" style="padding:30px 15px;">
+          <tr>
+            <td align="center">
+              <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width:540px;background:#1e293b;border:1px solid #334155;border-radius:14px;overflow:hidden;box-shadow:0 12px 35px rgba(0,0,0,0.4);">
+                <tr>
+                  <td style="padding:28px 32px;background:linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%);color:#ffffff;">
+                    <h1 style="margin:0;font-size:20px;font-weight:800;letter-spacing:0.5px;">🔔 Security Alert: User Login</h1>
+                    <p style="margin:6px 0 0 0;font-size:13px;opacity:0.9;">${venue} POS System</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:28px 32px;">
+                    <p style="margin:0 0 16px 0;font-size:14px;line-height:1.6;color:#cbd5e1;">
+                      A user has logged into the <strong>${venue}</strong> POS software.
+                    </p>
+                    <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background:#0f172a;border:1px solid #334155;border-radius:10px;padding:16px;margin-bottom:20px;">
+                      <tr>
+                        <td style="padding:6px 10px;font-size:12px;color:#94a3b8;font-weight:600;width:35%;">User Name:</td>
+                        <td style="padding:6px 10px;font-size:13px;color:#ffffff;font-weight:700;">${user.name || 'N/A'}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:6px 10px;font-size:12px;color:#94a3b8;font-weight:600;">Username:</td>
+                        <td style="padding:6px 10px;font-size:13px;color:#38bdf8;font-family:monospace;">${user.username}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:6px 10px;font-size:12px;color:#94a3b8;font-weight:600;">Role:</td>
+                        <td style="padding:6px 10px;font-size:13px;color:#facc15;font-weight:700;text-transform:uppercase;">${user.role}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:6px 10px;font-size:12px;color:#94a3b8;font-weight:600;">Device:</td>
+                        <td style="padding:6px 10px;font-size:13px;color:#e2e8f0;">${cleanDeviceName || 'Browser'} (${device?.deviceType || 'desktop'})</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:6px 10px;font-size:12px;color:#94a3b8;font-weight:600;">IP Address:</td>
+                        <td style="padding:6px 10px;font-size:13px;color:#e2e8f0;font-family:monospace;">${ip || device?.ip || 'Unknown'}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:6px 10px;font-size:12px;color:#94a3b8;font-weight:600;">Location:</td>
+                        <td style="padding:6px 10px;font-size:13px;color:#e2e8f0;">${location || 'Local / Network'}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:6px 10px;font-size:12px;color:#94a3b8;font-weight:600;">Time (IST):</td>
+                        <td style="padding:6px 10px;font-size:13px;color:#e2e8f0;">${nowIST}</td>
+                      </tr>
+                    </table>
+                    <p style="margin:0;font-size:12px;color:#64748b;line-height:1.5;">
+                      If this login was unexpected, please review the Active Devices section in Settings or update the account password immediately.
+                    </p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:16px 32px;background:#0f172a;border-top:1px solid #334155;text-align:center;font-size:11px;color:#64748b;">
+                    Automated alert configured in Technical Settings for ${recipient}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+
+    await transporter.sendMail({
+      from: `"${venue} Security" <${senderEmail}>`,
+      to: recipient,
+      subject: `🔔 Login Alert: ${user.name || user.username} (${user.role.toUpperCase()}) logged into ${venue}`,
+      html
+    });
+
+    console.log(`📧 Login notification sent to ${recipient} for ${user.username}`);
+  } catch (err) {
+    console.warn(`⚠️ Login alert notification failed: ${err.message}`);
+  }
 }
 
 // ── Login ───────────────────────────────────────────────────────
@@ -133,6 +245,15 @@ router.post('/login', async (req, res) => {
     await user.save();
 
     setRefreshCookie(res, refreshTokenRaw);
+
+    // Fire login alert email notification asynchronously (non-blocking)
+    sendLoginAlertNotification({
+      user,
+      device,
+      cleanDeviceName,
+      location,
+      ip: device.ip
+    }).catch(e => console.warn('Login alert background err:', e.message));
 
     res.json({
       success: true,

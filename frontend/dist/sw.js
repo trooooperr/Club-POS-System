@@ -11,9 +11,18 @@ const STATIC_ASSETS = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
+    caches.open(CACHE_NAME).then(async (cache) => {
       console.log('⚡ [ServiceWorker] Pre-caching offline app shell');
-      return cache.addAll(STATIC_ASSETS);
+      await Promise.allSettled(
+        STATIC_ASSETS.map(async (url) => {
+          try {
+            const res = await fetch(url);
+            if (res && res.ok) {
+              await cache.put(url, res);
+            }
+          } catch {}
+        })
+      );
     })
   );
   self.skipWaiting();

@@ -592,7 +592,7 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
 
     // 3. Fetch all orders with items & financial fields to calculate exact Restaurant & Bar sales
     const orders = await Order.find(orderMatch).select(
-      'businessDate items foodSubtotal alcoholSubtotal subtotal sgst cgst serviceTax discount roundOff grandTotal paidAmount dueAmount paymentMode isCredit paymentMethod paymentStatus cashAmount upiAmount'
+      'businessDate billNo tableNo date createdAt items foodSubtotal alcoholSubtotal subtotal sgst cgst serviceTax serviceTaxRate discount discountPercent roundOff grandTotal paidAmount dueAmount paymentMode isCredit paymentMethod paymentStatus cashAmount upiAmount customerName'
     ).lean();
 
     const dailyMap = {};
@@ -602,12 +602,22 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
       due: 0,
       restaurantSales: 0,
       barSales: 0,
-      advancePayments: 0
+      advancePayments: 0,
+      serviceTax: 0,
+      collectedServiceTax: 0
     });
 
     let totalRestaurantSales = 0;
     let totalBarSales = 0;
     let totalGst = 0;
+    let totalServiceTax = 0;
+    let collectedServiceTax = 0;
+    let dueServiceTax = 0;
+    let serviceTaxOrdersCount = 0;
+    let zeroServiceTaxOrdersCount = 0;
+    let totalAlcoholSubtotal = 0;
+    let totalBarDiscounts = 0;
+    const serviceTaxOrderList = [];
     let cashTotal = 0, upiTotal = 0, dueTotal = 0;
 
     orders.forEach(o => {
@@ -684,6 +694,60 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
       // Track total GST collected (SGST + CGST)
       const orderGst = Number(((o.sgst || 0) + (o.cgst || 0)).toFixed(2));
       totalGst += orderGst;
+
+      // Track exact Service Tax
+      const orderST = Number((o.serviceTax || 0).toFixed(2));
+      let orderCollectedST = 0;
+      let orderDueST = 0;
+
+      if (orderST > 0) {
+        totalServiceTax += orderST;
+        serviceTaxOrdersCount += 1;
+
+        if (orderDue <= 0 || o.grandTotal <= 0) {
+          orderCollectedST = orderST;
+        } else if (actualPaid <= 0) {
+          orderDueST = orderST;
+        } else {
+          const paidRatio = Math.min(1, Math.max(0, actualPaid / o.grandTotal));
+          orderCollectedST = Number((orderST * paidRatio).toFixed(2));
+          orderDueST = Number((orderST - orderCollectedST).toFixed(2));
+        }
+        collectedServiceTax += orderCollectedST;
+        dueServiceTax += orderDueST;
+      } else if (orderAlcohol > 0) {
+        zeroServiceTaxOrdersCount += 1;
+      }
+
+      if (orderAlcohol > 0) {
+        totalAlcoholSubtotal += orderAlcohol;
+        totalBarDiscounts += (o.discount || 0);
+      }
+
+      dailyMap[bDate].serviceTax = (dailyMap[bDate].serviceTax || 0) + orderST;
+      dailyMap[bDate].collectedServiceTax = (dailyMap[bDate].collectedServiceTax || 0) + orderCollectedST;
+
+      if (orderST > 0 || orderAlcohol > 0) {
+        serviceTaxOrderList.push({
+          billNo: o.billNo || `HTB-T${o.tableNo}`,
+          tableNo: o.tableNo,
+          date: o.date || o.createdAt,
+          businessDate: bDate,
+          customerName: o.customerName || 'Walk-in Guest',
+          alcoholSubtotal: Math.round(orderAlcohol),
+          serviceTaxRate: o.serviceTaxRate || (orderAlcohol > 0 && orderST > 0 ? Number(((orderST / orderAlcohol) * 100).toFixed(1)) : 0),
+          serviceTax: orderST,
+          collectedServiceTax: orderCollectedST,
+          dueServiceTax: orderDueST,
+          discount: Math.round(o.discount || 0),
+          discountPercent: o.discountPercent || 0,
+          grandTotal: Math.round(o.grandTotal || 0),
+          paidAmount: Math.round(actualPaid),
+          dueAmount: Math.round(Math.max(0, orderDue)),
+          paymentMode: o.paymentMode || 'cash',
+          paymentStatus: (isDueOrder && orderDue > 0) ? (actualPaid > 0 ? 'partial' : 'pending') : 'paid',
+        });
+      }
 
       const orderRestaurantSales = Math.round(orderFood + orderGst);
       const orderBarSales = Math.max(0, Math.round(orderAlcohol + (o.serviceTax || 0) - (o.discount || 0)));
@@ -772,7 +836,9 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
         due: Math.round(entry.due),
         restaurantSales: Math.round(entry.restaurantSales),
         barSales: Math.round(entry.barSales),
-        advancePayments: Math.round(entry.advancePayments)
+        advancePayments: Math.round(entry.advancePayments),
+        serviceTax: Math.round(entry.serviceTax || 0),
+        collectedServiceTax: Math.round(entry.collectedServiceTax || 0)
       };
     });
 
@@ -854,6 +920,23 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
       totalSalesWithDue: Math.round(combinedGrossRevenue),    // Clear alias for total sales incl due
       totalDue: Math.round(totalDueAmount),                   // Total pending due amount
       totalGst: Math.round(totalGst),                         // Total GST collected from customers
+      totalServiceTax: Math.round(totalServiceTax),           // Exact total Service Tax billed
+      collectedServiceTax: Math.round(collectedServiceTax),   // Exact Service Tax collected in Cash/UPI
+      dueServiceTax: Math.round(dueServiceTax),               // Service Tax in pending due
+      serviceTaxOrdersCount,                                  // Orders where Service Tax was billed
+      zeroServiceTaxOrdersCount,                              // Orders with bar where Service Tax was 0/waived
+      totalAlcoholSubtotal: Math.round(totalAlcoholSubtotal), // Gross Alcohol subtotal before discount/tax
+      totalBarDiscounts: Math.round(totalBarDiscounts),       // Total discounts given on bar
+      serviceTaxAudit: {
+        totalServiceTax: Math.round(totalServiceTax),
+        collectedServiceTax: Math.round(collectedServiceTax),
+        dueServiceTax: Math.round(dueServiceTax),
+        serviceTaxOrdersCount,
+        zeroServiceTaxOrdersCount,
+        totalAlcoholSubtotal: Math.round(totalAlcoholSubtotal),
+        totalBarDiscounts: Math.round(totalBarDiscounts),
+        orders: serviceTaxOrderList.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
+      },
       restaurantSales: Math.round(totalRestaurantSales),
       barSales: Math.round(totalBarSales),
       advancePayments: Math.round(totalAdvancePayment),
@@ -877,6 +960,99 @@ router.get('/analytics', requireRole(['admin', 'manager', 'staff']), async (req,
         totalRevenue: Math.round(totalShotsRevenue),
         items: shotsBreakdown
       }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/service-tax', requireRole(['admin', 'manager', 'staff']), async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    if (!startDate || !endDate) return res.status(400).json({ message: 'startDate and endDate required' });
+
+    const orderMatch = { businessDate: { $gte: startDate, $lte: endDate }, grandTotal: { $gt: 0 } };
+    const orders = await Order.find(orderMatch).select(
+      'businessDate billNo tableNo date createdAt foodSubtotal alcoholSubtotal subtotal sgst cgst serviceTax serviceTaxRate discount discountPercent roundOff grandTotal paidAmount dueAmount paymentMode isCredit paymentMethod paymentStatus customerName'
+    ).sort({ date: -1 }).lean();
+
+    let totalServiceTax = 0;
+    let collectedServiceTax = 0;
+    let dueServiceTax = 0;
+    let serviceTaxOrdersCount = 0;
+    let zeroServiceTaxOrdersCount = 0;
+    let totalAlcoholSubtotal = 0;
+    let totalBarDiscounts = 0;
+    const auditOrders = [];
+
+    orders.forEach(o => {
+      const orderST = Number((o.serviceTax || 0).toFixed(2));
+      const orderAlc = Number((o.alcoholSubtotal || 0).toFixed(2));
+      const isDueOrder = o.paymentMode === 'due' || o.paymentMethod === 'due' || o.paymentStatus === 'pending' || o.isCredit;
+      const orderDue = o.dueAmount > 0 ? o.dueAmount : (isDueOrder ? o.grandTotal - (o.paidAmount || 0) : 0);
+      const actualPaid = o.paidAmount !== undefined ? o.paidAmount : (o.dueAmount > 0 ? Math.max(0, o.grandTotal - o.dueAmount) : o.grandTotal);
+
+      let orderCollectedST = 0;
+      let orderDueST = 0;
+
+      if (orderST > 0) {
+        totalServiceTax += orderST;
+        serviceTaxOrdersCount += 1;
+
+        if (orderDue <= 0 || o.grandTotal <= 0) {
+          orderCollectedST = orderST;
+        } else if (actualPaid <= 0) {
+          orderDueST = orderST;
+        } else {
+          const paidRatio = Math.min(1, Math.max(0, actualPaid / o.grandTotal));
+          orderCollectedST = Number((orderST * paidRatio).toFixed(2));
+          orderDueST = Number((orderST - orderCollectedST).toFixed(2));
+        }
+        collectedServiceTax += orderCollectedST;
+        dueServiceTax += orderDueST;
+      } else if (orderAlc > 0) {
+        zeroServiceTaxOrdersCount += 1;
+      }
+
+      if (orderAlc > 0) {
+        totalAlcoholSubtotal += orderAlc;
+        totalBarDiscounts += (o.discount || 0);
+      }
+
+      if (orderST > 0 || orderAlc > 0) {
+        auditOrders.push({
+          billNo: o.billNo || `HTB-T${o.tableNo}`,
+          tableNo: o.tableNo,
+          date: o.date || o.createdAt,
+          businessDate: o.businessDate,
+          customerName: o.customerName || 'Walk-in Guest',
+          alcoholSubtotal: Math.round(orderAlc),
+          serviceTaxRate: o.serviceTaxRate || (orderAlc > 0 && orderST > 0 ? Number(((orderST / orderAlc) * 100).toFixed(1)) : 0),
+          serviceTax: orderST,
+          collectedServiceTax: orderCollectedST,
+          dueServiceTax: orderDueST,
+          discount: Math.round(o.discount || 0),
+          discountPercent: o.discountPercent || 0,
+          grandTotal: Math.round(o.grandTotal || 0),
+          paidAmount: Math.round(actualPaid),
+          dueAmount: Math.round(Math.max(0, orderDue)),
+          paymentMode: o.paymentMode || 'cash',
+          paymentStatus: (isDueOrder && orderDue > 0) ? (actualPaid > 0 ? 'partial' : 'pending') : 'paid',
+        });
+      }
+    });
+
+    res.json({
+      startDate,
+      endDate,
+      totalServiceTax: Math.round(totalServiceTax),
+      collectedServiceTax: Math.round(collectedServiceTax),
+      dueServiceTax: Math.round(dueServiceTax),
+      serviceTaxOrdersCount,
+      zeroServiceTaxOrdersCount,
+      totalAlcoholSubtotal: Math.round(totalAlcoholSubtotal),
+      totalBarDiscounts: Math.round(totalBarDiscounts),
+      orders: auditOrders
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

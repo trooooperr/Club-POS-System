@@ -191,20 +191,45 @@ export default function InvoiceModal() {
           <div className="bill-paper-wrap" id="printable-bill-area">
             <div className="bill-inner">
               <div className="bill-top-center">
-                <img
-                  src={BILL_LOGO_BASE64}
-                  alt="HUMTUM"
-                  style={{
-                    maxHeight: '60px',
-                    maxWidth: '120px',
-                    width: 'auto',
-                    height: 'auto',
-                    objectFit: 'contain',
-                    display: 'block',
-                    margin: '0 auto 6px'
-                  }}
-                />
-                <div className="bill-name-heavy">{s.restaurantName}</div>
+                {(() => {
+                  const rawRestName = (s.restaurantName || 'HUMTUM').trim();
+                  let billRestName = rawRestName;
+                  let billTagline = (s.brandTagline || '').trim();
+                  if (!billTagline && /the\s+bar\s*(&|and)\s*restaurant/i.test(rawRestName)) {
+                    billRestName = rawRestName.replace(/\s*the\s+bar\s*(&|and)\s*restaurant/i, '').trim();
+                    billTagline = 'The Bar & Restaurant';
+                  } else if (!billTagline && rawRestName.toUpperCase().startsWith('HUMTUM') && rawRestName.length > 6) {
+                    billRestName = 'HUMTUM';
+                    billTagline = rawRestName.slice(6).trim();
+                  }
+                  const logoSrc = s.logoUrl || BILL_LOGO_BASE64;
+
+                  return (
+                    <>
+                      {logoSrc && (
+                        <img
+                          src={logoSrc}
+                          alt={billRestName}
+                          style={{
+                            maxHeight: '60px',
+                            maxWidth: '120px',
+                            width: 'auto',
+                            height: 'auto',
+                            objectFit: 'contain',
+                            display: 'block',
+                            margin: '0 auto 6px',
+                            filter: 'grayscale(100%) contrast(150%)',
+                            WebkitFilter: 'grayscale(100%) contrast(150%)'
+                          }}
+                        />
+                      )}
+                      <div className="bill-name-heavy">{billRestName}</div>
+                      {billTagline && (
+                        <div className="bill-tagline-heavy">{billTagline}</div>
+                      )}
+                    </>
+                  );
+                })()}
                 {s.address && <div className="bill-sub-info">{s.address}</div>}
                 {(s.phone || s.contact) && <div className="bill-sub-info">Contact: {s.phone || s.contact}</div>}
                 <div className="bill-sub-info">Email: contact@humtumbar.in</div>
@@ -499,7 +524,8 @@ export default function InvoiceModal() {
           box-shadow: 0 4px 20px rgba(0,0,0,0.25);
         }
         .bill-inner { border: 1px dashed #cbd5e1; border-radius: 6px; padding: 12px; color: #0f172a; font-family: 'Courier New', Courier, monospace; }
-        .bill-name-heavy { font-size: 18px; font-weight: 900; text-align: center; color: #000000; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
+        .bill-name-heavy { font-family: 'Courier New', Courier, monospace; font-size: 20px; font-weight: 900; text-align: center; color: #000000; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 3px; }
+        .bill-tagline-heavy { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: 900; text-align: center; color: #000000; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 1px; margin-bottom: 4px; }
         .bill-sub-info { font-size: 10px; text-align: center; color: #1e293b; font-weight: 700; text-transform: uppercase; margin-bottom: 1px; line-height: 1.3; }
         .bill-zig-zag-sep { border-top: 1px dashed #94a3b8; margin: 8px 0; }
         

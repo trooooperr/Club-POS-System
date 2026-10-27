@@ -104,20 +104,49 @@ export default function BillPreviewModal({ bill, table, tableNo, settings, onClo
         <div style={{ padding: '24px 20px', background: 'white', color: '#000' }}>
           {/* Header */}
           <div style={{ textAlign: 'center', marginBottom: 16 }}>
-            <img
-              src={BILL_LOGO_BASE64}
-              alt="HUMTUM"
-              style={{
-                maxHeight: '60px',
-                maxWidth: '120px',
-                width: 'auto',
-                height: 'auto',
-                objectFit: 'contain',
-                display: 'block',
-                margin: '0 auto 6px'
-              }}
-            />
-            <div style={{ fontSize: 18, fontWeight: 900, letterSpacing: '1px' }}>{settings.restaurantName || 'HumTum'}</div>
+            {(() => {
+              const rawRestName = (settings.restaurantName || 'HUMTUM').trim();
+              let billRestName = rawRestName;
+              let billTagline = (settings.brandTagline || '').trim();
+              if (!billTagline && /the\s+bar\s*(&|and)\s*restaurant/i.test(rawRestName)) {
+                billRestName = rawRestName.replace(/\s*the\s+bar\s*(&|and)\s*restaurant/i, '').trim();
+                billTagline = 'The Bar & Restaurant';
+              } else if (!billTagline && rawRestName.toUpperCase().startsWith('HUMTUM') && rawRestName.length > 6) {
+                billRestName = 'HUMTUM';
+                billTagline = rawRestName.slice(6).trim();
+              }
+              const logoSrc = settings.logoUrl || BILL_LOGO_BASE64;
+
+              return (
+                <>
+                  {logoSrc && (
+                    <img
+                      src={logoSrc}
+                      alt={billRestName}
+                      style={{
+                        maxHeight: '60px',
+                        maxWidth: '120px',
+                        width: 'auto',
+                        height: 'auto',
+                        objectFit: 'contain',
+                        display: 'block',
+                        margin: '0 auto 6px',
+                        filter: 'grayscale(100%) contrast(150%)',
+                        WebkitFilter: 'grayscale(100%) contrast(150%)'
+                      }}
+                    />
+                  )}
+                  <div style={{ fontFamily: "'Courier New', Courier, monospace", fontSize: 20, fontWeight: 900, letterSpacing: '1px', textTransform: 'uppercase', color: '#000', marginBottom: 3 }}>
+                    {billRestName}
+                  </div>
+                  {billTagline && (
+                    <div style={{ fontFamily: "'Courier New', Courier, monospace", fontSize: 14, fontWeight: 900, letterSpacing: '0.5px', color: '#000', marginTop: 1, marginBottom: 4, textTransform: 'uppercase' }}>
+                      {billTagline}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
             {settings.address && (
               <div style={{ fontSize: 11, color: '#1e293b', fontWeight: 600, marginTop: 4 }}>{settings.address}</div>
             )}

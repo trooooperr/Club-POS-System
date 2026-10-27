@@ -25,3 +25,6 @@ print-agent/bin/
 # DB Backup
 .backup_tmp/
 keys/google-service-account.json
+
+# Local seed scripts
+scripts/seed-*.js

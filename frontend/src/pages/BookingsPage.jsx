@@ -250,8 +250,18 @@ export default function BookingsPage() {
   };
 
   const triggerPrintReceipt = (b) => {
-    const restName = (settings.restaurantName || 'HUMTUM').trim();
-    const restAddress = settings.address || 'Rajendra Nagar, Gorakhpur';
+    const rawName = (settings.restaurantName || 'HUMTUM').trim();
+    let restName = rawName;
+    let restTagline = settings.brandTagline || '';
+    if (!restTagline && /humtum/i.test(rawName)) {
+      const match = rawName.match(/^(humtum)\s*(the\s+.*|bar\s+.*)?$/i);
+      if (match) {
+        restName = match[1].toUpperCase();
+        restTagline = (match[2] || '').trim();
+      }
+    }
+    const billLogoSrc = settings.logoUrl || BILL_LOGO_BASE64;
+    const restAddress = settings.address || '';
     const restPhone = settings.phone || settings.contact || '';
     const gstin = settings.gstin || '';
 
@@ -281,7 +291,8 @@ export default function BookingsPage() {
               font-weight: bold; 
             }
             .center { text-align: center; }
-            .brand { font-size: 19px; font-weight: 900; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 1px; }
+            .brand { font-family: 'Courier New', Courier, monospace; font-size: 20px; font-weight: 900; margin-bottom: 3px; text-transform: uppercase; letter-spacing: 1px; }
+            .tagline { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: 900; margin-top: 1px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
             .sub-info { font-size: 11px; margin-bottom: 3px; font-weight: normal; }
             .dash-line { border-top: 1px dashed #000; margin: 6px 0; }
             .thick-line { border-top: 2px solid #000; margin: 6px 0; }
@@ -300,11 +311,12 @@ export default function BookingsPage() {
         </head>
         <body>
           <div class="center">
-            <img src="${BILL_LOGO_BASE64}" alt="HUMTUM" style="max-height: 55px; max-width: 120px; width: auto; height: auto; object-fit: contain; margin: 0 auto 4px; display: block;" />
+            ${billLogoSrc ? `<img src="${billLogoSrc}" alt="${restName}" style="max-height: 55px; max-width: 120px; width: auto; height: auto; object-fit: contain; margin: 0 auto 4px; display: block; filter: grayscale(100%) contrast(150%); -webkit-filter: grayscale(100%) contrast(150%);" />` : ''}
             <div class="brand">${restName}</div>
-            <div class="sub-info">${restAddress}</div>
+            ${restTagline ? `<div class="tagline">${restTagline}</div>` : ''}
+            ${restAddress ? `<div class="sub-info">${restAddress}</div>` : ''}
             ${restPhone ? `<div class="sub-info">Contact: ${restPhone}</div>` : ''}
-            <div class="sub-info">Email: contact@humtumbar.in</div>
+            ${settings.email ? `<div class="sub-info">Email: ${settings.email}</div>` : ''}
             ${gstin ? `<div class="sub-info">GSTIN: ${gstin}</div>` : ''}
           </div>
 

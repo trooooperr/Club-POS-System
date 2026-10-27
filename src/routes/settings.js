@@ -55,10 +55,32 @@ function removeCategory(list, category) {
   return { categories };
 }
 
+const DEFAULT_TABLE_SECTIONS = [
+  { id: 'sec-1', name: 'Bottom Lounge', range: [1, 6], color: 'zone-bottom' },
+  { id: 'sec-2', name: 'Top Lounge',    range: [7, 12],  color: 'zone-top' },
+  { id: 'sec-3', name: 'Restaurant',    range: [13, 18], color: 'zone-rest' },
+  { id: 'sec-4', name: 'VIP',           range: [19, 20], color: 'zone-vip' },
+];
+
+function sanitizeTableSections(sections, totalTables = 20) {
+  if (!Array.isArray(sections) || sections.length === 0) return DEFAULT_TABLE_SECTIONS;
+  return sections.map((s, idx) => {
+    const id = s && s.id ? cleanString(s.id) : `sec-${idx + 1}`;
+    const name = cleanString(s?.name, `Section ${idx + 1}`);
+    let range = Array.isArray(s?.range) && s.range.length >= 2
+      ? [Math.max(1, parseInt(s.range[0]) || 1), Math.max(1, parseInt(s.range[1]) || 1)]
+      : [1, Math.min(20, totalTables)];
+    if (range[0] > range[1]) range = [range[1], range[0]];
+    const color = cleanString(s?.color, 'zone-bottom');
+    return { id, name, range, color };
+  });
+}
+
 function normalizeSettings(data) {
+  const total = cleanNumber(data.totalTables, 20) || 20;
   return {
     ...data.toObject(),
-    restaurantName: data.restaurantName || 'HUMTUM Billing System',
+    restaurantName: data.restaurantName || 'HUMTUM',
     address: data.address || '',
     gstin: data.gstin || '',
     phone: data.phone || '',
@@ -70,8 +92,6 @@ function normalizeSettings(data) {
     currency: data.currency || '₹',
     thankYouMsg: data.thankYouMsg || '',
     darkMode: data.darkMode !== false,
-    directPrinting: !!data.directPrinting,
-    qzTrayEnabled: !!data.qzTrayEnabled,
     printAgentEnabled: !!data.printAgentEnabled,
     printAgentPort: Number(data.printAgentPort) || 5001,
     printAgentToken: data.printAgentToken || '',
@@ -85,13 +105,27 @@ function normalizeSettings(data) {
     menuCategories: cleanCategoryList(data.menuCategories) || [],
     senderEmail: FIXED_SENDER_EMAIL,
     adminEmail: data.adminEmail || DEFAULTS.adminEmail,
+    loginAlertEmail: cleanString(data.loginAlertEmail, 'alokgupta1605@gmail.com').toLowerCase(),
+    loginAlertEnabled: data.loginAlertEnabled !== false,
     googleReviewLink: data.googleReviewLink || '',
     instagramLink: data.instagramLink || '',
     facebookLink: data.facebookLink || '',
     whatsappEnabled: !!data.whatsappEnabled,
-    whatsappTemplate: data.whatsappTemplate || 'Hello {customerName}!\n\nThank you for visiting HumTum Bar & Club. We hope you had a wonderful time! 🍹✨\n\nCould you please take a moment to share your experience with us? It helps us grow!\nGoogle Review: {googleReviewLink}\n\nFollow us to stay updated with our events and offers:\nInstagram: {instagramLink}\nFacebook: {facebookLink}\n\nHope to see you again soon!\nTeam HumTum',
+    whatsappTemplate: data.whatsappTemplate || 'Hello {customerName}!\n\nThank you for visiting HumTum The Bar & Restaurant. We hope you had a wonderful time! 🍹✨\n\nCould you please take a moment to share your experience with us? It helps us grow!\nGoogle Review: {googleReviewLink}\n\nFollow us to stay updated with our events and offers:\nInstagram: {instagramLink}\nFacebook: {facebookLink}\n\nHope to see you again soon!\nTeam HumTum',
     isDryDay: !!data.isDryDay,
     maxDiscountLimit: data.maxDiscountLimit !== undefined ? Number(data.maxDiscountLimit) : 30,
+    totalTables: total,
+    tableSections: sanitizeTableSections(data.tableSections, total),
+    webMenuBaseUrl: cleanString(data.webMenuBaseUrl, ''),
+    brandTagline: cleanString(data.brandTagline, ''),
+    logoUrl: cleanString(data.logoUrl, ''),
+    accentColor: cleanString(data.accentColor, '#F59E0B'),
+    themePreset: cleanString(data.themePreset, 'amber-gold'),
+    receiptHeader: cleanString(data.receiptHeader, ''),
+    receiptFooter: cleanString(data.receiptFooter, ''),
+    wifiSsid: cleanString(data.wifiSsid, ''),
+    wifiPassword: cleanString(data.wifiPassword, ''),
+    whiteLabelPoweredBy: data.whiteLabelPoweredBy !== false,
   };
 }
 
@@ -108,23 +142,11 @@ async function getOrCreateSettings() {
       changed = true;
     }
     if (!existing.googleReviewLink || existing.googleReviewLink === '') {
-      existing.googleReviewLink = 'https://g.page/r/CQnCGIPFlqaOEBM/review';
+      existing.googleReviewLink = '';
       changed = true;
     }
-    if (!existing.instagramLink || existing.instagramLink === '') {
-      existing.instagramLink = 'https://www.instagram.com/humtum.thebar/';
-      changed = true;
-    }
-    if (!existing.facebookLink || existing.facebookLink === '') {
-      existing.facebookLink = 'https://www.facebook.com/humtum.thebar/';
-      changed = true;
-    }
-    if (existing.whatsappEnabled !== true) {
-      existing.whatsappEnabled = true;
-      changed = true;
-    }
-    if (!existing.whatsappTemplate || existing.whatsappTemplate === '' || existing.whatsappTemplate.includes('{billNo}')) {
-      existing.whatsappTemplate = 'Hello {customerName}!\n\nThank you for visiting HumTum Bar & Club. We hope you had a wonderful time! 🍹✨\n\nCould you please take a moment to share your experience with us? It helps us grow!\nGoogle Review: {googleReviewLink}\n\nFollow us to stay updated with our events and offers:\nInstagram: {instagramLink}\nFacebook: {facebookLink}\n\nHope to see you again soon!\nTeam HumTum';
+    if (!existing.whatsappTemplate) {
+      existing.whatsappTemplate = 'Hello {customerName}!\n\nThank you for visiting {restaurantName}. We hope you had a wonderful time! 🍹✨\n\nCould you please take a moment to share your experience with us? It helps us grow!\nGoogle Review: {googleReviewLink}\n\nFollow us to stay updated with our events and offers:\nInstagram: {instagramLink}\nFacebook: {facebookLink}\n\nHope to see you again soon!\nTeam HumTum';
       changed = true;
     }
     if (changed) {
@@ -202,12 +224,7 @@ router.get('/', async (req, res) => {
 
 // UPDATE settings (Admin/Manager)
 router.put('/', requireRole(['admin', 'manager']), async (req, res) => {
-  console.log('--- Settings update request received ---');
-  console.log('User Role:', req.user?.role);
-  console.log('Incoming settings payload:', req.body);
-
   const settings = await getOrCreateSettings();
-  console.log('Existing settings in DB directPrinting:', settings.directPrinting);
 
   if (req.body.restaurantName !== undefined) settings.restaurantName = cleanString(req.body.restaurantName);
   if (req.body.address !== undefined) settings.address = cleanString(req.body.address);
@@ -227,8 +244,6 @@ router.put('/', requireRole(['admin', 'manager']), async (req, res) => {
   if (req.body.currency !== undefined) settings.currency = cleanString(req.body.currency, '₹').slice(0, 4) || '₹';
   if (req.body.thankYouMsg !== undefined) settings.thankYouMsg = cleanString(req.body.thankYouMsg);
   if (req.body.darkMode !== undefined) settings.darkMode = !!req.body.darkMode;
-  if (req.body.directPrinting !== undefined) settings.directPrinting = !!req.body.directPrinting;
-  if (req.body.qzTrayEnabled !== undefined) settings.qzTrayEnabled = !!req.body.qzTrayEnabled;
   if (req.body.printAgentEnabled !== undefined) settings.printAgentEnabled = !!req.body.printAgentEnabled;
   if (req.body.printAgentPort !== undefined) settings.printAgentPort = cleanNumber(req.body.printAgentPort, 5001);
   if (req.body.printAgentToken !== undefined) settings.printAgentToken = cleanString(req.body.printAgentToken);
@@ -240,6 +255,9 @@ router.put('/', requireRole(['admin', 'manager']), async (req, res) => {
   if (req.body.upiId !== undefined) settings.upiId = cleanString(req.body.upiId);
   if (req.body.includeUpiAmount !== undefined) settings.includeUpiAmount = !!req.body.includeUpiAmount;
   if (req.body.adminEmail !== undefined) settings.adminEmail = cleanString(req.body.adminEmail).toLowerCase();
+  if (req.body.loginAlertEmail !== undefined) settings.loginAlertEmail = cleanString(req.body.loginAlertEmail).toLowerCase();
+  if (req.body.loginAlertEnabled !== undefined) settings.loginAlertEnabled = !!req.body.loginAlertEnabled;
+  if (req.body.senderPassword !== undefined && req.body.senderPassword !== '') settings.senderPassword = cleanString(req.body.senderPassword);
   if (req.body.googleReviewLink !== undefined) settings.googleReviewLink = cleanString(req.body.googleReviewLink);
   if (req.body.instagramLink !== undefined) settings.instagramLink = cleanString(req.body.instagramLink);
   if (req.body.facebookLink !== undefined) settings.facebookLink = cleanString(req.body.facebookLink);
@@ -247,6 +265,24 @@ router.put('/', requireRole(['admin', 'manager']), async (req, res) => {
   if (req.body.whatsappTemplate !== undefined) settings.whatsappTemplate = cleanString(req.body.whatsappTemplate);
   if (req.body.isDryDay !== undefined) settings.isDryDay = !!req.body.isDryDay;
   if (req.body.maxDiscountLimit !== undefined) settings.maxDiscountLimit = cleanNumber(req.body.maxDiscountLimit, 30);
+  if (req.body.totalTables !== undefined) {
+    settings.totalTables = Math.max(1, Math.min(200, cleanNumber(req.body.totalTables, 20)));
+  }
+  if (req.body.tableSections !== undefined) {
+    settings.tableSections = sanitizeTableSections(req.body.tableSections, settings.totalTables || 20);
+  }
+  if (req.body.webMenuBaseUrl !== undefined) {
+    settings.webMenuBaseUrl = cleanString(req.body.webMenuBaseUrl, '');
+  }
+  if (req.body.brandTagline !== undefined) settings.brandTagline = cleanString(req.body.brandTagline, '');
+  if (req.body.logoUrl !== undefined) settings.logoUrl = cleanString(req.body.logoUrl, '');
+  if (req.body.accentColor !== undefined) settings.accentColor = cleanString(req.body.accentColor, '#F59E0B');
+  if (req.body.themePreset !== undefined) settings.themePreset = cleanString(req.body.themePreset, 'amber-gold');
+  if (req.body.receiptHeader !== undefined) settings.receiptHeader = cleanString(req.body.receiptHeader, '');
+  if (req.body.receiptFooter !== undefined) settings.receiptFooter = cleanString(req.body.receiptFooter, '');
+  if (req.body.wifiSsid !== undefined) settings.wifiSsid = cleanString(req.body.wifiSsid, '');
+  if (req.body.wifiPassword !== undefined) settings.wifiPassword = cleanString(req.body.wifiPassword, '');
+  if (req.body.whiteLabelPoweredBy !== undefined) settings.whiteLabelPoweredBy = !!req.body.whiteLabelPoweredBy;
 
   const inventoryCategories = cleanCategoryList(req.body.inventoryCategories);
   if (inventoryCategories !== undefined) {
@@ -260,13 +296,17 @@ router.put('/', requireRole(['admin', 'manager']), async (req, res) => {
 
   settings.senderEmail = FIXED_SENDER_EMAIL;
   
-  console.log('Saving settings directPrinting property:', settings.directPrinting);
   await settings.save();
   
   const normalized = normalizeSettings(settings);
-  console.log('Normalized settings response directPrinting:', normalized.directPrinting);
 
   await deleteCache(SETTINGS_CACHE_KEY);
+  await setCache(SETTINGS_CACHE_KEY, normalized, 300);
+
+  if (req.app?.locals?.io) {
+    req.app.locals.io.emit('SETTINGS_UPDATED', normalized);
+  }
+
   res.json(normalized);
 });
 
@@ -356,7 +396,7 @@ router.patch('/menu-category/rename', requireRole(['admin', 'manager']), async (
   }
 });
 
-// ── WHATSAPP API ENDPOINTS (Admin only) ──────────────────────────
+// ── WHATSAPP API ENDPOINTS (Admin only) ────────────────────────────────────────────────────
 router.get('/whatsapp/status', requireRole(['admin']), (req, res) => {
   try {
     const whatsappService = require('../lib/whatsappService');
@@ -383,6 +423,46 @@ router.post('/whatsapp/disconnect', requireRole(['admin']), async (req, res) => 
     res.json({ message: 'WhatsApp disconnected' });
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+});
+
+// Test Login Alert Email (Admin/Manager)
+router.post('/test-login-alert', requireRole(['admin', 'manager']), async (req, res) => {
+  try {
+    const settings = await getOrCreateSettings();
+    const recipient = cleanString(req.body.email || settings.loginAlertEmail || 'alokgupta1605@gmail.com').toLowerCase();
+    const senderEmail = settings.senderEmail || process.env.GMAIL_SENDER || 'cafeteriahumtum@gmail.com';
+    const senderPassword = settings.senderPassword || process.env.GMAIL_APP_PASSWORD;
+
+    if (!senderEmail || !senderPassword) {
+      return res.status(400).json({ error: 'Sender email or app password not configured.' });
+    }
+
+    const nodemailer = require('nodemailer');
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
+      auth: { user: senderEmail, pass: senderPassword.replace(/\s+/g, '') }
+    });
+
+    const venue = settings.restaurantName || 'HUMTUM';
+    await transporter.sendMail({
+      from: `"${venue} Security" <${senderEmail}>`,
+      to: recipient,
+      subject: `🔔 Test Login Alert from ${venue} POS`,
+      html: `
+        <div style="font-family:sans-serif;background:#0f172a;color:#e2e8f0;padding:24px;border-radius:12px;max-width:500px;margin:auto;">
+          <h2 style="color:#38bdf8;margin-top:0;">✅ Login Alert Notification Test</h2>
+          <p>This is a test notification confirming that login alerts from <strong>${venue} POS</strong> are actively routed to <strong>${recipient}</strong>.</p>
+          <p style="font-size:12px;color:#94a3b8;">Timestamp: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</p>
+        </div>
+      `
+    });
+
+    res.json({ success: true, message: `Test alert sent successfully to ${recipient}` });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Failed to send test alert email' });
   }
 });
 

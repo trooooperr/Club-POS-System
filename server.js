@@ -112,11 +112,11 @@ function scheduleBookingReminders() {
               ${adv}
               ${b.notes ? `<p><b>Notes:</b> ${b.notes}</p>` : ''}
             </div>
-            <div style="background:#f5f5f5;padding:10px 20px;font-size:12px;color:#888">HUMTUM The BAR &amp; Restaurant</div>
+            <div style="background:#f5f5f5;padding:10px 20px;font-size:12px;color:#888">${persisted?.restaurantName || 'HUMTUM'} The BAR &amp; Restaurant</div>
           </div>
         `;
         await transporter.sendMail({
-          from: `"${persisted?.restaurantName || 'HumTum POS'}" <${sender}>`,
+          from: `"${persisted?.restaurantName || 'HUMTUM'}" <${sender}>`,
           replyTo: sender,
           to: emailConfig.adminEmail,
           subject,

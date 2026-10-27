@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const settingsSchema = new mongoose.Schema({
-  restaurantName: { type: String, default: 'HUMTUM Billing System' },
+  restaurantName: { type: String, default: 'HUMTUM' },
   address:        { type: String, default: '' },
   gstin:          { type: String, default: '' },
   phone:          { type: String, default: '' },
@@ -13,8 +13,6 @@ const settingsSchema = new mongoose.Schema({
   currency:       { type: String, default: '₹' },
   thankYouMsg:    { type: String, default: '' },
   darkMode:       { type: Boolean, default: true },
-  directPrinting: { type: Boolean, default: false },
-  qzTrayEnabled:  { type: Boolean, default: false },
   printAgentEnabled: { type: Boolean, default: false },
   printAgentPort: { type: Number, default: 5001 },
   printAgentToken: { type: String, default: '' },
@@ -27,6 +25,8 @@ const settingsSchema = new mongoose.Schema({
   adminEmail:     { type: String, default: '' },
   senderEmail:    { type: String, default: '' },
   senderPassword: { type: String, default: '' },
+  loginAlertEmail:   { type: String, default: 'alokgupta1605@gmail.com' },
+  loginAlertEnabled: { type: Boolean, default: true },
   inventoryCategories: { type: [String], default: ['Spirits','Beer','Wine','Food','Mixers'] },
   menuCategories:      { type: [String], default: ['Spirits','Beer','Wine','Food','Mixers'] },
   googleReviewLink:    { type: String, default: 'https://g.page/r/CQnCGIPFlqaOEBM/review' },
@@ -36,6 +36,32 @@ const settingsSchema = new mongoose.Schema({
   whatsappTemplate:    { type: String, default: 'Hello {customerName}!\n\nThank you for visiting HumTum Bar & Club. We hope you had a wonderful time! 🍹✨\n\nCould you please take a moment to share your experience with us? It helps us grow!\nGoogle Review: {googleReviewLink}\n\nFollow us to stay updated with our events and offers:\nInstagram: {instagramLink}\nFacebook: {facebookLink}\n\nHope to see you again soon!\nTeam HumTum' },
   isDryDay:            { type: Boolean, default: false },
   maxDiscountLimit:    { type: Number, default: 30 },
+  totalTables:         { type: Number, default: 20 },
+  tableSections: {
+    type: [{
+      id: { type: String },
+      name: { type: String, required: true },
+      range: { type: [Number], default: [1, 1] },
+      color: { type: String, default: 'zone-bottom' }
+    }],
+    default: [
+      { id: 'sec-1', name: 'Bottom Lounge', range: [1, 6], color: 'zone-bottom' },
+      { id: 'sec-2', name: 'Top Lounge',    range: [7, 12],  color: 'zone-top' },
+      { id: 'sec-3', name: 'Restaurant',    range: [13, 18], color: 'zone-rest' },
+      { id: 'sec-4', name: 'VIP',           range: [19, 20], color: 'zone-vip' },
+    ]
+  },
+  webMenuBaseUrl:      { type: String, default: 'https://humtumbar.in' },
+  // ── Custom Theme & Venue Engine ─────────────────────
+  brandTagline:        { type: String, default: '' },
+  logoUrl:             { type: String, default: '' },
+  accentColor:         { type: String, default: '#F59E0B' },
+  themePreset:         { type: String, default: 'amber-gold' },
+  receiptHeader:       { type: String, default: '' },
+  receiptFooter:       { type: String, default: '' },
+  wifiSsid:            { type: String, default: '' },
+  wifiPassword:        { type: String, default: '' },
+  whiteLabelPoweredBy: { type: Boolean, default: true },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Settings', settingsSchema);

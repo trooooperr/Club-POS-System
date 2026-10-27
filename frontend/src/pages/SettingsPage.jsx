@@ -1,28 +1,88 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useApp } from '../context/AppContext';
-import { Save, Check, Send, KeyRound, ShieldAlert, Users, Trash2, RefreshCw, GripVertical, Download, Laptop, Smartphone, Tablet, Monitor, MapPin, Clock, LogOut, ShieldCheck, Database, UploadCloud, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useApp, applyThemeAccent } from '../context/AppContext';
+import { Save, Check, Send, KeyRound, ShieldAlert, Users, Trash2, RefreshCw, GripVertical, Download, Laptop, Smartphone, Tablet, Monitor, MapPin, Clock, LogOut, ShieldCheck, Database, UploadCloud, ExternalLink, ChevronDown, ChevronUp, QrCode, Copy, Plus, Edit2, LayoutGrid, Layers, Printer, Sliders, Hash, Palette, Sparkles, Image as ImageIcon, Wifi, Globe, Bell } from 'lucide-react';
+import QRCode from 'qrcode';
 import { apiUrl, authFetch } from '../lib/api';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
+
+const THEME_PRESETS = [
+  { id: 'amber-gold', label: 'Amber Gold', hex: '#F59E0B', desc: 'Warm Amber' },
+  { id: 'cyber-emerald', label: 'Cyber Emerald', hex: '#10B981', desc: 'Lounge / Garden' },
+  { id: 'electric-violet', label: 'Electric Violet', hex: '#8B5CF6', desc: 'Violet / Lounge' },
+  { id: 'crimson-ruby', label: 'Crimson Ruby', hex: '#EF4444', desc: 'Speakeasy / Cocktails' },
+  { id: 'ocean-cyan', label: 'Ocean Cyan', hex: '#06B6D4', desc: 'Rooftop / Poolside' },
+  { id: 'neon-rose', label: 'Neon Rose', hex: '#F43F5E', desc: 'VIP / Chic Lounge' },
+];
+
+
 export default function SettingsPage() {
   const { settings, setSettings, saveSettings, currentUser, orderHistory, workers, loadData, agentConnected, agentPrinters, fetchAgentPrinters, socket, logout } = useApp();
   const [form, setForm] = useState({ ...settings, billingPrinterName: settings.billingPrinterName || '' });
   const [saved, setSaved] = useState(false);
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const isDirtyRef = useRef(false);
+  const set = (k, v) => {
+    isDirtyRef.current = true;
+    setForm(f => ({ ...f, [k]: v }));
+  };
 
   const [showTechnicalSettings, setShowTechnicalSettings] = useState(false);
 
-  const [isCashierPos, setIsCashierPos] = useState(localStorage.getItem('is_cashier_pos') !== 'false');
 
-  const handleToggleCashier = (checked) => {
-    setIsCashierPos(checked);
-    localStorage.setItem('is_cashier_pos', checked ? 'true' : 'false');
-    showToast(checked ? 'Device configured as Cashier POS' : 'Device configured as Mobile/Order POS', 'info');
+  const handleLogoUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      showToast('Image too large. Please select an image under 2MB', 'error');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (uploadEvent) => {
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxDim = 256;
+        let w = img.width;
+        let h = img.height;
+        if (w > h && w > maxDim) {
+          h = Math.round((h * maxDim) / w);
+          w = maxDim;
+        } else if (h > maxDim) {
+          w = Math.round((w * maxDim) / h);
+          h = maxDim;
+        }
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/png');
+        set('logoUrl', dataUrl);
+        showToast('Logo uploaded & applied!', 'success');
+      };
+      img.src = uploadEvent.target.result;
+    };
+    reader.readAsDataURL(file);
   };
 
-  const [email, setEmail] = useState({ adminEmail: settings.adminEmail || '' });
+  const handleSelectThemePreset = (preset) => {
+    set('themePreset', preset.id);
+    set('accentColor', preset.hex);
+    applyThemeAccent(preset.hex);
+    showToast(`Switched theme to ${preset.label}`, 'info');
+  };
+
+  const handleCustomColorChange = (hex) => {
+    set('accentColor', hex);
+    set('themePreset', 'custom');
+    applyThemeAccent(hex);
+  };
+
+  const [email, setEmail] = useState({
+    adminEmail: settings.adminEmail || '',
+    loginAlertEmail: settings.loginAlertEmail || 'alokgupta1605@gmail.com',
+    loginAlertEnabled: settings.loginAlertEnabled !== false
+  });
+  const [testingLoginAlert, setTestingLoginAlert] = useState(false);
   const setE = (k, v) => setEmail(prev => ({ ...prev, [k]: v }));
-  const [sending, setSending] = useState(false);
-  const [sendResult, setSendResult] = useState(null);
   const { showToast } = useApp();
   const [fetchingPrinters, setFetchingPrinters] = useState(false);
   const [testingPrinter, setTestingPrinter] = useState(null);
@@ -33,9 +93,6 @@ export default function SettingsPage() {
   const [editCatVal, setEditCatVal] = useState('');
   // Ref to detect double‑tap on touch devices
   const lastTapRef = useRef(0);
-
-  const [whatsappStatus, setWhatsappStatus] = useState({ status: 'DISCONNECTED', qr: null, user: null });
-  const [loadingWhatsapp, setLoadingWhatsapp] = useState(false);
 
   // ── Active Sessions / Devices ──────────────────────────────────
   const [sessions, setSessions] = useState([]);
@@ -435,7 +492,11 @@ export default function SettingsPage() {
   useEffect(() => {
     if (settings) {
       setForm({ ...settings });
-      setEmail({ adminEmail: settings.adminEmail || '' });
+      setEmail({
+        adminEmail: settings.adminEmail || '',
+        loginAlertEmail: settings.loginAlertEmail || 'alokgupta1605@gmail.com',
+        loginAlertEnabled: settings.loginAlertEnabled !== false
+      });
     }
   }, [settings]);
 
@@ -562,8 +623,14 @@ export default function SettingsPage() {
   const [menuCatError, setMenuCatError] = useState('');
 
   useEffect(() => {
-    setForm({ ...settings });
-    setEmail({ adminEmail: settings.adminEmail || '' });
+    if (!isDirtyRef.current) {
+      setForm({ ...settings });
+      setEmail({
+        adminEmail: settings.adminEmail || '',
+        loginAlertEmail: settings.loginAlertEmail || 'alokgupta1605@gmail.com',
+        loginAlertEnabled: settings.loginAlertEnabled !== false
+      });
+    }
   }, [settings]);
 
   const handleShiftMenuCategory = (index, direction) => {
@@ -633,16 +700,374 @@ export default function SettingsPage() {
 
 
 
+  // ── Table Themes & Canvas Generator ──────────────────────────
+  const SECTION_THEMES = [
+    { id: 'zone-bottom', label: 'Sky Blue', hex: '#0ea5e9' },
+    { id: 'zone-top',    label: 'Amber Gold', hex: '#f59e0b' },
+    { id: 'zone-rest',   label: 'Emerald', hex: '#10b981' },
+    { id: 'zone-vip',    label: 'Gold VIP', hex: '#eab308' },
+    { id: 'zone-purple', label: 'Purple Lounge', hex: '#a855f7' },
+    { id: 'zone-rose',   label: 'Rose Red', hex: '#f43f5e' },
+    { id: 'zone-cyan',   label: 'Electric Cyan', hex: '#06b6d4' },
+  ];
+
+  const generateTableQrCardCanvas = async ({ tableNo, qrDataUrl }) => {
+    // Minimal download: white card with TABLE X title + QR code only
+    const padding = 32;
+    const qrSize = 400;
+    const titleH = 60;
+    const width = qrSize + padding * 2;
+    const height = titleH + qrSize + padding * 2;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+
+    // White background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+
+    // Table number title
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#111827';
+    ctx.font = 'bold 34px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    ctx.fillText(`TABLE ${tableNo}`, width / 2, padding + 38);
+
+    // Draw QR image
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = reject;
+      img.src = qrDataUrl;
+    });
+    ctx.drawImage(img, padding, padding + titleH, qrSize, qrSize);
+
+    return canvas;
+  };
+
+  // ── Table & Section State ─────────────────────────────────────
+  const currentTotalTables = Math.max(1, Math.min(200, parseInt(form.totalTables) || 20));
+  const currentSections = useMemo(() => {
+    return Array.isArray(form.tableSections) && form.tableSections.length > 0
+      ? form.tableSections
+      : [
+          { id: 'sec-1', name: 'Bottom Lounge', range: [1, 6], color: 'zone-bottom' },
+          { id: 'sec-2', name: 'Top Lounge',    range: [7, 12],  color: 'zone-top' },
+          { id: 'sec-3', name: 'Restaurant',    range: [13, 18], color: 'zone-rest' },
+          { id: 'sec-4', name: 'VIP',           range: [19, 20], color: 'zone-vip' },
+        ];
+  }, [form.tableSections]);
+
+  const [editingSecId, setEditingSecId] = useState(null);
+  const [secForm, setSecForm] = useState({ name: '', start: 1, end: 1, color: 'zone-bottom' });
+  const [showAddSec, setShowAddSec] = useState(false);
+  const [newSec, setNewSec] = useState({ name: '', start: 1, end: 1, color: 'zone-bottom' });
+  const [secError, setSecError] = useState('');
+  const [savingTableConfig, setSavingTableConfig] = useState(false);
+
+  // ── QR Code Hub State ─────────────────────────────────────────
+  const [qrFilterSec, setQrFilterSec] = useState('All');
+  const [qrSearch, setQrSearch] = useState('');
+  const [copiedTable, setCopiedTable] = useState(null);
+  const [qrCodeUrls, setQrCodeUrls] = useState({});
+  const [generatingQrs, setGeneratingQrs] = useState(false);
+  const [activeQrTable, setActiveQrTable] = useState(null);
+  const [selectedQrTable, setSelectedQrTable] = useState(1);
+  const [showAllTablesGrid, setShowAllTablesGrid] = useState(false);
+  const [previewQrModal, setPreviewQrModal] = useState(null);
+  const [downloadingQrTable, setDownloadingQrTable] = useState(null);
+  const [showPrintSheet, setShowPrintSheet] = useState(false);
+
+  const webBaseUrl = (form.webMenuBaseUrl || 'https://humtumbar.in').replace(/\/+$/, '');
+
+  // Generate QR code for a single table on-demand and cache it
+  const ensureQrCode = useCallback(async (tableNum) => {
+    if (!tableNum) return null;
+    if (qrCodeUrls[tableNum]) return qrCodeUrls[tableNum];
+    try {
+      const targetUrl = `${webBaseUrl}/menu?table=${tableNum}`;
+      const qrData = await QRCode.toDataURL(targetUrl, {
+        width: 260,
+        margin: 2,
+        errorCorrectionLevel: 'H',
+        color: { dark: '#000000', light: '#ffffff' }
+      });
+      setQrCodeUrls(prev => ({ ...prev, [tableNum]: qrData }));
+      return qrData;
+    } catch (err) {
+      console.error('Error generating QR for table', tableNum, err);
+      return null;
+    }
+  }, [qrCodeUrls, webBaseUrl]);
+
+  // Preload QR for the actively selected table
+  useEffect(() => {
+    if (selectedQrTable) {
+      ensureQrCode(selectedQrTable);
+    }
+  }, [selectedQrTable, ensureQrCode]);
+
+  // Keep selected table clamped within available range
+  useEffect(() => {
+    if (currentTotalTables > 0 && selectedQrTable > currentTotalTables) {
+      setSelectedQrTable(Math.max(1, currentTotalTables));
+    }
+  }, [currentTotalTables, selectedQrTable]);
+
+  // Toggle showing QR code for a specific table
+  const handleToggleTableQr = async (tableNum) => {
+    if (activeQrTable === tableNum) {
+      setActiveQrTable(null);
+      return;
+    }
+    setActiveQrTable(tableNum);
+    await ensureQrCode(tableNum);
+  };
+
+  const getSectionForTable = useCallback((num) => {
+    const found = currentSections.find(s => num >= s.range[0] && num <= s.range[1]);
+    return found ? found.name : 'General';
+  }, [currentSections]);
+
+  // Open the dedicated stand card mockup modal
+  const handleOpenQrModal = async (tableNum) => {
+    const secName = getSectionForTable(tableNum);
+    const targetUrl = `${webBaseUrl}/menu?table=${tableNum}`;
+    const qrData = await ensureQrCode(tableNum);
+    setPreviewQrModal({
+      tableNo: tableNum,
+      sectionName: secName,
+      qrDataUrl: qrData,
+      targetUrl
+    });
+  };
+
+  // Only batch-generate when user explicitly opens the Print Sheet modal
+  useEffect(() => {
+    if (!showPrintSheet) return;
+    let isSubscribed = true;
+    const generateAllForPrint = async () => {
+      setGeneratingQrs(true);
+      try {
+        for (let i = 1; i <= currentTotalTables; i++) {
+          if (!isSubscribed) break;
+          if (!qrCodeUrls[i]) {
+            const targetUrl = `${webBaseUrl}/menu?table=${i}`;
+            const qrData = await QRCode.toDataURL(targetUrl, {
+              width: 260,
+              margin: 2,
+              errorCorrectionLevel: 'H',
+              color: { dark: '#000000', light: '#ffffff' }
+            });
+            if (isSubscribed) {
+              setQrCodeUrls(prev => ({ ...prev, [i]: qrData }));
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error generating print sheet QR codes:', err);
+      } finally {
+        if (isSubscribed) setGeneratingQrs(false);
+      }
+    };
+    generateAllForPrint();
+    return () => { isSubscribed = false; };
+  }, [showPrintSheet, currentTotalTables, webBaseUrl, qrCodeUrls]);
+
+  const handleSetTotalTables = (num) => {
+    const val = Math.max(1, Math.min(200, parseInt(num) || 1));
+    setForm(prev => ({ ...prev, totalTables: val }));
+  };
+
+  const handleStartEditSection = (s) => {
+    setEditingSecId(s.id);
+    setSecForm({
+      name: s.name,
+      start: s.range[0],
+      end: s.range[1],
+      color: s.color || 'zone-bottom'
+    });
+    setSecError('');
+  };
+
+  const handleSaveEditedSection = () => {
+    setSecError('');
+    if (!secForm.name.trim()) return setSecError('Section name is required');
+    const start = Math.max(1, Math.min(currentTotalTables, parseInt(secForm.start) || 1));
+    const end = Math.max(start, Math.min(currentTotalTables, parseInt(secForm.end) || start));
+
+    const updated = currentSections.map(s => {
+      if (s.id === editingSecId) {
+        return {
+          ...s,
+          name: secForm.name.trim(),
+          range: [start, end],
+          color: secForm.color || s.color
+        };
+      }
+      return s;
+    });
+
+    setForm(prev => ({ ...prev, tableSections: updated }));
+    setEditingSecId(null);
+    showToast(`Updated section "${secForm.name}"`, 'success');
+  };
+
+  const handleAddSection = () => {
+    setSecError('');
+    const name = newSec.name.trim();
+    if (!name) return setSecError('Section name is required');
+    const start = Math.max(1, Math.min(currentTotalTables, parseInt(newSec.start) || 1));
+    const end = Math.max(start, Math.min(currentTotalTables, parseInt(newSec.end) || start));
+
+    const newSectionItem = {
+      id: `sec-${Date.now()}`,
+      name,
+      range: [start, end],
+      color: newSec.color || 'zone-bottom'
+    };
+
+    const updated = [...currentSections, newSectionItem];
+    setForm(prev => ({ ...prev, tableSections: updated }));
+    setShowAddSec(false);
+    setNewSec({ name: '', start: Math.min(currentTotalTables, end + 1), end: Math.min(currentTotalTables, end + 5), color: 'zone-bottom' });
+    showToast(`Added section "${name}" (Tables ${start}–${end})`, 'success');
+  };
+
+  const handleDeleteSection = (secId) => {
+    const sec = currentSections.find(s => s.id === secId);
+    if (!window.confirm(`Are you sure you want to delete section "${sec?.name || 'this section'}"?\n\nTables in this range will automatically be accessible in Additional Tables on the floor plan.`)) {
+      return;
+    }
+    const updated = currentSections.filter(s => s.id !== secId);
+    setForm(prev => ({ ...prev, tableSections: updated }));
+    showToast(`Deleted section "${sec?.name || ''}"`, 'info');
+  };
+
+  const handleAutoDistributeSections = () => {
+    if (!currentSections.length) return;
+    const count = currentSections.length;
+    const perSec = Math.floor(currentTotalTables / count);
+    let remainder = currentTotalTables % count;
+
+    let currentStart = 1;
+    const updated = currentSections.map((s) => {
+      const extra = remainder > 0 ? 1 : 0;
+      if (remainder > 0) remainder--;
+      const span = Math.max(1, perSec + extra);
+      const start = currentStart;
+      const end = Math.min(currentTotalTables, start + span - 1);
+      currentStart = end + 1;
+      return { ...s, range: [start, end] };
+    });
+
+    setForm(prev => ({ ...prev, tableSections: updated }));
+    showToast(`Auto-distributed ${currentTotalTables} tables across ${count} sections`, 'success');
+  };
+
+  const handleInstantSaveTableConfig = async () => {
+    setSavingTableConfig(true);
+    try {
+      await saveSettings({
+        ...form,
+        totalTables: currentTotalTables,
+        tableSections: currentSections,
+        webMenuBaseUrl: form.webMenuBaseUrl || 'https://humtumbar.in'
+      });
+      showToast('Table & Section setup saved successfully!', 'success');
+    } catch (err) {
+      showToast('Failed to save table setup: ' + err.message, 'error');
+    } finally {
+      setSavingTableConfig(false);
+    }
+  };
+
+  const handleCopyTableLink = async (tableNum) => {
+    const url = `${webBaseUrl}/menu?table=${tableNum}`;
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        const input = document.createElement('input');
+        input.value = url;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+      }
+      setCopiedTable(tableNum);
+      setTimeout(() => setCopiedTable(null), 2000);
+      showToast(`Copied QR order link for Table ${tableNum}`, 'success');
+    } catch (e) {
+      showToast('Failed to copy link', 'error');
+    }
+  };
+
+  const handleDownloadTableQr = async (tableNum) => {
+    setDownloadingQrTable(tableNum);
+    try {
+      let qrData = qrCodeUrls[tableNum];
+      if (!qrData) {
+        const targetUrl = `${webBaseUrl}/menu?table=${tableNum}`;
+        qrData = await QRCode.toDataURL(targetUrl, {
+          width: 400,
+          margin: 2,
+          errorCorrectionLevel: 'H',
+          color: { dark: '#000000', light: '#ffffff' }
+        });
+        setQrCodeUrls(prev => ({ ...prev, [tableNum]: qrData }));
+      }
+      const canvas = await generateTableQrCardCanvas({ tableNo: tableNum, qrDataUrl: qrData });
+      const link = document.createElement('a');
+      link.download = `Table-${tableNum}-QR.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      showToast(`Downloaded QR for Table ${tableNum}`, 'success');
+    } catch (err) {
+      console.error('Download QR error:', err);
+      showToast('Failed to download QR code', 'error');
+    } finally {
+      setDownloadingQrTable(null);
+    }
+  };
+
   const handleSaveEmail = async () => {
-    if (savingEmail) return;
     setSavingEmail(true);
     try {
-      await saveSettings({ ...form, adminEmail: email.adminEmail });
-      showToast('Email settings saved successfully');
+      await saveSettings({
+        ...form,
+        adminEmail: email.adminEmail,
+        loginAlertEmail: email.loginAlertEmail,
+        loginAlertEnabled: email.loginAlertEnabled
+      });
+      showToast('Email & Login Alert settings saved successfully');
     } catch (e) {
       showToast('Error saving email: ' + e.message, 'error');
     } finally {
       setSavingEmail(false);
+    }
+  };
+
+  const handleTestLoginAlert = async () => {
+    setTestingLoginAlert(true);
+    try {
+      const res = await authFetch(apiUrl('/api/settings/test-login-alert'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.loginAlertEmail || 'alokgupta1605@gmail.com' })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast(data.message || 'Test alert email sent successfully!');
+      } else {
+        showToast(data.error || 'Failed to send test email', 'error');
+      }
+    } catch (err) {
+      showToast('Error: ' + err.message, 'error');
+    } finally {
+      setTestingLoginAlert(false);
     }
   };
 
@@ -678,7 +1103,11 @@ export default function SettingsPage() {
     try {
       setSaved('saving');
       const data = { ...form, ...email };
-      await saveSettings(data);
+      const savedResult = await saveSettings(data);
+      isDirtyRef.current = false;
+      if (savedResult) {
+        setForm({ ...savedResult });
+      }
       setSaved(true);
       showToast('Settings saved successfully');
       setTimeout(() => setSaved(false), 3000);
@@ -688,7 +1117,6 @@ export default function SettingsPage() {
     }
   };
 
-  const c = form.currency;
 
   return (
     <div className="fi settings-page">
@@ -703,33 +1131,104 @@ export default function SettingsPage() {
         <section className="settings-card">
           <div className="settings-card-head">
             <div>
-              <h2>Business Info</h2>
-              <p>Printed invoice and restaurant identity details.</p>
+              <h2>Business & Branding</h2>
+              <p>Printed invoice, venue identity, and white-label theme.</p>
             </div>
           </div>
           <div className="settings-fields">
+
             <div className="settings-field settings-wide">
-              <label>Restaurant Name</label>
-              <input value={form.restaurantName || ''} onChange={e => set('restaurantName', e.target.value)} placeholder="HUMTUM Billing System" />
+              <label>Restaurant / Venue Name</label>
+              <input
+                value={form.restaurantName || ''}
+                onChange={e => set('restaurantName', e.target.value)}
+                placeholder="HUMTUM"
+              />
             </div>
+
+            <div className="settings-field settings-wide">
+              <label>Tagline / Subtitle (Optional - shown on bill & sidebar)</label>
+              <input
+                value={form.brandTagline || ''}
+                onChange={e => set('brandTagline', e.target.value)}
+                placeholder="The Bar & Restaurant"
+              />
+            </div>
+
+
             <div className="settings-field settings-wide">
               <label>Address</label>
-              <input value={form.address || ''} onChange={e => set('address', e.target.value)} placeholder="Restaurant address" />
+              <input
+                value={form.address || ''}
+                onChange={e => set('address', e.target.value)}
+                placeholder="Restaurant address"
+              />
             </div>
+
             <div className="settings-field">
               <label>GSTIN</label>
-              <input value={form.gstin || ''} onChange={e => set('gstin', e.target.value)} placeholder="GST number" />
+              <input
+                value={form.gstin || ''}
+                onChange={e => set('gstin', e.target.value)}
+                placeholder="GST number"
+              />
             </div>
+
             <div className="settings-field">
               <label>Phone</label>
-              <input value={form.phone || ''} onChange={e => set('phone', e.target.value)} placeholder="Phone number" />
+              <input
+                value={form.phone || ''}
+                onChange={e => set('phone', e.target.value)}
+                placeholder="Phone number"
+              />
             </div>
-            {/* 
-            <div className="settings-field settings-wide">
-              <label>Google Review Link</label>
-              <input value={form.googleReviewLink || ''} onChange={e => set('googleReviewLink', e.target.value)} placeholder="https://g.page/r/.../review" />
+
+            {/* Clean Theme Accent Color */}
+            <div className="settings-field">
+              <label>Accent Theme Color</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input
+                  type="color"
+                  value={form.accentColor || '#F59E0B'}
+                  onChange={e => handleCustomColorChange(e.target.value)}
+                  style={{ width: '36px', height: '36px', padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: '6px' }}
+                />
+                <input
+                  type="text"
+                  value={form.accentColor || '#F59E0B'}
+                  onChange={e => handleCustomColorChange(e.target.value)}
+                  style={{ flex: 1, fontFamily: 'monospace' }}
+                  placeholder="#F59E0B"
+                />
+              </div>
             </div>
-            */}
+
+            {/* Clean Logo Upload */}
+            <div className="settings-field">
+              <label>Venue Logo</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <label className="btn btn-secondary" style={{ cursor: 'pointer', margin: 0, padding: '8px 12px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <UploadCloud size={14} />
+                  {form.logoUrl ? 'Change' : 'Upload'}
+                  <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleLogoUpload} />
+                </label>
+                {form.logoUrl && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ padding: '8px 10px', color: 'var(--red)' }}
+                    onClick={() => set('logoUrl', '')}
+                    title="Remove Logo"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
+                {form.logoUrl && (
+                  <img src={form.logoUrl} alt="Logo" style={{ width: '32px', height: '32px', objectFit: 'contain', borderRadius: '6px', border: '1px solid var(--border)' }} />
+                )}
+              </div>
+            </div>
+
           </div>
         </section>
 
@@ -909,6 +1408,630 @@ export default function SettingsPage() {
             ))}
             {invCategories.length === 0 && <div className="settings-empty">No inventory categories yet.</div>}
           </div>
+        </section>
+
+        {/* ── Table & Section Management ───────────────────────────── */}
+        <section className="settings-card settings-full">
+          <div className="settings-card-head">
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <LayoutGrid size={20} style={{ color: 'var(--a)' }} />
+                <h2>Dining Tables & Section Management</h2>
+              </div>
+              <p>Configure total tables in your venue, create or remove dining sections, and assign table ranges.</p>
+            </div>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={handleInstantSaveTableConfig}
+              disabled={savingTableConfig}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+            >
+              {savingTableConfig ? <RefreshCw size={14} className="spin" /> : <Save size={14} />}
+              <span>{savingTableConfig ? 'Saving...' : 'Save Table Setup'}</span>
+            </button>
+          </div>
+
+          {/* Table Count Banner & Stepper */}
+          <div className="table-mgmt-banner">
+            <div>
+              <div style={{ fontSize: '11px', fontWeight: '600', color: 'var(--t2)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Total Tables
+              </div>
+              <div style={{ fontSize: '20px', fontWeight: '900', color: 'var(--t0)', marginTop: '1px' }}>
+                {currentTotalTables} <span style={{ fontSize: '13px', fontWeight: '500', color: 'var(--t2)' }}>Tables (T1–T{currentTotalTables})</span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <div className="table-stepper-group">
+                <button
+                  type="button"
+                  className="table-stepper-btn"
+                  onClick={() => handleSetTotalTables(currentTotalTables - 5)}
+                  disabled={currentTotalTables <= 5}
+                  title="Decrease 5 Tables"
+                >
+                  -5
+                </button>
+                <button
+                  type="button"
+                  className="table-stepper-btn"
+                  onClick={() => handleSetTotalTables(currentTotalTables - 1)}
+                  disabled={currentTotalTables <= 1}
+                  title="Decrease 1 Table"
+                >
+                  -1
+                </button>
+                <input
+                  type="number"
+                  min="1"
+                  max="200"
+                  className="table-stepper-input"
+                  value={currentTotalTables}
+                  onChange={e => handleSetTotalTables(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="table-stepper-btn"
+                  onClick={() => handleSetTotalTables(currentTotalTables + 1)}
+                  disabled={currentTotalTables >= 200}
+                  title="Increase 1 Table"
+                >
+                  +1
+                </button>
+                <button
+                  type="button"
+                  className="table-stepper-btn"
+                  onClick={() => handleSetTotalTables(currentTotalTables + 5)}
+                  disabled={currentTotalTables >= 195}
+                  title="Increase 5 Tables"
+                >
+                  +5
+                </button>
+              </div>
+
+              {/* Quick Presets */}
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                {[20, 25, 30, 40, 50].map(cnt => (
+                  <button
+                    key={cnt}
+                    type="button"
+                    onClick={() => handleSetTotalTables(cnt)}
+                    style={{
+                      padding: '4px 8px',
+                      fontSize: '11.5px',
+                      borderRadius: '6px',
+                      border: '1px solid var(--b1)',
+                      background: currentTotalTables === cnt ? 'var(--a)' : 'var(--s2)',
+                      color: currentTotalTables === cnt ? '#000' : 'var(--t1)',
+                      fontWeight: currentTotalTables === cnt ? '700' : '500',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {cnt} Tables
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Section Management Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px', marginBottom: '6px', flexWrap: 'wrap', gap: '8px' }}>
+            <div>
+              <h3 style={{ fontSize: '13px', fontWeight: '700', margin: 0, color: 'var(--t0)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Layers size={14} style={{ color: 'var(--a)' }} />
+                <span>Sections & Zones ({currentSections.length})</span>
+              </h3>
+              <p style={{ margin: '1px 0 0 0', fontSize: '11px', color: 'var(--t2)' }}>
+                Divide tables into areas (e.g. Lounge, Rooftop, Bar, VIP).
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  setShowAddSec(true);
+                  const lastSec = currentSections[currentSections.length - 1];
+                  const nextStart = lastSec ? Math.min(currentTotalTables, lastSec.range[1] + 1) : 1;
+                  const nextEnd = Math.min(currentTotalTables, nextStart + 4);
+                  setNewSec({ name: '', start: nextStart, end: nextEnd, color: 'zone-bottom' });
+                }}
+                style={{ fontSize: '11px', padding: '4px 9px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+              >
+                <Plus size={12} /> Add Section
+              </button>
+            </div>
+          </div>
+
+          {secError && <div className="settings-error" style={{ marginBottom: '10px' }}>{secError}</div>}
+
+          {/* Add Section Box */}
+          {showAddSec && (
+            <div style={{ background: 'var(--s2)', border: '1px solid var(--a)', borderRadius: '10px', padding: '16px', marginBottom: '16px' }}>
+              <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '12px', color: 'var(--a)' }}>
+                Add New Dining Section
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+                <div className="settings-field">
+                  <label>Section Name</label>
+                  <input
+                    value={newSec.name}
+                    onChange={e => setNewSec(s => ({ ...s, name: e.target.value }))}
+                    placeholder="e.g. Rooftop Lounge, VIP Deck"
+                  />
+                </div>
+                <div className="settings-field">
+                  <label>Start Table #</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max={currentTotalTables}
+                    value={newSec.start}
+                    onChange={e => setNewSec(s => ({ ...s, start: parseInt(e.target.value) || 1 }))}
+                  />
+                </div>
+                <div className="settings-field">
+                  <label>End Table #</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max={currentTotalTables}
+                    value={newSec.end}
+                    onChange={e => setNewSec(s => ({ ...s, end: parseInt(e.target.value) || 1 }))}
+                  />
+                </div>
+                <div className="settings-field">
+                  <label>Theme Color</label>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', height: '38px', flexWrap: 'wrap' }}>
+                    {SECTION_THEMES.map(th => (
+                      <button
+                        key={th.id}
+                        type="button"
+                        onClick={() => setNewSec(s => ({ ...s, color: th.id }))}
+                        title={th.label}
+                        style={{
+                          width: '24px',
+                          height: '24px',
+                          borderRadius: '50%',
+                          background: th.hex,
+                          border: newSec.color === th.id ? '2px solid #fff' : '2px solid transparent',
+                          transform: newSec.color === th.id ? 'scale(1.2)' : 'scale(1)',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease'
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '12px' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowAddSec(false)}>Cancel</button>
+                <button type="button" className="btn btn-primary" onClick={handleAddSection}>Create Section</button>
+              </div>
+            </div>
+          )}
+
+          {/* Section Items Grid */}
+          <div className="section-editor-grid">
+            {currentSections.map(sec => {
+              const isEditing = editingSecId === sec.id;
+              const theme = SECTION_THEMES.find(t => t.id === sec.color) || SECTION_THEMES[0];
+              const tableCount = Math.max(0, sec.range[1] - sec.range[0] + 1);
+
+              if (isEditing) {
+                return (
+                  <div key={sec.id} className="section-item-box" style={{ borderColor: 'var(--a)' }}>
+                    <div style={{ fontWeight: '700', fontSize: '13px', color: 'var(--a)' }}>Editing Section</div>
+                    <div className="settings-field">
+                      <label>Section Name</label>
+                      <input
+                        value={secForm.name}
+                        onChange={e => setSecForm(f => ({ ...f, name: e.target.value }))}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <div className="settings-field" style={{ flex: 1 }}>
+                        <label>Start Table</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max={currentTotalTables}
+                          value={secForm.start}
+                          onChange={e => setSecForm(f => ({ ...f, start: parseInt(e.target.value) || 1 }))}
+                        />
+                      </div>
+                      <div className="settings-field" style={{ flex: 1 }}>
+                        <label>End Table</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max={currentTotalTables}
+                          value={secForm.end}
+                          onChange={e => setSecForm(f => ({ ...f, end: parseInt(e.target.value) || 1 }))}
+                        />
+                      </div>
+                    </div>
+                    <div className="settings-field">
+                      <label>Color Theme</label>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        {SECTION_THEMES.map(th => (
+                          <button
+                            key={th.id}
+                            type="button"
+                            onClick={() => setSecForm(f => ({ ...f, color: th.id }))}
+                            title={th.label}
+                            style={{
+                              width: '22px',
+                              height: '22px',
+                              borderRadius: '50%',
+                              background: th.hex,
+                              border: secForm.color === th.id ? '2px solid #fff' : '2px solid transparent',
+                              transform: secForm.color === th.id ? 'scale(1.2)' : 'scale(1)',
+                              cursor: 'pointer'
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', marginTop: '6px' }}>
+                      <button type="button" className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => setEditingSecId(null)}>Cancel</button>
+                      <button type="button" className="btn btn-primary" style={{ padding: '4px 12px', fontSize: '12px' }} onClick={handleSaveEditedSection}>Save</button>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div key={sec.id} className="section-item-box">
+                  <div className="section-item-top">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+                      <span className="section-theme-dot" style={{ background: theme.hex }} />
+                      <span style={{ fontWeight: '700', fontSize: '13px', color: 'var(--t0)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sec.name}</span>
+                    </div>
+                    <span style={{ fontSize: '10.5px', fontWeight: '700', padding: '1px 6px', borderRadius: '4px', background: `${theme.hex}20`, color: theme.hex, whiteSpace: 'nowrap' }}>
+                      T{sec.range[0]}–T{sec.range[1]} ({tableCount})
+                    </span>
+                  </div>
+
+                  <div className="section-item-actions" style={{ borderTop: '1px solid var(--b0)', paddingTop: '6px' }}>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      style={{ fontSize: '11px', padding: '3px 7px', display: 'inline-flex', alignItems: 'center', gap: '3px', color: 'var(--t1)' }}
+                      onClick={() => handleStartEditSection(sec)}
+                    >
+                      <Edit2 size={11} /> Edit
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      style={{ fontSize: '11px', padding: '3px 7px', display: 'inline-flex', alignItems: 'center', gap: '3px', color: '#ef4444', marginLeft: 'auto' }}
+                      onClick={() => handleDeleteSection(sec.id)}
+                    >
+                      <Trash2 size={11} /> Delete
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {currentSections.length === 0 && (
+            <div className="settings-empty" style={{ margin: '14px 0' }}>
+              No sections defined. All tables will appear in a default layout.
+            </div>
+          )}
+        </section>
+
+        {/* ── Table QR Code Hub (Mobile Self-Ordering) ─────────────── */}
+        <section className="settings-card settings-full">
+          <div className="settings-card-head" style={{ marginBottom: '10px' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <QrCode size={18} style={{ color: 'var(--a)' }} />
+                <h2 style={{ fontSize: '16px' }}>Table QR Codes (Self-Ordering)</h2>
+              </div>
+              <p style={{ fontSize: '12px', margin: '2px 0 0' }}>Instant guest order links & printable table tent cards. Click any table's QR button to reveal.</p>
+            </div>
+
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setShowPrintSheet(true)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', padding: '6px 12px' }}
+            >
+              <Printer size={13} /> Print All Cards
+            </button>
+          </div>
+
+          {/* Compact QR Toolbar */}
+          <div className="qr-hub-toolbar" style={{ gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: '1 1 540px', minWidth: '320px', flexWrap: 'wrap' }}>
+              {/* Search Bar */}
+              <div style={{ position: 'relative', flex: '1 1 160px', minWidth: '140px' }}>
+                <input
+                  type="text"
+                  placeholder="Filter table #..."
+                  value={qrSearch}
+                  onChange={e => setQrSearch(e.target.value)}
+                  style={{ width: '100%', paddingLeft: '28px', height: '34px', fontSize: '12.5px' }}
+                />
+                <Hash size={13} style={{ position: 'absolute', left: '9px', top: '10px', color: 'var(--t2)' }} />
+              </div>
+
+              {/* 1. Section Dropdown */}
+              <select
+                value={qrFilterSec}
+                onChange={e => {
+                  const newSecId = e.target.value;
+                  setQrFilterSec(newSecId);
+                  if (newSecId !== 'All') {
+                    const targetSec = currentSections.find(s => s.id === newSecId);
+                    if (targetSec && (selectedQrTable < targetSec.range[0] || selectedQrTable > targetSec.range[1])) {
+                      setSelectedQrTable(targetSec.range[0]);
+                      ensureQrCode(targetSec.range[0]);
+                    }
+                  }
+                }}
+                style={{
+                  flex: '1.3 1 220px',
+                  minWidth: '200px',
+                  height: '34px',
+                  fontSize: '12.5px',
+                  padding: '4px 10px',
+                  color: 'var(--t0)',
+                  background: 'var(--s1)'
+                }}
+                title="Filter by Section"
+              >
+                <option value="All">All Sections</option>
+                {currentSections.map(s => (
+                  <option key={s.id} value={s.id}>{s.name} (T{s.range[0]}–T{s.range[1]})</option>
+                ))}
+              </select>
+
+              {/* 2. Table Dropdown — directly to the right of Section Dropdown */}
+              {(() => {
+                const tablesList = Array.from({ length: currentTotalTables }, (_, i) => i + 1).filter(tableNo => {
+                  if (qrSearch && !String(tableNo).includes(qrSearch.trim())) return false;
+                  if (qrFilterSec !== 'All') {
+                    const targetSec = currentSections.find(s => s.id === qrFilterSec);
+                    if (targetSec && (tableNo < targetSec.range[0] || tableNo > targetSec.range[1])) {
+                      return false;
+                    }
+                  }
+                  return true;
+                });
+
+                return (
+                  <select
+                    value={selectedQrTable}
+                    onChange={e => {
+                      const num = Number(e.target.value);
+                      setSelectedQrTable(num);
+                      ensureQrCode(num);
+                    }}
+                    style={{
+                      flex: '1.3 1 230px',
+                      minWidth: '210px',
+                      height: '34px',
+                      fontSize: '12.5px',
+                      padding: '4px 10px',
+                      fontWeight: '700',
+                      border: '1px solid var(--a)',
+                      color: 'var(--t0)',
+                      background: 'var(--s1)'
+                    }}
+                    title="Select Table"
+                  >
+                    {tablesList.map(num => {
+                      const sec = getSectionForTable(num);
+                      return (
+                        <option key={num} value={num}>Table {num} ({sec})</option>
+                      );
+                    })}
+                    {tablesList.length === 0 && (
+                      <option value={selectedQrTable}>Table {selectedQrTable}</option>
+                    )}
+                  </select>
+                );
+              })()}
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '260px', flex: '0 1 280px' }}>
+              <label style={{ fontSize: '11px', color: 'var(--t2)', whiteSpace: 'nowrap' }}>Domain:</label>
+              <input
+                type="text"
+                value={form.webMenuBaseUrl || ''}
+                onChange={e => set('webMenuBaseUrl', e.target.value)}
+                placeholder="https://yourvenue.in"
+                style={{ flex: 1, fontSize: '11.5px', height: '34px', fontFamily: 'monospace', padding: '4px 8px' }}
+              />
+            </div>
+          </div>
+
+          {/* Active Selected Table QR Card — Compact, Single-Row (No extra space taken) */}
+          {(() => {
+            const currentTableNo = selectedQrTable;
+            const secName = getSectionForTable(currentTableNo);
+            const targetSec = currentSections.find(s => currentTableNo >= s.range[0] && currentTableNo <= s.range[1]);
+            const theme = SECTION_THEMES.find(t => t.id === targetSec?.color) || SECTION_THEMES[0];
+            const qrData = qrCodeUrls[currentTableNo];
+            const isCopied = copiedTable === currentTableNo;
+            const isDownloading = downloadingQrTable === currentTableNo;
+            const targetUrl = `${webBaseUrl}/menu?table=${currentTableNo}`;
+
+            return (
+              <div className="qr-active-preview-card">
+                <div className="qr-active-preview-left">
+                  <div className="qr-img-wrapper" style={{ padding: '6px', background: '#ffffff', borderRadius: '8px', border: '1px solid var(--b1)' }}>
+                    {qrData ? (
+                      <img
+                        src={qrData}
+                        alt={`Table ${currentTableNo} QR`}
+                        style={{ width: '105px', height: '105px', display: 'block' }}
+                      />
+                    ) : (
+                      <div style={{ width: '105px', height: '105px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888' }}>
+                        <RefreshCw size={18} className="spin" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="qr-active-preview-right">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '16px', fontWeight: '800', color: 'var(--t0)' }}>
+                        Table {currentTableNo}
+                      </span>
+                      <span
+                        className="qr-sec-pill"
+                        style={{
+                          color: theme.hex,
+                          background: `${theme.hex}20`,
+                          fontSize: '11px',
+                          padding: '2px 8px',
+                          maxWidth: 'none'
+                        }}
+                      >
+                        {secName}
+                      </span>
+                    </div>
+
+                    {/* Quick navigation arrows */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled={currentTableNo <= 1}
+                        onClick={() => {
+                          const prev = Math.max(1, currentTableNo - 1);
+                          setSelectedQrTable(prev);
+                          ensureQrCode(prev);
+                        }}
+                        style={{ padding: '3px 8px', fontSize: '11px', height: '26px' }}
+                        title="Previous Table"
+                      >
+                        ← Prev
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled={currentTableNo >= currentTotalTables}
+                        onClick={() => {
+                          const next = Math.min(currentTotalTables, currentTableNo + 1);
+                          setSelectedQrTable(next);
+                          ensureQrCode(next);
+                        }}
+                        style={{ padding: '3px 8px', fontSize: '11px', height: '26px' }}
+                        title="Next Table"
+                      >
+                        Next →
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* URL Display */}
+                  <div style={{
+                    fontSize: '11px',
+                    color: 'var(--t2)',
+                    fontFamily: 'monospace',
+                    background: 'var(--s1)',
+                    border: '1px solid var(--b1)',
+                    borderRadius: '5px',
+                    padding: '5px 8px',
+                    wordBreak: 'break-all'
+                  }}>
+                    {targetUrl}
+                  </div>
+
+                  {/* Actions */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className={`btn ${isCopied ? 'btn-primary' : 'btn-secondary'}`}
+                      onClick={() => handleCopyTableLink(currentTableNo)}
+                      style={{ fontSize: '11.5px', padding: '5px 12px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                    >
+                      {isCopied ? <Check size={12} /> : <Copy size={12} />}
+                      <span>{isCopied ? 'Copied Link!' : 'Copy Link'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => handleDownloadTableQr(currentTableNo)}
+                      disabled={isDownloading}
+                      style={{ fontSize: '11.5px', padding: '5px 12px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                    >
+                      {isDownloading ? <RefreshCw size={12} className="spin" /> : <Download size={12} />}
+                      <span>Download QR (PNG)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      onClick={() => setShowAllTablesGrid(prev => !prev)}
+                      style={{ fontSize: '11px', padding: '4px 8px', color: 'var(--t2)', marginLeft: 'auto' }}
+                    >
+                      {showAllTablesGrid ? '▲ Hide All Tables Grid' : '▼ Show All Tables Grid'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Optional Collapsible All Tables Grid */}
+          {showAllTablesGrid && (
+            <div className="qr-tables-grid" style={{ marginTop: '10px' }}>
+              {Array.from({ length: currentTotalTables }, (_, i) => i + 1)
+                .filter(tableNo => {
+                  if (qrSearch && !String(tableNo).includes(qrSearch.trim())) return false;
+                  if (qrFilterSec !== 'All') {
+                    const targetSec = currentSections.find(s => s.id === qrFilterSec);
+                    if (targetSec && (tableNo < targetSec.range[0] || tableNo > targetSec.range[1])) {
+                      return false;
+                    }
+                  }
+                  return true;
+                })
+                .map(tableNo => {
+                  const secName = getSectionForTable(tableNo);
+                  const targetSec = currentSections.find(s => tableNo >= s.range[0] && tableNo <= s.range[1]);
+                  const theme = SECTION_THEMES.find(t => t.id === targetSec?.color) || SECTION_THEMES[0];
+                  const isSelected = selectedQrTable === tableNo;
+
+                  return (
+                    <div
+                      key={tableNo}
+                      className={`qr-compact-card ${isSelected ? 'active' : ''}`}
+                      onClick={() => {
+                        setSelectedQrTable(tableNo);
+                        ensureQrCode(tableNo);
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <div className="qr-compact-top">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', minWidth: 0 }}>
+                          <span className="qr-table-num">Table {tableNo}</span>
+                          <span className="qr-sec-pill" style={{ color: theme.hex, background: `${theme.hex}20` }}>
+                            {secName}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: '10.5px', color: isSelected ? 'var(--a)' : 'var(--t3)', fontWeight: '700' }}>
+                          {isSelected ? '● Active' : 'Select'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
         </section>
 
         {/* Collapsible Technical & Advanced Settings Header */}
@@ -1140,30 +2263,75 @@ export default function SettingsPage() {
               )}
             </section>
 
-            {/* 2. Daily Report */}
+            {/* 2. Email Notifications & Security Alerts */}
             <section className="settings-card settings-full">
               <div className="settings-card-head">
                 <div>
-                  <h2>Daily Report</h2>
-                  <p>Send today&apos;s summary to the configured administrator email.</p>
+                  <h2>Email Notifications & Security Alerts</h2>
+                  <p>Configure automated daily revenue reports and real-time login security alerts.</p>
+                </div>
+                <Bell size={20} style={{ color: 'var(--a)' }} />
+              </div>
+
+              <div className="settings-fields settings-report-fields" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px' }}>
+                <div className="settings-field">
+                  <label>Sender Email (System SMTP)</label>
+                  <input value={form.senderEmail || settings.senderEmail || 'cafeteriahumtum@gmail.com'} readOnly className="settings-readonly" />
+                </div>
+                <div className="settings-field">
+                  <label>Daily Report Admin Email</label>
+                  <input value={email.adminEmail || ''} onChange={e => setE('adminEmail', e.target.value)} placeholder="owner@company.com" />
+                </div>
+                <div className="settings-field">
+                  <label>Login Notification Alert Email</label>
+                  <input value={email.loginAlertEmail || ''} onChange={e => setE('loginAlertEmail', e.target.value)} placeholder="alokgupta1605@gmail.com" />
+                  <span style={{ fontSize: '11px', color: 'var(--t2)', marginTop: '4px', display: 'block' }}>
+                    Every successful user login triggers an instant email alert with device, IP, and timestamp.
+                  </span>
                 </div>
               </div>
 
-              <div className="settings-fields settings-report-fields">
-                <div className="settings-field">
-                  <label>Sender Email</label>
-                  <input value={form.senderEmail || settings.senderEmail || ''} readOnly className="settings-readonly" />
-                </div>
-                <div className="settings-field">
-                  <label>Admin Email</label>
-                  <input value={email.adminEmail || ''} onChange={e => setE('adminEmail', e.target.value)} placeholder="owner@company.com" />
-                </div>
+              <div style={{ marginTop: '14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <label className="settings-toggle" style={{ margin: 0 }}>
+                  <input
+                    type="checkbox"
+                    checked={email.loginAlertEnabled !== false}
+                    onChange={e => setE('loginAlertEnabled', e.target.checked)}
+                  />
+                  <span>Enable Real-time Login Email Alerts</span>
+                </label>
               </div>
-              <div className="settings-actions">
+
+              <div className="settings-actions" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '16px' }}>
                 <button className="btn btn-primary settings-grid-action" onClick={handleSaveEmail} disabled={savingEmail}>
-                  {savingEmail ? 'Saving...' : 'Save Email'}
+                  {savingEmail ? 'Saving...' : 'Save Email Settings'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={handleTestLoginAlert}
+                  disabled={testingLoginAlert || !email.loginAlertEmail}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <Send size={14} />
+                  {testingLoginAlert ? 'Sending Test Alert...' : 'Test Login Alert Email'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={handleSendReport}
+                  disabled={sending || !email.adminEmail}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <Send size={14} />
+                  {sending ? 'Sending Report...' : 'Send Test Daily Report'}
                 </button>
               </div>
+              {sendResult && (
+                <div style={{ marginTop: '10px', fontSize: '12px', color: sendResult.ok ? 'var(--green)' : 'var(--red)' }}>
+                  {sendResult.msg}
+                </div>
+              )}
             </section>
 
             {/* 3. Database Backup & Sync Section */}
@@ -1347,7 +2515,7 @@ export default function SettingsPage() {
                       </span>
                     )}
                   </div>
-                  <p>Active devices and browsers signed in to your HumTum POS account. Log out of any device you don't recognize.</p>
+                  <p>Active devices and browsers signed in to your POS account. Log out of any device you don't recognize.</p>
                 </div>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                   <button
@@ -1464,6 +2632,132 @@ export default function SettingsPage() {
           </>
         )}
       </div>
+
+      {/* ── Table QR Stand Preview Modal ──────────────────────────── */}
+      {previewQrModal && (
+        <div className="moverlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.85)', zIndex: 1200 }} onClick={() => setPreviewQrModal(null)}>
+          <div className="mbox" style={{ maxWidth: '480px', width: '92%', background: 'var(--s1)', borderRadius: '16px', border: '1px solid var(--b1)', padding: '24px', position: 'relative' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ fontSize: '18px', fontWeight: '800', margin: 0, color: 'var(--t0)' }}>
+                  Table {previewQrModal.tableNo} · QR Tent Card
+                </h3>
+                <span style={{ fontSize: '12px', color: 'var(--a)' }}>{previewQrModal.sectionName}</span>
+              </div>
+              <button type="button" onClick={() => setPreviewQrModal(null)} className="iBtn" style={{ padding: '6px' }}>
+                ✕
+              </button>
+            </div>
+
+            {/* Stand Mockup Preview */}
+            <div style={{ background: '#0d131f', border: '2px solid #eab308', borderRadius: '12px', padding: '20px', textAlign: 'center', color: '#fff', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
+              <div style={{ fontFamily: 'Cinzel, Georgia, serif', fontWeight: '900', fontSize: '20px', color: '#f59e0b', letterSpacing: '2px' }}>
+                {(form.restaurantName || 'HUMTUM').toUpperCase()}
+              </div>
+              <div style={{ fontSize: '11px', color: '#94a3b8', letterSpacing: '1px', marginTop: '2px' }}>
+                {form.brandTagline || 'BAR & RESTAURANT'}
+              </div>
+              
+              <div style={{ display: 'inline-block', background: 'rgba(234,179,8,0.15)', border: '1px solid rgba(234,179,8,0.4)', borderRadius: '12px', padding: '2px 14px', fontSize: '11px', color: '#fbbf24', fontWeight: '700', marginTop: '10px' }}>
+                {previewQrModal.sectionName.toUpperCase()}
+              </div>
+
+              <div style={{ fontSize: '28px', fontWeight: '900', margin: '10px 0 14px', color: '#fff' }}>
+                TABLE {previewQrModal.tableNo}
+              </div>
+
+              <div style={{ background: '#fff', display: 'inline-block', padding: '12px', borderRadius: '14px', boxShadow: '0 4px 14px rgba(0,0,0,0.4)' }}>
+                {previewQrModal.qrDataUrl ? (
+                  <img src={previewQrModal.qrDataUrl} alt="Table QR" style={{ width: '180px', height: '180px', display: 'block' }} />
+                ) : (
+                  <div style={{ width: '180px', height: '180px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#333' }}>
+                    Loading QR...
+                  </div>
+                )}
+              </div>
+
+              <div style={{ fontSize: '14px', fontWeight: '700', color: '#e2e8f0', marginTop: '14px' }}>
+                SCAN TO VIEW MENU & ORDER
+              </div>
+              <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                Point phone camera to browse & order
+              </div>
+
+              <div style={{ marginTop: '14px', padding: '6px', background: 'rgba(255,255,255,0.06)', borderRadius: '6px', fontSize: '11px', color: '#38bdf8', fontFamily: 'monospace' }}>
+                {previewQrModal.targetUrl}
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div style={{ display: 'flex', gap: '8px', marginTop: '18px' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                onClick={() => handleCopyTableLink(previewQrModal.tableNo)}
+              >
+                <Copy size={14} /> Copy Link
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                onClick={() => handleDownloadTableQr(previewQrModal.tableNo)}
+              >
+                <Download size={14} /> Download Card PNG
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Print Sheet Overlay ───────────────────────────────────── */}
+      {showPrintSheet && (
+        <div className="moverlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.85)', zIndex: 1200 }} onClick={() => setShowPrintSheet(false)}>
+          <div className="mbox" style={{ maxWidth: '850px', width: '95%', maxHeight: '90vh', overflowY: 'auto', background: 'var(--s1)', borderRadius: '16px', border: '1px solid var(--b1)', padding: '24px' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ fontSize: '18px', fontWeight: '800', margin: 0 }}>Print Table Cards Sheet ({currentTotalTables} Tables)</h3>
+                <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--t2)' }}>
+                  Printable table tent cards ready to cut and display on tables.
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button type="button" className="btn btn-primary" onClick={() => window.print()} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <Printer size={14} /> Print Now
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowPrintSheet(false)}>Close</button>
+              </div>
+            </div>
+
+            <div className="print-tent-cards-area" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px' }}>
+              {Array.from({ length: currentTotalTables }, (_, i) => i + 1).map(num => (
+                <div key={num} style={{ border: '2px solid #eab308', borderRadius: '12px', padding: '16px', textAlign: 'center', background: '#0d131f', color: '#fff' }}>
+                  <div style={{ fontFamily: 'Cinzel, Georgia, serif', fontWeight: '900', fontSize: '16px', color: '#f59e0b' }}>
+                    {(form.restaurantName || 'HUMTUM').toUpperCase()}
+                  </div>
+                  <div style={{ fontSize: '22px', fontWeight: '900', margin: '6px 0', color: '#fff' }}>
+                    TABLE {num}
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#fbbf24', fontWeight: '700', marginBottom: '8px' }}>
+                    {getSectionForTable(num).toUpperCase()}
+                  </div>
+                  <div style={{ background: '#fff', display: 'inline-block', padding: '8px', borderRadius: '8px' }}>
+                    {qrCodeUrls[num] ? (
+                      <img src={qrCodeUrls[num]} alt={`T${num}`} style={{ width: '120px', height: '120px', display: 'block' }} />
+                    ) : (
+                      <div style={{ width: '120px', height: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#333' }}>
+                        Loading...
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ fontSize: '11px', fontWeight: '700', marginTop: '8px', color: '#e2e8f0' }}>SCAN TO VIEW MENU & ORDER</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

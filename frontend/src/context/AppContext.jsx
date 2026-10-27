@@ -123,13 +123,32 @@ const SETTINGS_CACHE = 'ht_settings_cache';
 const WORKERS_CACHE = 'ht_workers_cache';
 const INVENTORY_CACHE = 'ht_inventory_cache';
 
-const NUM_TABLES = 20;
+export const DEFAULT_TABLE_SECTIONS = [
+  { id: 'sec-1', name: 'Bottom Lounge', range: [1, 6], color: 'zone-bottom' },
+  { id: 'sec-2', name: 'Top Lounge',    range: [7, 12],  color: 'zone-top' },
+  { id: 'sec-3', name: 'Restaurant',    range: [13, 18], color: 'zone-rest' },
+  { id: 'sec-4', name: 'VIP',           range: [19, 20], color: 'zone-vip' },
+];
+
+const DEFAULT_NUM_TABLES = 20;
 
 const DEFAULT_SETTINGS = {
-  restaurantName:  'HUMTUM Billing System',
-  address:         'Rajendra Nagar, Gorakhpur',
-  gstin:           '09AXFPG9491D1Z8',
+  restaurantName:  'HUMTUM',
+  address:         '',
+  gstin:           '',
   phone:           '',
+  totalTables:     20,
+  tableSections:   DEFAULT_TABLE_SECTIONS,
+  webMenuBaseUrl:  '',
+  brandTagline:    '',
+  logoUrl:         '',
+  accentColor:     '#F59E0B',
+  themePreset:     'amber-gold',
+  receiptHeader:   '',
+  receiptFooter:   '',
+  wifiSsid:        '',
+  wifiPassword:    '',
+  whiteLabelPoweredBy: true,
   gstRate:         5,
   sgstRate:        2.5,
   cgstRate:        2.5,
@@ -138,7 +157,6 @@ const DEFAULT_SETTINGS = {
   currency:        '₹',
   thankYouMsg:     'Thank you for visiting!',
   darkMode:        true,
-  directPrinting:  false,
   printAgentEnabled: false,
   printAgentPort: 5001,
   printAgentToken: '',
@@ -146,26 +164,52 @@ const DEFAULT_SETTINGS = {
   detectedPrinters: [],
   adminEmail:      '',
   senderEmail:     '',
+  loginAlertEmail: 'alokgupta1605@gmail.com',
+  loginAlertEnabled: true,
 };
 
-function initTables() {
+export function applyThemeAccent(accentColor = '#F59E0B') {
+  if (!accentColor || typeof document === 'undefined') return;
+  try {
+    const root = document.documentElement;
+    root.style.setProperty('--a', accentColor);
+    const hex = accentColor.replace('#', '');
+    if (hex.length === 6) {
+      const r = parseInt(hex.substring(0, 2), 16);
+      const g = parseInt(hex.substring(2, 4), 16);
+      const b = parseInt(hex.substring(4, 6), 16);
+      const rH = Math.max(0, Math.floor(r * 0.85));
+      const gH = Math.max(0, Math.floor(g * 0.85));
+      const bH = Math.max(0, Math.floor(b * 0.85));
+      const hoverHex = `#${rH.toString(16).padStart(2, '0')}${gH.toString(16).padStart(2, '0')}${bH.toString(16).padStart(2, '0')}`;
+      root.style.setProperty('--a2', hoverHex);
+      root.style.setProperty('--ag', `rgba(${r}, ${g}, ${b}, 0.25)`);
+      root.style.setProperty('--gradient-accent', `linear-gradient(135deg, ${accentColor} 0%, ${hoverHex} 100%)`);
+    }
+  } catch (e) {
+    console.error('Error applying accent theme color', e);
+  }
+}
+
+function initTables(count = DEFAULT_NUM_TABLES) {
   const t = {};
-  for (let i = 1; i <= NUM_TABLES; i++) {
-    t[`T${i}`] = { items:[], discount:'', customerPhone:'', customerName:'', startTime:null, dueAmount:0 };
+  for (let i = 1; i <= count; i++) {
+    t[`t${i}`] = { items:[], discount:'', customerPhone:'', customerName:'', startTime:null, dueAmount:0 };
+    t[`T${i}`] = t[`t${i}`];
   }
   return t;
 }
 
-function loadTableBills() {
+function loadTableBills(count = DEFAULT_NUM_TABLES) {
   try {
     const raw = localStorage.getItem(TABLES_KEY);
     if (raw) {
       const saved = JSON.parse(raw);
-      const base = initTables();
+      const base = initTables(count);
       return { ...base, ...saved };
     }
   } catch {}
-  return initTables();
+  return initTables(count);
 }
 
 function saveTableBills(bills) {
@@ -249,6 +293,14 @@ export function AppProvider({ children }) {
       throw err;
     }
   }, [settings]);
+
+  // ── Real-Time Theme & Browser Title Sync ────────────────────────
+  useEffect(() => {
+    applyThemeAccent(settings.accentColor || '#F59E0B');
+    if (settings.restaurantName && typeof document !== 'undefined') {
+      document.title = `${settings.restaurantName} - POS ERP`;
+    }
+  }, [settings.accentColor, settings.restaurantName]);
 
   useEffect(() => {
     // Only fetch settings if logged in
@@ -341,8 +393,16 @@ export function AppProvider({ children }) {
     saveMasterCache('inventory', nextInventory);
   }, []);
 
+  // ── Dynamic Tables & Sections ───────────────────────────────────
+  const NUM_TABLES = Math.max(1, Math.min(200, Number(settings?.totalTables) || 20));
+  const tableSections = useMemo(() => {
+    return Array.isArray(settings?.tableSections) && settings.tableSections.length
+      ? settings.tableSections
+      : DEFAULT_TABLE_SECTIONS;
+  }, [settings?.tableSections]);
+
   // ── Tables — persist to localStorage ────────────────────────────
-  const [tableBills, _setTableBills] = useState(loadTableBills);
+  const [tableBills, _setTableBills] = useState(() => loadTableBills(NUM_TABLES));
   const setTableBills = useCallback((updater) => {
     _setTableBills(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
@@ -350,6 +410,29 @@ export function AppProvider({ children }) {
       return next;
     });
   }, []);
+
+  // Ensure table slots exist for all active table numbers
+  useEffect(() => {
+    _setTableBills(prev => {
+      let changed = false;
+      const next = { ...(prev || {}) };
+      for (let i = 1; i <= NUM_TABLES; i++) {
+        const idLower = `t${i}`;
+        const idUpper = `T${i}`;
+        if (!next[idLower] && !next[idUpper]) {
+          const slot = { items:[], discount:'', customerPhone:'', customerName:'', startTime:null, dueAmount:0 };
+          next[idLower] = slot;
+          next[idUpper] = slot;
+          changed = true;
+        }
+      }
+      if (changed) {
+        saveTableBills(next);
+        return next;
+      }
+      return prev;
+    });
+  }, [NUM_TABLES]);
 
   const [activeTableId,   setActiveTableId]   = useState(null);
   const [categoryFilter,  setCategoryFilter]  = useState('All');
@@ -659,8 +742,19 @@ export function AppProvider({ children }) {
     const hasBoth = foodItems.length > 0 && alcoholItems.length > 0;
     const pageHeight = 125 + (itemCount * 9) + (hasBoth ? 45 : 0) + (hasQr ? 55 : 0) + (hasTipQr ? 45 : 0);
 
-    const restName = (settings.restaurantName || 'HUMTUM').trim();
+    const rawRestName = (settings.restaurantName || 'HUMTUM').trim();
+    let restName = rawRestName;
+    let restTagline = (settings.brandTagline || '').trim();
+
+    if (!restTagline && /the\s+bar\s*(&|and)\s*restaurant/i.test(rawRestName)) {
+      restName = rawRestName.replace(/\s*the\s+bar\s*(&|and)\s*restaurant/i, '').trim();
+      restTagline = 'THE BAR & RESTAURANT';
+    } else if (!restTagline && rawRestName.toUpperCase().startsWith('HUMTUM') && rawRestName.length > 6) {
+      restName = 'HUMTUM';
+      restTagline = rawRestName.slice(6).trim();
+    }
     const restPhone = settings.phone || settings.contact || '';
+    const billLogoSrc = settings.logoUrl || BILL_LOGO_BASE64;
 
     const formattedBillDate = formatBillDateTime(dateOverride || table?.date || table?.createdAt || Date.now());
 
@@ -672,7 +766,8 @@ export function AppProvider({ children }) {
             @page { size: 80mm ${pageHeight}mm; margin: 0; }
             body { font-family: 'Courier New', Courier, monospace; width: 70mm; margin: 0; padding: 0; font-size: 13px; color: #000; line-height: 1.2; font-weight: bold; }
             .center { text-align: center; }
-            .brand { font-size: 18px; font-weight: 900; margin-bottom: 2px; text-transform: uppercase; display: block; }
+            .brand { font-family: 'Courier New', Courier, monospace; font-size: 20px; font-weight: 900; margin-bottom: 3px; text-transform: uppercase; display: block; letter-spacing: 1px; }
+            .tagline { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: 900; margin-top: 1px; margin-bottom: 4px; text-transform: uppercase; display: block; letter-spacing: 0.5px; }
             .address { font-size: 12px; margin-bottom: 6px; line-height: 1.2; }
             .dash-line { border-top: 1px dashed #000; margin: 6px 0; }
             .thick-line { border-top: 2px solid #000; margin: 4px 0; }
@@ -688,11 +783,12 @@ export function AppProvider({ children }) {
         </head>
         <body>
           <div class="center">
-            <img src="${BILL_LOGO_BASE64}" alt="HUMTUM" style="max-height: 55px; max-width: 120px; width: auto; height: auto; object-fit: contain; margin: 0 auto 4px; display: block;" />
+            ${billLogoSrc ? `<img src="${billLogoSrc}" alt="${restName}" style="max-height: 55px; max-width: 120px; width: auto; height: auto; object-fit: contain; margin: 0 auto 4px; display: block; filter: grayscale(100%) contrast(150%); -webkit-filter: grayscale(100%) contrast(150%);" />` : ''}
             <div class="brand">${restName}</div>
+            ${restTagline ? `<div class="tagline">${restTagline}</div>` : ''}
             ${settings.address ? `<div class="address">${settings.address}</div>` : ''}
             ${restPhone ? `<div class="address" style="margin-top:-4px">Contact: ${restPhone}</div>` : ''}
-            <div class="address" style="margin-top:-4px">Email: contact@humtumbar.in</div>
+            ${settings.email ? `<div class="address" style="margin-top:-4px">Email: ${settings.email}</div>` : ''}
             ${settings.gstin ? `<div class="address" style="margin-top:-4px">GSTIN: ${settings.gstin}</div>` : ''}
           </div>
 
@@ -1379,6 +1475,13 @@ export function AppProvider({ children }) {
     newSocket.on('REFRESH_MENU', () => {
       console.log('🔄 REFRESH_MENU received in POS frontend, re-fetching data...');
       loadData(true, ['menu', 'inventory']);
+    });
+
+    newSocket.on('SETTINGS_UPDATED', (newSettings) => {
+      if (newSettings && typeof newSettings === 'object') {
+        console.log('⚙️ SETTINGS_UPDATED received in POS frontend');
+        setSettings(prev => ({ ...prev, ...newSettings }));
+      }
     });
 
     setSocket(newSocket);
@@ -2382,7 +2485,7 @@ export function AppProvider({ children }) {
       saveWorker, deleteWorker, updateWorkerStatus,
       toast, showToast,
       isDryDay: !!settings.isDryDay, toggleDryDay,
-      NUM_TABLES, activeTableCount,
+      NUM_TABLES, tableSections, activeTableCount,
       // Print Agent
       agentConnected, agentPrinters, fetchAgentPrinters, pingPrintAgent,
       // Socket.IO & KOT functions

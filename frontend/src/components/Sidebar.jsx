@@ -26,6 +26,21 @@ export default function Sidebar() {
   const rc = RC[role] || '#0D9488';
   const go = id => { setActiveSection(id); setSidebarOpen(false); };
 
+  const rawName = (settings?.restaurantName || 'HUMTUM').trim();
+  let mainTitle = rawName;
+  let subtitle = (settings?.brandTagline || '').trim();
+
+  // If no explicit brandTagline is set, intelligently split if the restaurantName has "The Bar & Restaurant" or "The Bar"
+  if (!subtitle && /the\s+bar\s*(&|and)\s*restaurant/i.test(rawName)) {
+    mainTitle = rawName.replace(/\s*the\s+bar\s*(&|and)\s*restaurant/i, '').trim();
+    subtitle = 'The Bar & Restaurant';
+  } else if (!subtitle && rawName.toUpperCase().startsWith('HUMTUM') && rawName.length > 6) {
+    mainTitle = 'HUMTUM';
+    subtitle = rawName.slice(6).trim();
+  }
+
+  const userDisplayName = currentUser?.name || 'Administrator';
+
   return (
     <>
       {/* Overlay Backdrop */}
@@ -39,17 +54,52 @@ export default function Sidebar() {
       {/* Sidebar */}
       <aside className={`sbar${sidebarOpen ? ' open' : ''}`}>
         {/* Logo */}
-        <div className="logo-wrap">
-          <div className="logo-box" style={{ background: 'none', boxShadow: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <img src="/favicon.ico" alt="Logo" style={{ width: '32px', height: '32px', objectFit: 'contain' }} />
+        <div className="logo-wrap" style={{ alignItems: 'center', padding: '14px 16px' }}>
+          <div className="logo-box" style={{ background: 'none', boxShadow: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <img
+              src={settings?.logoUrl || '/logo.png'}
+              alt={mainTitle || 'Logo'}
+              style={{ width: '38px', height: '38px', objectFit: 'contain', borderRadius: '8px' }}
+              onError={(e) => {
+                if (e.target.src !== window.location.origin + '/favicon.ico') {
+                  e.target.src = '/favicon.ico';
+                }
+              }}
+            />
           </div>
-          <div style={{ flex:1 }}>
-            <div className="logo-name" style={{ fontFamily: "'Cinzel', serif", fontWeight: 900, letterSpacing: '1px', color: 'var(--a)', fontSize: 22, textTransform: 'uppercase', textShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>
-              HUMTUM
+          <div style={{ flex: 1, minWidth: 0, marginLeft: '4px' }}>
+            <div
+              className="logo-name"
+              style={{
+                fontFamily: "'Cinzel', serif",
+                fontWeight: 900,
+                letterSpacing: '1px',
+                color: 'var(--a, #F59E0B)',
+                fontSize: 21,
+                textTransform: 'uppercase',
+                textShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                lineHeight: 1.15
+              }}
+              title={mainTitle}
+            >
+              {mainTitle}
             </div>
-            <div className="logo-sub" style={{ color: 'var(--t2)', fontSize: 11, letterSpacing: '0.02em', marginTop: '-2px' }}>
-              The BAR & Restaurant
-            </div>
+            {subtitle && (
+              <div
+                className="logo-sub"
+                style={{
+                  color: 'var(--t2)',
+                  fontSize: 10.5,
+                  fontWeight: 600,
+                  letterSpacing: '0.03em',
+                  marginTop: '2px',
+                  lineHeight: 1.2
+                }}
+                title={subtitle}
+              >
+                {subtitle}
+              </div>
+            )}
           </div>
           <button className="iBtn sbar-close" style={{ padding:4 }} onClick={()=>setSidebarOpen(false)}><X size={12}/></button>
         </div>
@@ -57,10 +107,10 @@ export default function Sidebar() {
         {/* User */}
         <div className="user-bar">
           <div className="avatar" style={{ background:`${rc}18`, color:rc, border:`1px solid ${rc}30` }}>
-            {currentUser?.name?.[0]||'?'}
+            {userDisplayName[0] || '?'}
           </div>
           <div style={{ flex:1, minWidth:0 }}>
-            <div className="user-name" style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{currentUser?.name}</div>
+            <div className="user-name" style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{userDisplayName}</div>
             <span className="role-tag" style={{ background:`${rc}14`, color:rc, border:`1px solid ${rc}25`, marginTop:1 }}>
               {ROLE_HIERARCHY[role]?.label}
             </span>
@@ -94,6 +144,10 @@ export default function Sidebar() {
           <button className="btn btn-ghost" style={{ width:'100%', fontSize:12 }} onClick={logout}>
             <LogOut size={12}/> Sign Out
           </button>
+        </div>
+
+        <div style={{ padding: '0 10px 10px', textAlign: 'center', fontSize: '10px', color: 'var(--t3)', letterSpacing: '0.04em' }}>
+          Powered by <b style={{ color: 'var(--t2)' }}>{mainTitle || 'HUMTUM'} POS</b>
         </div>
       </aside>
     </>
