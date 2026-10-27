@@ -490,7 +490,6 @@ router.post('/test-login-alert', requireRole(['admin', 'manager']), async (req, 
       auth: { user: senderEmail, pass: senderPassword }
     });
 
-    const venue = settings.restaurantName || 'HUMTUM';
     await transporter.sendMail({
       from: `"${venue} Security" <${senderEmail}>`,
       to: recipient,
