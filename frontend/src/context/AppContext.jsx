@@ -2492,7 +2492,7 @@ export function AppProvider({ children }) {
       socket,
       kotSessions, currentSession, kots,
       openTableSession, syncTableSession, createKOT, updateKOTStatus, removeKOTItem, deleteKOT, finalizeBill, completeOrder, cancelTableSession,
-      printKOTDocument, printBillDocument, checkIsAlcoholic,
+      printKOTDocument, printBillDocument, firePrint, checkIsAlcoholic,
       // Offline Resilience
       isOnline, offlineQueueCount, offlineKotQueueCount, offlineMutationCount, isSyncingOffline, flushOfflineQueue,
     }}>

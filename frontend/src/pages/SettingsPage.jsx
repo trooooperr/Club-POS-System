@@ -1261,7 +1261,7 @@ export default function SettingsPage() {
               <label>Maximum Discount Limit %</label>
               <input type="number" min="0" max="100" step="1" value={form.maxDiscountLimit ?? 30} onChange={e => set('maxDiscountLimit', Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)))} />
             </div>
-            <label className={`settings-toggle ${!form.serviceTaxEnabled ? 'settings-wide' : 'settings-service-tax-toggle'}`}>
+            <label className="settings-toggle">
               <input type="checkbox" checked={!!form.serviceTaxEnabled} onChange={e => set('serviceTaxEnabled', e.target.checked)} />
               <span>Enable Service Charge</span>
             </label>

@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 
 export default function BookingsPage() {
-  const { settings, showToast, currentUser } = useApp();
+  const { settings, showToast, currentUser, firePrint } = useApp();
 
   const getBusinessTodayStr = () => {
     const d = new Date();
@@ -378,32 +378,36 @@ export default function BookingsPage() {
       </html>
     `;
 
-    // Print via hidden iframe
-    const iframe = document.createElement('iframe');
-    iframe.style.position = 'fixed';
-    iframe.style.top = '-9999px';
-    iframe.style.left = '-9999px';
-    iframe.style.width = '0px';
-    iframe.style.height = '0px';
-    document.body.appendChild(iframe);
+    // Silent print via Print Agent if enabled, fallback to browser iframe
+    if (typeof firePrint === 'function') {
+      firePrint(printHtml, 'document', settings.billingPrinterName || settings.barPrinterName || '');
+    } else {
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.top = '-9999px';
+      iframe.style.left = '-9999px';
+      iframe.style.width = '0px';
+      iframe.style.height = '0px';
+      document.body.appendChild(iframe);
 
-    const doc = iframe.contentWindow.document;
-    doc.open();
-    doc.write(printHtml);
-    doc.close();
+      const doc = iframe.contentWindow.document;
+      doc.open();
+      doc.write(printHtml);
+      doc.close();
 
-    setTimeout(() => {
-      try {
-        iframe.contentWindow.focus();
-        iframe.contentWindow.print();
-      } catch (err) {
-        console.error('Print iframe error:', err);
-      } finally {
-        setTimeout(() => {
-          document.body.removeChild(iframe);
-        }, 3000);
-      }
-    }, 400);
+      setTimeout(() => {
+        try {
+          iframe.contentWindow.focus();
+          iframe.contentWindow.print();
+        } catch (err) {
+          console.error('Print iframe error:', err);
+        } finally {
+          setTimeout(() => {
+            document.body.removeChild(iframe);
+          }, 3000);
+        }
+      }, 400);
+    }
   };
 
   // Helper date display
