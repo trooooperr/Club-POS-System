@@ -103,7 +103,8 @@ function normalizeSettings(data) {
     includeUpiAmount: data.includeUpiAmount !== false,
     inventoryCategories: cleanCategoryList(data.inventoryCategories) || [],
     menuCategories: cleanCategoryList(data.menuCategories) || [],
-    senderEmail: FIXED_SENDER_EMAIL,
+    senderEmail: data.senderEmail || FIXED_SENDER_EMAIL,
+    hasSenderPassword: !!(data.senderPassword || process.env.GMAIL_APP_PASSWORD),
     adminEmail: data.adminEmail || DEFAULTS.adminEmail,
     loginAlertEmail: cleanString(data.loginAlertEmail, 'alokgupta1605@gmail.com').toLowerCase(),
     loginAlertEnabled: data.loginAlertEnabled !== false,
@@ -257,7 +258,8 @@ router.put('/', requireRole(['admin', 'manager']), async (req, res) => {
   if (req.body.adminEmail !== undefined) settings.adminEmail = cleanString(req.body.adminEmail).toLowerCase();
   if (req.body.loginAlertEmail !== undefined) settings.loginAlertEmail = cleanString(req.body.loginAlertEmail).toLowerCase();
   if (req.body.loginAlertEnabled !== undefined) settings.loginAlertEnabled = !!req.body.loginAlertEnabled;
-  if (req.body.senderPassword !== undefined && req.body.senderPassword !== '') settings.senderPassword = cleanString(req.body.senderPassword);
+  if (req.body.senderEmail !== undefined && req.body.senderEmail.trim()) settings.senderEmail = cleanString(req.body.senderEmail).toLowerCase();
+  if (req.body.senderPassword !== undefined && req.body.senderPassword.trim() !== '') settings.senderPassword = cleanString(req.body.senderPassword).replace(/\s+/g, '');
   if (req.body.googleReviewLink !== undefined) settings.googleReviewLink = cleanString(req.body.googleReviewLink);
   if (req.body.instagramLink !== undefined) settings.instagramLink = cleanString(req.body.instagramLink);
   if (req.body.facebookLink !== undefined) settings.facebookLink = cleanString(req.body.facebookLink);
@@ -431,11 +433,12 @@ router.post('/test-login-alert', requireRole(['admin', 'manager']), async (req, 
   try {
     const settings = await getOrCreateSettings();
     const recipient = cleanString(req.body.email || settings.loginAlertEmail || 'alokgupta1605@gmail.com').toLowerCase();
-    const senderEmail = settings.senderEmail || process.env.GMAIL_SENDER || 'cafeteriahumtum@gmail.com';
-    const senderPassword = settings.senderPassword || process.env.GMAIL_APP_PASSWORD;
+    const senderEmail = cleanString(req.body.senderEmail || settings.senderEmail || process.env.GMAIL_SENDER || 'cafeteriahumtum@gmail.com').toLowerCase();
+    const rawPassword = req.body.senderPassword || settings.senderPassword || process.env.GMAIL_APP_PASSWORD || '';
+    const senderPassword = String(rawPassword).replace(/\s+/g, '');
 
     if (!senderEmail || !senderPassword) {
-      return res.status(400).json({ error: 'Sender email or app password not configured.' });
+      return res.status(400).json({ error: 'Sender email or Gmail App Password is not configured.' });
     }
 
     const nodemailer = require('nodemailer');
@@ -443,7 +446,7 @@ router.post('/test-login-alert', requireRole(['admin', 'manager']), async (req, 
       host: 'smtp.gmail.com',
       port: 465,
       secure: true,
-      auth: { user: senderEmail, pass: senderPassword.replace(/\s+/g, '') }
+      auth: { user: senderEmail, pass: senderPassword }
     });
 
     const venue = settings.restaurantName || 'HUMTUM';
@@ -455,13 +458,26 @@ router.post('/test-login-alert', requireRole(['admin', 'manager']), async (req, 
         <div style="font-family:sans-serif;background:#0f172a;color:#e2e8f0;padding:24px;border-radius:12px;max-width:500px;margin:auto;">
           <h2 style="color:#38bdf8;margin-top:0;">✅ Login Alert Notification Test</h2>
           <p>This is a test notification confirming that login alerts from <strong>${venue} POS</strong> are actively routed to <strong>${recipient}</strong>.</p>
-          <p style="font-size:12px;color:#94a3b8;">Timestamp: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</p>
+          <p style="font-size:12px;color:#94a3b8;">Sender: ${senderEmail} · Timestamp: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</p>
         </div>
       `
     });
 
-    res.json({ success: true, message: `Test alert sent successfully to ${recipient}` });
+    // If a new valid password was passed in the test, persist it
+    if (req.body.senderPassword) {
+      settings.senderPassword = senderPassword;
+      if (req.body.senderEmail) settings.senderEmail = senderEmail;
+      await settings.save();
+    }
+
+    res.json({ success: true, message: `Test alert sent successfully to ${recipient}!` });
   } catch (err) {
+    console.error('Test login alert error:', err);
+    if (err.code === 'EAUTH' || (err.message && err.message.includes('Username and Password not accepted'))) {
+      return res.status(400).json({
+        error: 'Google authentication failed (535 Bad Credentials). Please generate a new 16-character App Password in Google Account > Security > App Passwords.'
+      });
+    }
     res.status(500).json({ error: err.message || 'Failed to send test alert email' });
   }
 });

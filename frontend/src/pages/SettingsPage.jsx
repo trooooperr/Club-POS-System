@@ -76,7 +76,12 @@ export default function SettingsPage() {
     applyThemeAccent(hex);
   };
 
+  const [whatsappStatus, setWhatsappStatus] = useState(null);
+  const [loadingWhatsapp, setLoadingWhatsapp] = useState(false);
+
   const [email, setEmail] = useState({
+    senderEmail: settings.senderEmail || 'cafeteriahumtum@gmail.com',
+    senderPassword: '',
     adminEmail: settings.adminEmail || '',
     loginAlertEmail: settings.loginAlertEmail || 'alokgupta1605@gmail.com',
     loginAlertEnabled: settings.loginAlertEnabled !== false
@@ -492,11 +497,13 @@ export default function SettingsPage() {
   useEffect(() => {
     if (settings) {
       setForm({ ...settings });
-      setEmail({
+      setEmail(prev => ({
+        ...prev,
+        senderEmail: settings.senderEmail || 'cafeteriahumtum@gmail.com',
         adminEmail: settings.adminEmail || '',
         loginAlertEmail: settings.loginAlertEmail || 'alokgupta1605@gmail.com',
         loginAlertEnabled: settings.loginAlertEnabled !== false
-      });
+      }));
     }
   }, [settings]);
 
@@ -627,11 +634,13 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!isDirtyRef.current) {
       setForm({ ...settings });
-      setEmail({
+      setEmail(prev => ({
+        ...prev,
+        senderEmail: settings.senderEmail || 'cafeteriahumtum@gmail.com',
         adminEmail: settings.adminEmail || '',
         loginAlertEmail: settings.loginAlertEmail || 'alokgupta1605@gmail.com',
         loginAlertEnabled: settings.loginAlertEnabled !== false
-      });
+      }));
     }
   }, [settings]);
 
@@ -1040,6 +1049,8 @@ export default function SettingsPage() {
     try {
       await saveSettings({
         ...form,
+        senderEmail: email.senderEmail,
+        senderPassword: email.senderPassword || undefined,
         adminEmail: email.adminEmail,
         loginAlertEmail: email.loginAlertEmail,
         loginAlertEnabled: email.loginAlertEnabled
@@ -1058,7 +1069,11 @@ export default function SettingsPage() {
       const res = await authFetch(apiUrl('/api/settings/test-login-alert'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.loginAlertEmail || 'alokgupta1605@gmail.com' })
+        body: JSON.stringify({
+          email: email.loginAlertEmail || 'alokgupta1605@gmail.com',
+          senderEmail: email.senderEmail,
+          senderPassword: email.senderPassword
+        })
       });
       const data = await res.json();
       if (res.ok) {
@@ -2275,10 +2290,26 @@ export default function SettingsPage() {
                 <Bell size={20} style={{ color: 'var(--a)' }} />
               </div>
 
-              <div className="settings-fields settings-report-fields" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px' }}>
+              <div className="settings-fields settings-report-fields" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
                 <div className="settings-field">
-                  <label>Sender Email (System SMTP)</label>
-                  <input value={form.senderEmail || settings.senderEmail || 'cafeteriahumtum@gmail.com'} readOnly className="settings-readonly" />
+                  <label>Sender Email (Gmail SMTP)</label>
+                  <input
+                    value={email.senderEmail || ''}
+                    onChange={e => setE('senderEmail', e.target.value)}
+                    placeholder="cafeteriahumtum@gmail.com"
+                  />
+                </div>
+                <div className="settings-field">
+                  <label>Gmail App Password (16 chars)</label>
+                  <input
+                    type="password"
+                    value={email.senderPassword || ''}
+                    onChange={e => setE('senderPassword', e.target.value)}
+                    placeholder={settings?.hasSenderPassword ? '•••••••••••••••• (Saved)' : 'abcd efgh ijkl mnop'}
+                  />
+                  <span style={{ fontSize: '11px', color: 'var(--t2)', marginTop: '4px', display: 'block' }}>
+                    Google Account &gt; Security &gt; 2-Step Verification &gt; App Passwords.
+                  </span>
                 </div>
                 <div className="settings-field">
                   <label>Daily Report Admin Email</label>
@@ -2288,7 +2319,7 @@ export default function SettingsPage() {
                   <label>Login Notification Alert Email</label>
                   <input value={email.loginAlertEmail || ''} onChange={e => setE('loginAlertEmail', e.target.value)} placeholder="alokgupta1605@gmail.com" />
                   <span style={{ fontSize: '11px', color: 'var(--t2)', marginTop: '4px', display: 'block' }}>
-                    Every successful user login triggers an instant email alert with device, IP, and timestamp.
+                    Every user login triggers an email alert with device, IP, and time.
                   </span>
                 </div>
               </div>
