@@ -1106,6 +1106,7 @@ export default function SettingsPage() {
         body: JSON.stringify({
           emailConfig: {
             adminEmail: email.adminEmail.trim(),
+            emailWebhookUrl: (email.emailWebhookUrl || '').trim(),
           },
           settings: form,
           inventory: [],

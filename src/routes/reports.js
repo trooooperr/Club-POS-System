@@ -31,6 +31,7 @@ function resolveEmailConfig(persisted, incoming = {}) {
     senderEmail: process.env.GMAIL_SENDER || incoming.senderEmail || persisted?.senderEmail || authEmail,
     senderPassword: incoming.senderPassword || persisted?.senderPassword || process.env.GMAIL_APP_PASSWORD || '',
     adminEmail: incoming.adminEmail || persisted?.adminEmail || process.env.ADMIN_EMAIL || '',
+    emailWebhookUrl: incoming.emailWebhookUrl || persisted?.emailWebhookUrl || process.env.EMAIL_WEBHOOK_URL || '',
   };
 }
 
@@ -48,13 +49,45 @@ function assertEmailConfig(emailConfig) {
 
 const dns = require('dns').promises;
 
+/**
+ * Try to send an email via Google Apps Script webhook (if configured).
+ * Returns true on success, false if no webhook URL configured.
+ */
+async function trySendViaWebhook(webhookUrl, { to, subject, html }) {
+  if (!webhookUrl) return false;
+  try {
+    const fetchFn = globalThis.fetch || require('node-fetch');
+    const resp = await fetchFn(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to, subject, html }),
+    });
+    const text = await resp.text();
+    let data = {};
+    try { data = JSON.parse(text); } catch (_) {}
+    if (data.error) throw new Error(data.error);
+    console.log(`📧 Email dispatched via Google Script webhook to ${to}`);
+    return true;
+  } catch (err) {
+    console.warn(`⚠️ Webhook send failed: ${err.message} — falling back to SMTP`);
+    return false;
+  }
+}
+
+/**
+ * Create an SMTP transporter — tries port 587 (STARTTLS) first, then 465 (SSL).
+ * Port 587 is almost never blocked by ISPs; 465 often is.
+ */
 async function createTransport(emailConfig) {
   if (process.env.SMTP_HOST) {
     return nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: parseInt(process.env.SMTP_PORT || '587', 10),
       secure: process.env.SMTP_SECURE === 'true',
-      family: 4, // Force IPv4 — prevents ENETUNREACH on IPv6-disabled networks
+      family: 4,
+      connectionTimeout: 8000,
+      greetingTimeout: 8000,
+      socketTimeout: 10000,
       auth: {
         user: emailConfig.authEmail,
         pass: emailConfig.senderPassword,
@@ -62,11 +95,15 @@ async function createTransport(emailConfig) {
     });
   }
 
+  // Try port 587 (STARTTLS) — most ISP-friendly
   return nodemailer.createTransport({
     host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
-    family: 4, // Force IPv4 — prevents ENETUNREACH on IPv6-disabled networks
+    port: 587,
+    secure: false,        // STARTTLS, not SSL
+    family: 4,            // Force IPv4 — prevents ENETUNREACH on IPv6-disabled networks
+    connectionTimeout: 8000,
+    greetingTimeout: 8000,
+    socketTimeout: 10000,
     auth: {
       user: emailConfig.authEmail,
       pass: emailConfig.senderPassword,
@@ -208,7 +245,12 @@ function buildReportHTML({ date, orders, settings, inventory, dailyReport = [] }
 async function sendDailyReportInternal(options = {}) {
   const persistedSettings = await getPersistedSettings();
   const resolvedEmailConfig = resolveEmailConfig(persistedSettings, options.emailConfig);
-  assertEmailConfig(resolvedEmailConfig);
+
+  const to = resolvedEmailConfig.adminEmail;
+  if (!to) {
+    throw new Error('Missing recipient email. Please configure "Daily Report Admin Email" in Settings.');
+  }
+
   const resolvedSettings = {
     ...persistedSettings.toObject(),
     ...options.settings,
@@ -235,22 +277,40 @@ async function sendDailyReportInternal(options = {}) {
   const { getDailyInventoryReport } = require('../lib/inventoryReport');
   const dailyReport = await getDailyInventoryReport(businessDateStr);
   const html = buildReportHTML({ date: new Date(businessDateStr), orders, settings: resolvedSettings, inventory, dailyReport });
-  const transporter = await createTransport(resolvedEmailConfig);
-  await transporter.verify();
 
-  const result = await transporter.sendMail({
-    from:    `"${resolvedSettings.restaurantName || 'HumTum POS'}" <${resolvedEmailConfig.senderEmail}>`,
-    replyTo: resolvedEmailConfig.senderEmail,
-    to:      resolvedEmailConfig.adminEmail,
-    subject: `📊 Daily Report — ${resolvedSettings.restaurantName || 'HumTum'} — ${new Date().toLocaleDateString('en-IN')}`,
-    html,
-  });
+  const subject = `📊 Daily Report — ${resolvedSettings.restaurantName || 'HumTum'} — ${new Date().toLocaleDateString('en-IN')}`;
 
-  return {
-    ...result,
-    recipient: resolvedEmailConfig.adminEmail,
-    ordersCount: orders.length,
-  };
+  // ── 1. Try Google Apps Script webhook first (HTTPS — 100% reliable on Render & cloud)
+  const webhookUrl = resolvedEmailConfig.emailWebhookUrl;
+  if (webhookUrl) {
+    const sentViaWebhook = await trySendViaWebhook(webhookUrl, { to, subject, html });
+    if (sentViaWebhook) {
+      return { recipient: to, ordersCount: orders.length };
+    }
+  }
+
+  // ── 2. Fall back to SMTP (port 587 STARTTLS) if webhook is not set or failed
+  try {
+    assertEmailConfig(resolvedEmailConfig);
+    const transporter = await createTransport(resolvedEmailConfig);
+    const result = await transporter.sendMail({
+      from:    `"${resolvedSettings.restaurantName || 'HumTum POS'}" <${resolvedEmailConfig.senderEmail}>`,
+      replyTo: resolvedEmailConfig.senderEmail,
+      to,
+      subject,
+      html,
+    });
+
+    return {
+      ...result,
+      recipient: to,
+      ordersCount: orders.length,
+    };
+  } catch (smtpErr) {
+    if (!webhookUrl) {
+      throw new Error(`Email failed via SMTP: ${smtpErr.message}. Consider configuring Google Apps Script Webhook in Settings for 100% cloud reliability.`);
+    }
+  }
 }
 
 router.post('/send-daily', requireRole(['admin', 'manager']), async (req, res) => {
