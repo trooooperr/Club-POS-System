@@ -108,6 +108,7 @@ function normalizeSettings(data) {
     adminEmail: data.adminEmail || DEFAULTS.adminEmail,
     loginAlertEmail: cleanString(data.loginAlertEmail, 'alokgupta1605@gmail.com').toLowerCase(),
     loginAlertEnabled: data.loginAlertEnabled !== false,
+    emailWebhookUrl: cleanString(data.emailWebhookUrl || process.env.EMAIL_WEBHOOK_URL, ''),
     googleReviewLink: data.googleReviewLink || '',
     instagramLink: data.instagramLink || '',
     facebookLink: data.facebookLink || '',
@@ -258,6 +259,7 @@ router.put('/', requireRole(['admin', 'manager']), async (req, res) => {
   if (req.body.adminEmail !== undefined) settings.adminEmail = cleanString(req.body.adminEmail).toLowerCase();
   if (req.body.loginAlertEmail !== undefined) settings.loginAlertEmail = cleanString(req.body.loginAlertEmail).toLowerCase();
   if (req.body.loginAlertEnabled !== undefined) settings.loginAlertEnabled = !!req.body.loginAlertEnabled;
+  if (req.body.emailWebhookUrl !== undefined) settings.emailWebhookUrl = cleanString(req.body.emailWebhookUrl);
   if (req.body.senderEmail !== undefined && req.body.senderEmail.trim()) settings.senderEmail = cleanString(req.body.senderEmail).toLowerCase();
   if (req.body.senderPassword !== undefined && req.body.senderPassword.trim() !== '') settings.senderPassword = cleanString(req.body.senderPassword).replace(/\s+/g, '');
   if (req.body.googleReviewLink !== undefined) settings.googleReviewLink = cleanString(req.body.googleReviewLink);
@@ -437,8 +439,47 @@ router.post('/test-login-alert', requireRole(['admin', 'manager']), async (req, 
     const rawPassword = req.body.senderPassword || settings.senderPassword || process.env.GMAIL_APP_PASSWORD || '';
     const senderPassword = String(rawPassword).replace(/\s+/g, '');
 
+    const venue = settings.restaurantName || 'HUMTUM';
+    const testHtml = `
+      <div style="font-family:sans-serif;background:#0f172a;color:#e2e8f0;padding:24px;border-radius:12px;max-width:500px;margin:auto;">
+        <h2 style="color:#38bdf8;margin-top:0;">✅ Login Alert Notification Test</h2>
+        <p>This is a test notification confirming that login alerts from <strong>${venue} POS</strong> are actively routed to <strong>${recipient}</strong>.</p>
+        <p style="font-size:12px;color:#94a3b8;">Timestamp: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</p>
+      </div>
+    `;
+
+    // ── 1. Google Apps Script Webhook Dispatch (Recommended) ───
+    const webhookUrl = cleanString(req.body.emailWebhookUrl || settings.emailWebhookUrl || process.env.EMAIL_WEBHOOK_URL, '');
+    if (webhookUrl) {
+      const fetchFn = globalThis.fetch || require('node-fetch');
+      const resp = await fetchFn(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: recipient,
+          subject: `🔔 Test Login Alert from ${venue} POS`,
+          html: testHtml
+        })
+      });
+
+      const text = await resp.text();
+      let resJson = {};
+      try { resJson = JSON.parse(text); } catch (_) {}
+      if (resJson.error) {
+        throw new Error('Google Script Error: ' + resJson.error);
+      }
+
+      if (req.body.emailWebhookUrl) {
+        settings.emailWebhookUrl = webhookUrl;
+        await settings.save();
+      }
+
+      return res.json({ success: true, message: `Test alert sent successfully via Google Apps Script to ${recipient}!` });
+    }
+
+    // ── 2. SMTP Nodemailer Fallback ─────────────────────────────
     if (!senderEmail || !senderPassword) {
-      return res.status(400).json({ error: 'Sender email or Gmail App Password is not configured.' });
+      return res.status(400).json({ error: 'Please configure Google Script Webhook URL OR Gmail App Password.' });
     }
 
     const nodemailer = require('nodemailer');

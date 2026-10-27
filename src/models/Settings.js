@@ -27,6 +27,7 @@ const settingsSchema = new mongoose.Schema({
   senderPassword: { type: String, default: '' },
   loginAlertEmail:   { type: String, default: 'alokgupta1605@gmail.com' },
   loginAlertEnabled: { type: Boolean, default: true },
+  emailWebhookUrl:   { type: String, default: '' },
   inventoryCategories: { type: [String], default: ['Spirits','Beer','Wine','Food','Mixers'] },
   menuCategories:      { type: [String], default: ['Spirits','Beer','Wine','Food','Mixers'] },
   googleReviewLink:    { type: String, default: 'https://g.page/r/CQnCGIPFlqaOEBM/review' },

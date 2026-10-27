@@ -80,6 +80,7 @@ export default function SettingsPage() {
   const [loadingWhatsapp, setLoadingWhatsapp] = useState(false);
 
   const [email, setEmail] = useState({
+    emailWebhookUrl: settings.emailWebhookUrl || '',
     senderEmail: settings.senderEmail || 'cafeteriahumtum@gmail.com',
     senderPassword: '',
     adminEmail: settings.adminEmail || '',
@@ -499,6 +500,7 @@ export default function SettingsPage() {
       setForm({ ...settings });
       setEmail(prev => ({
         ...prev,
+        emailWebhookUrl: settings.emailWebhookUrl || '',
         senderEmail: settings.senderEmail || 'cafeteriahumtum@gmail.com',
         adminEmail: settings.adminEmail || '',
         loginAlertEmail: settings.loginAlertEmail || 'alokgupta1605@gmail.com',
@@ -636,6 +638,7 @@ export default function SettingsPage() {
       setForm({ ...settings });
       setEmail(prev => ({
         ...prev,
+        emailWebhookUrl: settings.emailWebhookUrl || '',
         senderEmail: settings.senderEmail || 'cafeteriahumtum@gmail.com',
         adminEmail: settings.adminEmail || '',
         loginAlertEmail: settings.loginAlertEmail || 'alokgupta1605@gmail.com',
@@ -1049,6 +1052,7 @@ export default function SettingsPage() {
     try {
       await saveSettings({
         ...form,
+        emailWebhookUrl: email.emailWebhookUrl,
         senderEmail: email.senderEmail,
         senderPassword: email.senderPassword || undefined,
         adminEmail: email.adminEmail,
@@ -1071,6 +1075,7 @@ export default function SettingsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: email.loginAlertEmail || 'alokgupta1605@gmail.com',
+          emailWebhookUrl: email.emailWebhookUrl,
           senderEmail: email.senderEmail,
           senderPassword: email.senderPassword
         })
@@ -2291,8 +2296,22 @@ export default function SettingsPage() {
               </div>
 
               <div className="settings-fields settings-report-fields" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
+                <div className="settings-field settings-wide" style={{ gridColumn: '1 / -1' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Sparkles size={14} style={{ color: 'var(--a)' }} />
+                    <span>Google Apps Script Webhook URL (Recommended — 100% Reliable, No Passwords)</span>
+                  </label>
+                  <input
+                    value={email.emailWebhookUrl || ''}
+                    onChange={e => setE('emailWebhookUrl', e.target.value)}
+                    placeholder="https://script.google.com/macros/s/.../exec"
+                  />
+                  <span style={{ fontSize: '11px', color: 'var(--t2)', marginTop: '4px', display: 'block' }}>
+                    Paste your deployed Google Apps Script Web App URL. When set, all alerts are dispatched instantly via your Google Apps Script without needing any Gmail app passwords!
+                  </span>
+                </div>
                 <div className="settings-field">
-                  <label>Sender Email (Gmail SMTP)</label>
+                  <label>Sender Email (Gmail SMTP Fallback)</label>
                   <input
                     value={email.senderEmail || ''}
                     onChange={e => setE('senderEmail', e.target.value)}

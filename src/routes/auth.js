@@ -43,20 +43,14 @@ async function sendLoginAlertNotification({ user, device, cleanDeviceName, locat
     const recipient = (settings.loginAlertEmail || 'alokgupta1605@gmail.com').trim().toLowerCase();
     if (!recipient) return;
 
+    const webhookUrl = (settings.emailWebhookUrl || process.env.EMAIL_WEBHOOK_URL || '').trim();
     const senderEmail = settings.senderEmail || process.env.GMAIL_SENDER || 'cafeteriahumtum@gmail.com';
     const senderPassword = settings.senderPassword || process.env.GMAIL_APP_PASSWORD;
 
-    if (!senderEmail || !senderPassword) {
-      console.warn('⚠️ Login notification email skipped: SMTP sender credentials not set');
+    if (!webhookUrl && (!senderEmail || !senderPassword)) {
+      console.warn('⚠️ Login notification email skipped: Neither Google Script Webhook nor SMTP credentials set');
       return;
     }
-
-    const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true,
-      auth: { user: senderEmail, pass: senderPassword.replace(/\s+/g, '') }
-    });
 
     const nowIST = new Date().toLocaleString('en-IN', {
       timeZone: 'Asia/Kolkata',
@@ -133,14 +127,40 @@ async function sendLoginAlertNotification({ user, device, cleanDeviceName, locat
       </html>
     `;
 
+    const subject = `🔔 Login Alert: ${user.name || user.username} (${user.role.toUpperCase()}) logged into ${venue}`;
+
+    if (webhookUrl) {
+      const fetchFn = globalThis.fetch || require('node-fetch');
+      const resp = await fetchFn(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: recipient,
+          subject,
+          html
+        })
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (data.error) throw new Error(data.error);
+      console.log(`📧 Login notification dispatched via Google Script to ${recipient} for ${user.username}`);
+      return;
+    }
+
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
+      auth: { user: senderEmail, pass: senderPassword.replace(/\s+/g, '') }
+    });
+
     await transporter.sendMail({
       from: `"${venue} Security" <${senderEmail}>`,
       to: recipient,
-      subject: `🔔 Login Alert: ${user.name || user.username} (${user.role.toUpperCase()}) logged into ${venue}`,
+      subject,
       html
     });
 
-    console.log(`📧 Login notification sent to ${recipient} for ${user.username}`);
+    console.log(`📧 Login notification sent via SMTP to ${recipient} for ${user.username}`);
   } catch (err) {
     console.warn(`⚠️ Login alert notification failed: ${err.message}`);
   }
