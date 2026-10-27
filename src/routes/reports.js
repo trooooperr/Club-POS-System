@@ -54,6 +54,7 @@ async function createTransport(emailConfig) {
       host: process.env.SMTP_HOST,
       port: parseInt(process.env.SMTP_PORT || '587', 10),
       secure: process.env.SMTP_SECURE === 'true',
+      family: 4, // Force IPv4 — prevents ENETUNREACH on IPv6-disabled networks
       auth: {
         user: emailConfig.authEmail,
         pass: emailConfig.senderPassword,
@@ -62,7 +63,10 @@ async function createTransport(emailConfig) {
   }
 
   return nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
+    family: 4, // Force IPv4 — prevents ENETUNREACH on IPv6-disabled networks
     auth: {
       user: emailConfig.authEmail,
       pass: emailConfig.senderPassword,

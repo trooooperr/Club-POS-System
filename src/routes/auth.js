@@ -1,11 +1,84 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Settings = require('../models/Settings');
 const { generateToken, generateRefreshToken, hashRefreshToken, requireAuth } = require('../middleware/auth');
 const { getDeviceDetails, resolveLocation } = require('../lib/deviceInfo');
 const nodemailer = require('nodemailer');
+
+function renderRevokeHtml({ success, title, message, deviceName, username }) {
+  const isOk = !!success;
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>${title} · HumTum Security</title>
+      <style>
+        * { box-sizing: border-box; }
+        body {
+          margin: 0; padding: 0;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+          background: #0b1120; color: #e2e8f0;
+          display: flex; align-items: center; justify-content: center;
+          min-height: 100vh; padding: 20px;
+        }
+        .card {
+          max-width: 480px; width: 100%;
+          background: #1e293b; border: 1px solid #334155;
+          border-radius: 16px; padding: 32px 24px;
+          text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+        }
+        .icon {
+          width: 64px; height: 64px; margin: 0 auto 16px;
+          border-radius: 50%; display: flex; align-items: center; justify-content: center;
+          font-size: 30px;
+          background: ${isOk ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)'};
+          color: ${isOk ? '#22c55e' : '#ef4444'};
+          border: 1px solid ${isOk ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)'};
+        }
+        h1 { margin: 0 0 10px; font-size: 20px; font-weight: 800; color: #ffffff; }
+        p { margin: 0 0 20px; font-size: 14px; line-height: 1.6; color: #94a3b8; }
+        .info-box {
+          background: #0f172a; border: 1px solid #334155;
+          border-radius: 10px; padding: 14px; margin-bottom: 24px;
+          font-size: 13px; text-align: left;
+        }
+        .info-row { display: flex; justify-content: space-between; margin-bottom: 6px; }
+        .info-row:last-child { margin-bottom: 0; }
+        .info-label { color: #64748b; font-weight: 600; }
+        .info-val { color: #f1f5f9; font-weight: 700; }
+        .btn {
+          display: inline-block; text-decoration: none;
+          background: #38bdf8; color: #0b1120;
+          font-weight: 700; font-size: 14px;
+          padding: 12px 28px; border-radius: 8px;
+          transition: background 0.2s;
+        }
+        .btn:hover { background: #0ea5e9; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="icon">${isOk ? '🛡️' : '⚠️'}</div>
+        <h1>${title}</h1>
+        <p>${message}</p>
+        ${deviceName ? `
+          <div class="info-box">
+            <div class="info-row"><span class="info-label">Revoked Device:</span><span class="info-val">${deviceName}</span></div>
+            ${username ? `<div class="info-row"><span class="info-label">Account:</span><span class="info-val">${username}</span></div>` : ''}
+            <div class="info-row"><span class="info-label">Action Status:</span><span class="info-val" style="color:#ef4444;">DISCONNECTED</span></div>
+          </div>
+        ` : ''}
+        <a href="https://humtumbill.onrender.com" class="btn">Open HumTum POS</a>
+      </div>
+    </body>
+    </html>
+  `;
+}
 const ROLE_HIERARCHY = {
   admin: { level: 3 },
   manager: { level: 2 },
@@ -35,7 +108,7 @@ function clearRefreshCookie(res) {
   });
 }
 
-async function sendLoginAlertNotification({ user, device, cleanDeviceName, location, ip }) {
+async function sendLoginAlertNotification({ user, device, cleanDeviceName, location, ip, sessionId }) {
   try {
     const settings = await Settings.findOne() || {};
     if (settings.loginAlertEnabled === false) return;
@@ -59,6 +132,18 @@ async function sendLoginAlertNotification({ user, device, cleanDeviceName, locat
     });
 
     const venue = settings.restaurantName || 'HUMTUM';
+
+    let revokeUrl = '';
+    if (sessionId && user._id) {
+      const JWT_SECRET = process.env.JWT_SECRET || 'humtum_secret_2026';
+      const revokeToken = jwt.sign(
+        { userId: String(user._id), sessionId, action: 'remote_revoke' },
+        JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+      const baseUrl = (process.env.PUBLIC_APP_URL || 'https://humtumbill.onrender.com').replace(/\/+$/, '');
+      revokeUrl = `${baseUrl}/api/auth/remote-revoke?token=${encodeURIComponent(revokeToken)}`;
+    }
 
     const html = `
       <!DOCTYPE html>
@@ -109,6 +194,18 @@ async function sendLoginAlertNotification({ user, device, cleanDeviceName, locat
                         <td style="padding:6px 10px;font-size:13px;color:#e2e8f0;">${nowIST}</td>
                       </tr>
                     </table>
+
+                    ${revokeUrl ? `
+                    <div style="text-align:center;margin:22px 0 14px 0;">
+                      <a href="${revokeUrl}" style="background-color:#ef4444;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:700;font-size:13px;display:inline-block;letter-spacing:0.3px;box-shadow:0 4px 14px rgba(239,68,68,0.35);">
+                        🚨 Instant Logout This Device
+                      </a>
+                    </div>
+                    <p style="margin:0 0 16px 0;font-size:11px;color:#94a3b8;line-height:1.4;text-align:center;">
+                      If this login seems unauthorized, click the button above to immediately revoke its session and disconnect it.
+                    </p>
+                    ` : ''}
+
                     <p style="margin:0;font-size:12px;color:#64748b;line-height:1.5;">
                       If this login was unexpected, please review the Active Devices section in Settings or update the account password immediately.
                     </p>
@@ -150,6 +247,7 @@ async function sendLoginAlertNotification({ user, device, cleanDeviceName, locat
       host: 'smtp.gmail.com',
       port: 465,
       secure: true,
+      family: 4, // Force IPv4 — prevents ENETUNREACH on IPv6-disabled networks
       auth: { user: senderEmail, pass: senderPassword.replace(/\s+/g, '') }
     });
 
@@ -165,6 +263,71 @@ async function sendLoginAlertNotification({ user, device, cleanDeviceName, locat
     console.warn(`⚠️ Login alert notification failed: ${err.message}`);
   }
 }
+
+// ── Remote Session Revoke (From Email Instant Logout Button) ────
+router.get('/remote-revoke', async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) {
+      return res.status(400).send(renderRevokeHtml({
+        success: false,
+        title: 'Invalid Security Token',
+        message: 'No security token provided in request.'
+      }));
+    }
+
+    const JWT_SECRET = process.env.JWT_SECRET || 'humtum_secret_2026';
+    let decoded;
+    try {
+      decoded = jwt.verify(token, JWT_SECRET);
+    } catch (e) {
+      return res.status(401).send(renderRevokeHtml({
+        success: false,
+        title: 'Link Expired or Invalid',
+        message: 'This security link has expired or has already been used.'
+      }));
+    }
+
+    if (decoded.action !== 'remote_revoke' || !decoded.userId || !decoded.sessionId) {
+      return res.status(400).send(renderRevokeHtml({
+        success: false,
+        title: 'Invalid Action',
+        message: 'Unauthorized security token payload.'
+      }));
+    }
+
+    const user = await User.findById(decoded.userId);
+    if (!user) {
+      return res.status(404).send(renderRevokeHtml({
+        success: false,
+        title: 'User Not Found',
+        message: 'The associated user account was not found.'
+      }));
+    }
+
+    const targetSession = (user.sessions || []).find(s => s.sessionId === decoded.sessionId);
+    const deviceName = targetSession?.deviceName || 'Web Device';
+
+    user.sessions = (user.sessions || []).filter(s => s.sessionId !== decoded.sessionId);
+    await user.save();
+
+    console.log(`🚨 Security: Remote revoked session ${decoded.sessionId} for user ${user.username} (${deviceName})`);
+
+    return res.send(renderRevokeHtml({
+      success: true,
+      title: 'Device Session Terminated',
+      deviceName,
+      username: user.username,
+      message: `The device <strong>"${deviceName}"</strong> was immediately logged out and disconnected from HumTum POS.`
+    }));
+  } catch (err) {
+    return res.status(500).send(renderRevokeHtml({
+      success: false,
+      title: 'Server Error',
+      message: err.message
+    }));
+  }
+});
 
 // ── Login ───────────────────────────────────────────────────────
 router.post('/login', async (req, res) => {
@@ -272,7 +435,8 @@ router.post('/login', async (req, res) => {
       device,
       cleanDeviceName,
       location,
-      ip: device.ip
+      ip: device.ip,
+      sessionId
     }).catch(e => console.warn('Login alert background err:', e.message));
 
     res.json({
@@ -668,6 +832,7 @@ router.post('/forgot-password', async (req, res) => {
       host: 'smtp.gmail.com',
       port: 465,
       secure: true,
+      family: 4, // Force IPv4 — prevents ENETUNREACH on IPv6-disabled networks
       auth: { user: senderEmail, pass: senderPassword },
     });
 

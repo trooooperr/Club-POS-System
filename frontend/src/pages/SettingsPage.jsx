@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useApp, applyThemeAccent } from '../context/AppContext';
-import { Save, Check, Send, KeyRound, ShieldAlert, Users, Trash2, RefreshCw, GripVertical, Download, Laptop, Smartphone, Tablet, Monitor, MapPin, Clock, LogOut, ShieldCheck, Database, UploadCloud, ExternalLink, ChevronDown, ChevronUp, QrCode, Copy, Plus, Edit2, LayoutGrid, Layers, Printer, Sliders, Hash, Palette, Sparkles, Image as ImageIcon, Wifi, Globe, Bell } from 'lucide-react';
+import { Save, Check, Send, KeyRound, ShieldAlert, Users, Trash2, RefreshCw, GripVertical, Download, Laptop, Smartphone, Tablet, Monitor, MapPin, Clock, LogOut, ShieldCheck, Database, UploadCloud, ExternalLink, ChevronDown, ChevronUp, QrCode, Copy, Plus, Edit2, LayoutGrid, Layers, Printer, Sliders, Hash, Palette, Sparkles, Image as ImageIcon, Wifi, Globe, Bell, Eye, EyeOff } from 'lucide-react';
 import QRCode from 'qrcode';
 import { apiUrl, authFetch } from '../lib/api';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
@@ -88,6 +88,7 @@ export default function SettingsPage() {
     loginAlertEnabled: settings.loginAlertEnabled !== false
   });
   const [testingLoginAlert, setTestingLoginAlert] = useState(false);
+  const [showScriptUrl, setShowScriptUrl] = useState(false);
   const setE = (k, v) => setEmail(prev => ({ ...prev, [k]: v }));
   const { showToast } = useApp();
   const [fetchingPrinters, setFetchingPrinters] = useState(false);
@@ -1432,8 +1433,10 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* Collapsible Technical & Advanced Settings Header */}
-        <div className="settings-full" style={{ marginTop: '12px' }}>
+        {/* Collapsible Technical & Advanced Settings Header (Admin & Manager Only) */}
+        {['admin', 'manager'].includes(currentUser?.role) && (
+          <>
+            <div className="settings-full" style={{ marginTop: '12px' }}>
           <button
             type="button"
             onClick={() => setShowTechnicalSettings(prev => !prev)}
@@ -2297,49 +2300,75 @@ export default function SettingsPage() {
 
               <div className="settings-fields settings-report-fields" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
                 <div className="settings-field settings-wide" style={{ gridColumn: '1 / -1' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Sparkles size={14} style={{ color: 'var(--a)' }} />
-                    <span>Google Apps Script Webhook URL (Recommended — 100% Reliable, No Passwords)</span>
-                  </label>
-                  <input
-                    value={email.emailWebhookUrl || ''}
-                    onChange={e => setE('emailWebhookUrl', e.target.value)}
-                    placeholder="https://script.google.com/macros/s/.../exec"
-                  />
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', margin: 0 }}>
+                      <Sparkles size={14} style={{ color: 'var(--a)' }} />
+                      <span>Google Apps Script Webhook URL</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowScriptUrl(prev => !prev)}
+                      className="btn btn-secondary btn-sm"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '4px 10px',
+                        fontSize: '11px',
+                        fontWeight: '700',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        background: showScriptUrl ? 'var(--a)' : 'rgba(255,255,255,0.08)',
+                        color: showScriptUrl ? '#000' : 'var(--t0)',
+                        border: '1px solid var(--b1)'
+                      }}
+                      title={showScriptUrl ? 'Click to hide and lock' : 'Click to show and edit'}
+                    >
+                      {showScriptUrl ? (
+                        <>
+                          <EyeOff size={13} />
+                          <span>Hide & Lock</span>
+                        </>
+                      ) : (
+                        <>
+                          <Eye size={13} />
+                          <span>Show & Edit</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <div>
+                    <input
+                      type={showScriptUrl ? 'text' : 'password'}
+                      readOnly={!showScriptUrl}
+                      value={email.emailWebhookUrl || ''}
+                      onChange={e => setE('emailWebhookUrl', e.target.value)}
+                      placeholder={showScriptUrl ? 'https://script.google.com/macros/s/.../exec' : '••••••••••••••••••••••••••••••••••••••••'}
+                      style={{
+                        fontFamily: showScriptUrl ? 'monospace' : 'inherit',
+                        letterSpacing: showScriptUrl ? 'normal' : '2px',
+                        cursor: showScriptUrl ? 'text' : 'not-allowed',
+                        background: showScriptUrl ? 'var(--s2)' : 'var(--s1)',
+                        opacity: showScriptUrl ? 1 : 0.85
+                      }}
+                    />
+                  </div>
                   <span style={{ fontSize: '11px', color: 'var(--t2)', marginTop: '4px', display: 'block' }}>
-                    Paste your deployed Google Apps Script Web App URL. When set, all alerts are dispatched instantly via your Google Apps Script without needing any Gmail app passwords!
+                    {showScriptUrl
+                      ? 'Paste your deployed Google Apps Script Web App URL here.'
+                      : 'URL is securely hidden and locked. Click "Show & Edit" on the right to view or modify.'}
                   </span>
-                </div>
-                <div className="settings-field">
-                  <label>Sender Email (Gmail SMTP Fallback)</label>
-                  <input
-                    value={email.senderEmail || ''}
-                    onChange={e => setE('senderEmail', e.target.value)}
-                    placeholder="cafeteriahumtum@gmail.com"
-                  />
-                </div>
-                <div className="settings-field">
-                  <label>Gmail App Password (16 chars)</label>
-                  <input
-                    type="password"
-                    value={email.senderPassword || ''}
-                    onChange={e => setE('senderPassword', e.target.value)}
-                    placeholder={settings?.hasSenderPassword ? '•••••••••••••••• (Saved)' : 'abcd efgh ijkl mnop'}
-                  />
-                  <span style={{ fontSize: '11px', color: 'var(--t2)', marginTop: '4px', display: 'block' }}>
-                    Google Account &gt; Security &gt; 2-Step Verification &gt; App Passwords.
-                  </span>
-                </div>
-                <div className="settings-field">
-                  <label>Daily Report Admin Email</label>
-                  <input value={email.adminEmail || ''} onChange={e => setE('adminEmail', e.target.value)} placeholder="owner@company.com" />
                 </div>
                 <div className="settings-field">
                   <label>Login Notification Alert Email</label>
                   <input value={email.loginAlertEmail || ''} onChange={e => setE('loginAlertEmail', e.target.value)} placeholder="alokgupta1605@gmail.com" />
                   <span style={{ fontSize: '11px', color: 'var(--t2)', marginTop: '4px', display: 'block' }}>
-                    Every user login triggers an email alert with device, IP, and time.
+                    Every user login triggers an email alert with device, IP, and instant logout button.
                   </span>
+                </div>
+                <div className="settings-field">
+                  <label>Daily Report Admin Email</label>
+                  <input value={email.adminEmail || ''} onChange={e => setE('adminEmail', e.target.value)} placeholder="owner@company.com" />
                 </div>
               </div>
 
@@ -2683,7 +2712,9 @@ export default function SettingsPage() {
             </section>
           </>
         )}
-      </div>
+          </>
+        )}
+      </div>{/* closes settings-grid */}
 
       {/* ── Table QR Stand Preview Modal ──────────────────────────── */}
       {previewQrModal && (

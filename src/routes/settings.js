@@ -487,6 +487,7 @@ router.post('/test-login-alert', requireRole(['admin', 'manager']), async (req, 
       host: 'smtp.gmail.com',
       port: 465,
       secure: true,
+      family: 4, // Force IPv4 — prevents ENETUNREACH on IPv6-disabled networks
       auth: { user: senderEmail, pass: senderPassword }
     });
 
