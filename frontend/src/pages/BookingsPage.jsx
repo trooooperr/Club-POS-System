@@ -274,39 +274,54 @@ export default function BookingsPage() {
       paymentModeText = `SPLIT (Cash: ₹${b.advanceCashAmount || 0}, UPI: ₹${b.advanceUpiAmount || 0})`;
     }
 
+    let pageHeight = 175;
+    if (billLogoSrc) pageHeight += 20;
+    if (restAddress) pageHeight += 10;
+    if (restPhone) pageHeight += 6;
+    if (settings.email) pageHeight += 6;
+    if (gstin) pageHeight += 6;
+    if (b.tableNo) pageHeight += 6;
+    if (b.foodAmount) pageHeight += 6;
+    if (b.decorationAmount) pageHeight += 6;
+    if (b.notes) {
+      const noteLines = Math.ceil(String(b.notes).length / 26);
+      pageHeight += 16 + (noteLines * 6);
+    }
+    pageHeight = Math.max(170, Math.round(pageHeight));
+
     const printHtml = `
       <html>
         <head>
           <title>RECEIPT - ${b.bookingNo}</title>
           <style>
-            @page { size: 80mm auto; margin: 3mm; }
+            @page { size: 80mm ${pageHeight}mm; margin: 0; }
             body { 
               font-family: 'Courier New', Courier, monospace; 
-              width: 74mm; 
-              margin: 0 auto; 
-              padding: 4px; 
+              width: 70mm; 
+              margin: 0; 
+              padding: 0; 
               font-size: 13px; 
               color: #000; 
-              line-height: 1.25; 
+              line-height: 1.2; 
               font-weight: bold; 
             }
             .center { text-align: center; }
-            .brand { font-family: 'Courier New', Courier, monospace; font-size: 20px; font-weight: 900; margin-bottom: 3px; text-transform: uppercase; letter-spacing: 1px; }
-            .tagline { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: 900; margin-top: 1px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+            .brand { font-family: 'Courier New', Courier, monospace; font-size: 20px; font-weight: 900; margin-bottom: 3px; text-transform: uppercase; display: block; letter-spacing: 1px; }
+            .tagline { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: 900; margin-top: 1px; margin-bottom: 4px; text-transform: uppercase; display: block; letter-spacing: 0.5px; }
             .sub-info { font-size: 11px; margin-bottom: 3px; font-weight: normal; }
             .dash-line { border-top: 1px dashed #000; margin: 6px 0; }
-            .thick-line { border-top: 2px solid #000; margin: 6px 0; }
+            .thick-line { border-top: 2px solid #000; margin: 4px 0; }
             .receipt-title { font-size: 14px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; margin: 4px 0; }
-            .row { display: flex; justify-content: space-between; margin-bottom: 3px; font-size: 12px; }
+            .row { display: flex; justify-content: space-between; margin-bottom: 2px; font-size: 12px; }
             .label { color: #222; }
             .val { font-weight: 900; text-align: right; }
-            .highlight-box { border: 1.5px solid #000; padding: 6px; margin: 8px 0; text-align: center; }
+            .highlight-box { border: 1.5px solid #000; padding: 6px; margin: 6px 0; text-align: center; }
             .advance-title { font-size: 13px; font-weight: 900; text-transform: uppercase; }
             .advance-amount { font-size: 20px; font-weight: 900; margin: 2px 0; }
-            .sign-area { margin-top: 25px; padding-top: 20px; border-top: 1px dashed #000; display: flex; justify-content: flex-end; align-items: flex-end; }
-            .sign-box { text-align: center; width: 45%; }
-            .sign-line { border-top: 1px solid #000; margin-top: 25px; padding-top: 2px; font-size: 11px; }
-            .footer-msg { font-size: 11px; margin-top: 12px; font-style: italic; text-align: center; }
+            .sign-area { margin-top: 20px; padding-top: 16px; border-top: 1px dashed #000; display: flex; justify-content: flex-end; align-items: flex-end; }
+            .sign-box { text-align: center; width: 50%; }
+            .sign-line { border-top: 1px solid #000; margin-top: 22px; padding-top: 2px; font-size: 11px; }
+            .footer-msg { font-size: 11px; margin-top: 10px; font-style: italic; text-align: center; font-weight: bold; }
           </style>
         </head>
         <body>
