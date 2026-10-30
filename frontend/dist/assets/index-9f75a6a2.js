@@ -604,19 +604,19 @@ Minimum version required to store current data is: `+i+`.
             .center { text-align: center; }
             .brand { font-family: 'Courier New', Courier, monospace; font-size: 20px; font-weight: 900; margin-bottom: 3px; text-transform: uppercase; display: block; letter-spacing: 1px; }
             .tagline { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: 900; margin-top: 1px; margin-bottom: 4px; text-transform: uppercase; display: block; letter-spacing: 0.5px; }
-            .sub-info { font-size: 11px; margin-bottom: 3px; font-weight: normal; }
+            .sub-info { font-size: 12px; margin-bottom: 3px; font-weight: bold; color: #000; }
             .dash-line { border-top: 1px dashed #000; margin: 6px 0; }
             .thick-line { border-top: 2px solid #000; margin: 4px 0; }
             .receipt-title { font-size: 14px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; margin: 4px 0; }
             .row { display: flex; justify-content: space-between; margin-bottom: 2px; font-size: 12px; }
-            .label { color: #222; }
+            .label { color: #000; font-weight: bold; }
             .val { font-weight: 900; text-align: right; }
             .highlight-box { border: 1.5px solid #000; padding: 6px; margin: 6px 0; text-align: center; }
             .advance-title { font-size: 13px; font-weight: 900; text-transform: uppercase; }
             .advance-amount { font-size: 20px; font-weight: 900; margin: 2px 0; }
             .sign-area { margin-top: 20px; padding-top: 16px; border-top: 1px dashed #000; display: flex; justify-content: flex-end; align-items: flex-end; }
             .sign-box { text-align: center; width: 50%; }
-            .sign-line { border-top: 1px solid #000; margin-top: 22px; padding-top: 2px; font-size: 11px; }
+            .sign-line { border-top: 1px solid #000; margin-top: 22px; padding-top: 2px; font-size: 11px; font-weight: bold; }
             .footer-msg { font-size: 11px; margin-top: 10px; font-style: italic; text-align: center; font-weight: bold; }
           </style>
         </head>
@@ -657,8 +657,8 @@ Minimum version required to store current data is: `+i+`.
           <div class="highlight-box">
             <div class="advance-title">ADVANCE RECEIVED</div>
             <div class="advance-amount">₹${E.toLocaleString("en-IN")}</div>
-            <div style="font-size: 11px;">Mode: ${W}</div>
-            <div style="font-size: 10px; color: #444; margin-top: 2px;">Paid On: ${R.advancePaymentDate||R.bookingDate}</div>
+            <div style="font-size: 11px; font-weight: bold;">Mode: ${W}</div>
+            <div style="font-size: 10px; color: #000; font-weight: bold; margin-top: 2px;">Paid On: ${R.advancePaymentDate||R.bookingDate}</div>
           </div>
 
           <div class="row" style="font-size: 13px; margin-top: 6px;">
