@@ -657,8 +657,8 @@ Minimum version required to store current data is: `+i+`.
           <div class="highlight-box">
             <div class="advance-title">ADVANCE RECEIVED</div>
             <div class="advance-amount">₹${E.toLocaleString("en-IN")}</div>
-            <div style="font-size: 11px; font-weight: bold;">Mode: ${W}</div>
-            <div style="font-size: 10px; color: #000; font-weight: bold; margin-top: 2px;">Paid On: ${R.advancePaymentDate||R.bookingDate}</div>
+            <div style="font-size: 12px; font-weight: 900; margin-top: 3px;">MODE: ${W}</div>
+            <div style="font-size: 12px; font-weight: 900; margin-top: 3px;">PAID ON: ${R.advancePaymentDate||R.bookingDate}</div>
           </div>
 
           <div class="row" style="font-size: 13px; margin-top: 6px;">

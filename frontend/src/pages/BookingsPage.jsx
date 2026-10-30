@@ -361,8 +361,8 @@ export default function BookingsPage() {
           <div class="highlight-box">
             <div class="advance-title">ADVANCE RECEIVED</div>
             <div class="advance-amount">₹${advanceAmt.toLocaleString('en-IN')}</div>
-            <div style="font-size: 11px; font-weight: bold;">Mode: ${paymentModeText}</div>
-            <div style="font-size: 10px; color: #000; font-weight: bold; margin-top: 2px;">Paid On: ${b.advancePaymentDate || b.bookingDate}</div>
+            <div style="font-size: 12px; font-weight: 900; margin-top: 3px;">MODE: ${paymentModeText}</div>
+            <div style="font-size: 12px; font-weight: 900; margin-top: 3px;">PAID ON: ${b.advancePaymentDate || b.bookingDate}</div>
           </div>
 
           <div class="row" style="font-size: 13px; margin-top: 6px;">
