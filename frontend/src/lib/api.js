@@ -55,12 +55,13 @@ async function tryRefreshToken() {
   _refreshPromise = (async () => {
     try {
       const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+      if (!refreshToken) return null;
 
       const res = await fetch(`${API_BASE}/api/auth/refresh`, {
         method:      'POST',
         credentials: 'include',
         headers:     { 'Content-Type': 'application/json' },
-        body:        JSON.stringify({ refreshToken: refreshToken || undefined }),
+        body:        JSON.stringify({ refreshToken }),
       });
 
       if (!res.ok) return null;
@@ -88,15 +89,21 @@ async function tryRefreshToken() {
 }
 
 /**
- * Force logout — clear all auth state and redirect to login.
+ * Force logout — clear all auth state and notify app without infinite reload loops.
  */
 export function forceLogout() {
+  const hadAuth = !!(localStorage.getItem(AUTH_KEY) || localStorage.getItem(TOKEN_KEY));
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
   localStorage.removeItem(AUTH_KEY);
   localStorage.removeItem(SESSION_KEY);
-  if (window.location.pathname !== '/login') {
-    window.location.reload();
+
+  // If there was no active auth stored, don't trigger anything to prevent loops
+  if (!hadAuth) return;
+
+  // Dispatch event so AppContext switches to LoginPage smoothly without page reload
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('humtum:auth-expired'));
   }
 }
 

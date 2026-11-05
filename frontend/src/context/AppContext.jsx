@@ -218,6 +218,7 @@ function saveTableBills(bills) {
 
 async function safeFetch(url) {
   try {
+    if (!localStorage.getItem(TOKEN_KEY)) return null;
     const res = await authFetch(url);
     if (!res.ok) { console.log(`API ${res.status}: ${url}`); return null; }
     const data = await res.json();
@@ -233,6 +234,14 @@ export function AppProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(() => {
     try { return JSON.parse(localStorage.getItem(AUTH_KEY)); } catch { return null; }
   });
+
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      setCurrentUser(null);
+    };
+    window.addEventListener('humtum:auth-expired', handleAuthExpired);
+    return () => window.removeEventListener('humtum:auth-expired', handleAuthExpired);
+  }, []);
 
   // ── Socket.IO ────────────────────────────────────────────────────
   const [socket, setSocket] = useState(null);
@@ -998,7 +1007,7 @@ export function AppProvider({ children }) {
 
   const isFetching = useRef(false);
   const loadData = useCallback(async (isSilent = false, components = ['menu', 'orders', 'workers', 'inventory', 'settings', 'sessions']) => {
-    if (isFetching.current) return;
+    if (isFetching.current || !localStorage.getItem(TOKEN_KEY)) return;
     isFetching.current = true;
     if (!isSilent) setLoading(true);
     setError(null);
@@ -1101,6 +1110,7 @@ export function AppProvider({ children }) {
 
   // ── Offline Queue Auto-Sync ──────────────────────────────────────────
   const flushOfflineQueue = useCallback(async () => {
+    if (!currentUser || !localStorage.getItem(TOKEN_KEY)) return;
     const orderQueue = getOfflineQueue();
     const kotQueue = getOfflineKotQueue();
     if ((!orderQueue || orderQueue.length === 0) && (!kotQueue || kotQueue.length === 0)) {
@@ -1248,6 +1258,7 @@ export function AppProvider({ children }) {
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
+      if (!currentUser || !localStorage.getItem(TOKEN_KEY)) return;
       showToast('📶 Internet reconnected! Syncing offline data...', 'info');
       flushOfflineQueue();
     };
@@ -1258,9 +1269,9 @@ export function AppProvider({ children }) {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Sync queue every 25 seconds if items are waiting
+    // Sync queue every 25 seconds if items are waiting and user is authenticated
     const syncInterval = setInterval(() => {
-      if (typeof navigator !== 'undefined' && navigator.onLine && (getOfflineQueue().length > 0 || getOfflineKotQueue().length > 0 || getOfflineMutationQueue().length > 0)) {
+      if (typeof navigator !== 'undefined' && navigator.onLine && currentUser && localStorage.getItem(TOKEN_KEY) && (getOfflineQueue().length > 0 || getOfflineKotQueue().length > 0 || getOfflineMutationQueue().length > 0)) {
         flushOfflineQueue();
       }
     }, 25000);
@@ -1273,7 +1284,7 @@ export function AppProvider({ children }) {
       catch { return Math.random().toString(); }
     };
     const twoMinSyncInterval = setInterval(async () => {
-      if (typeof navigator === 'undefined' || !navigator.onLine || !currentUser) return;
+      if (typeof navigator === 'undefined' || !navigator.onLine || !currentUser || !localStorage.getItem(TOKEN_KEY)) return;
       // Fetch a lightweight summary to check if anything changed
       try {
         const checks = await Promise.allSettled([
