@@ -561,7 +561,7 @@ ensureSumatraPDF()
     const port = config.port || 5001;
     app.listen(port, () => {
       log(`====================================================`);
-      log(`HumTum Print Agent running on http://localhost:${port}`);
+      log(`POS Print Agent running on http://localhost:${port}`);
       log(`Authentication Token: ${config.authToken || 'NONE (Bypassed)'}`);
       log(`Allowed Origin: ${config.allowedOrigin}`);
       log(`====================================================`);

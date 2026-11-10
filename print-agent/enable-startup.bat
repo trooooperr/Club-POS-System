@@ -1,7 +1,7 @@
 @echo off
 set SCRIPT="%TEMP%\CreateShortcut.vbs"
 echo Set oWS = CreateObject("WScript.Shell") > %SCRIPT%
-echo sLinkFile = oWS.SpecialFolders("Startup") ^& "\HumTumPrintAgent.lnk" >> %SCRIPT%
+echo sLinkFile = oWS.SpecialFolders("Startup") ^& "\POSPrintAgent.lnk" >> %SCRIPT%
 echo Set oLink = oWS.CreateShortcut(sLinkFile) >> %SCRIPT%
 
 if exist "%~dp0start-silent.vbs" (
@@ -26,7 +26,7 @@ del %SCRIPT%
 
 echo =======================================================
 echo Auto-Start Enabled Successfully!
-echo HumTum Print Agent will now start automatically in the background
+echo POS Silent Print Agent will now start automatically in the background
 echo whenever your Windows PC boots up.
 echo.
 echo Press any key to close this window.
