@@ -483,10 +483,14 @@ export default function OrdersPage() {
           discountPctStr = base > 0 ? String(Math.min(100, Math.round((order.discount / base) * 100))) : '';
         }
 
-        const hasServiceTax = (order.serviceTax && order.serviceTax > 0) || (order.serviceTaxRate && order.serviceTaxRate > 0);
-        const orderServiceTaxRate = order.serviceTaxRate > 0 
-          ? order.serviceTaxRate 
-          : (order.subtotal > 0 && order.serviceTax > 0 ? Number(((order.serviceTax / order.subtotal) * 100).toFixed(2)) : 0);
+        const hasServiceTax = typeof order.serviceTax === 'number' && order.serviceTax > 0;
+        const orderServiceTaxRate = hasServiceTax
+          ? (order.serviceTaxRate > 0 
+              ? order.serviceTaxRate 
+              : (order.alcoholSubtotal > 0 && order.serviceTax > 0
+                  ? Number(((order.serviceTax / order.alcoholSubtotal) * 100).toFixed(2))
+                  : (order.subtotal > 0 && order.serviceTax > 0 ? Number(((order.serviceTax / order.subtotal) * 100).toFixed(2)) : (settings?.serviceTaxRate || 5))))
+          : 0;
 
         setTableBills(prev => ({
           ...prev,

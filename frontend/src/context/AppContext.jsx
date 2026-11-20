@@ -1795,19 +1795,23 @@ export function AppProvider({ children }) {
     const gst = foodSubtotal * (gstRate / 100);
 
     const actOrder = session?.activeOrderId;
-    const orderHasST = actOrder ? ((actOrder.serviceTax && actOrder.serviceTax > 0) || (actOrder.serviceTaxRate && actOrder.serviceTaxRate > 0)) : false;
-    const orderSTRate = actOrder ? ((actOrder.serviceTaxRate && actOrder.serviceTaxRate > 0)
-      ? actOrder.serviceTaxRate
-      : (actOrder.subtotal > 0 && actOrder.serviceTax > 0 ? Number(((actOrder.serviceTax / actOrder.subtotal) * 100).toFixed(2)) : (settings?.serviceTaxRate || 5))) : undefined;
+    const orderHasST = actOrder ? (typeof actOrder.serviceTax === 'number' && actOrder.serviceTax > 0) : false;
+    const orderSTRate = actOrder && orderHasST ? (
+      (actOrder.serviceTaxRate && actOrder.serviceTaxRate > 0)
+        ? actOrder.serviceTaxRate
+        : (actOrder.alcoholSubtotal > 0 && actOrder.serviceTax > 0 
+            ? Number(((actOrder.serviceTax / actOrder.alcoholSubtotal) * 100).toFixed(2)) 
+            : (actOrder.subtotal > 0 && actOrder.serviceTax > 0 ? Number(((actOrder.serviceTax / actOrder.subtotal) * 100).toFixed(2)) : (settings?.serviceTaxRate || 5)))
+    ) : undefined;
 
     const isServiceTaxOn = localBill?.serviceTaxEnabled !== undefined 
       ? localBill.serviceTaxEnabled 
-      : (orderHasST ? true : !!settings?.serviceTaxEnabled);
+      : (actOrder ? orderHasST : !!settings?.serviceTaxEnabled);
     const effectiveServiceTaxRate = (localBill?.serviceTaxRate !== undefined && localBill.serviceTaxRate > 0)
       ? localBill.serviceTaxRate
       : (orderSTRate !== undefined && orderSTRate > 0
           ? orderSTRate
-          : (settings?.serviceTaxRate || 0));
+          : (isServiceTaxOn ? (settings?.serviceTaxRate || 0) : 0));
     const serviceTax = isServiceTaxOn ? alcoholSubtotal * ((effectiveServiceTaxRate || 0) / 100) : 0;
     const totalBeforeDiscount = subtotal + gst + serviceTax;
 

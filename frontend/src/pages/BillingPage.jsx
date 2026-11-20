@@ -748,21 +748,23 @@ export default function BillingPage() {
     const activeTableNum = parseTableNum(activeTableId);
     const activeSession = activeTableNum ? (activeSessions || []).find(s => s.tableNo === activeTableNum) : null;
     const actOrder = activeSession?.activeOrderId;
-    const orderHasST = actOrder ? ((actOrder.serviceTax && actOrder.serviceTax > 0) || (actOrder.serviceTaxRate && actOrder.serviceTaxRate > 0)) : false;
-    const orderSTRate = actOrder ? ((actOrder.serviceTaxRate && actOrder.serviceTaxRate > 0)
-      ? actOrder.serviceTaxRate
-      : (actOrder.alcoholSubtotal > 0 && actOrder.serviceTax > 0 
-          ? Number(((actOrder.serviceTax / actOrder.alcoholSubtotal) * 100).toFixed(2)) 
-          : (actOrder.subtotal > 0 && actOrder.serviceTax > 0 ? Number(((actOrder.serviceTax / actOrder.subtotal) * 100).toFixed(2)) : (settings?.serviceTaxRate || 5)))) : undefined;
+    const orderHasST = actOrder ? (typeof actOrder.serviceTax === 'number' && actOrder.serviceTax > 0) : false;
+    const orderSTRate = actOrder && orderHasST ? (
+      (actOrder.serviceTaxRate && actOrder.serviceTaxRate > 0)
+        ? actOrder.serviceTaxRate
+        : (actOrder.alcoholSubtotal > 0 && actOrder.serviceTax > 0 
+            ? Number(((actOrder.serviceTax / actOrder.alcoholSubtotal) * 100).toFixed(2)) 
+            : (actOrder.subtotal > 0 && actOrder.serviceTax > 0 ? Number(((actOrder.serviceTax / actOrder.subtotal) * 100).toFixed(2)) : (settings?.serviceTaxRate || 5)))
+    ) : undefined;
 
     const isServiceTaxOn = table.serviceTaxEnabled !== undefined 
       ? table.serviceTaxEnabled 
-      : (orderHasST ? true : !!settings.serviceTaxEnabled);
+      : (actOrder ? orderHasST : !!settings.serviceTaxEnabled);
     const effectiveServiceTaxRate = (table.serviceTaxRate !== undefined && table.serviceTaxRate > 0)
       ? table.serviceTaxRate
       : (orderSTRate !== undefined && orderSTRate > 0
           ? orderSTRate
-          : (settings.serviceTaxRate || 0));
+          : (isServiceTaxOn ? (settings.serviceTaxRate || 0) : 0));
     const serviceTax = isServiceTaxOn ? alcoholSubtotal * (effectiveServiceTaxRate / 100) : 0;
     const totalBeforeDiscount = subtotal + gst + serviceTax;
     const discountVal = hasAlcohol ? (parseFloat((table.discount || '').replace(/[^0-9.]/g, '')) || 0) : 0;
@@ -948,12 +950,18 @@ export default function BillingPage() {
           }
 
           if (actOrder) {
-            const orderHasST = (actOrder.serviceTax && actOrder.serviceTax > 0) || (actOrder.serviceTaxRate && actOrder.serviceTaxRate > 0);
+            const orderHasST = typeof actOrder.serviceTax === 'number' && actOrder.serviceTax > 0;
             if (orderHasST) {
               serviceTaxEnabledVal = true;
               serviceTaxRateVal = (actOrder.serviceTaxRate && actOrder.serviceTaxRate > 0)
                 ? actOrder.serviceTaxRate
-                : (actOrder.subtotal > 0 && actOrder.serviceTax > 0 ? Number(((actOrder.serviceTax / actOrder.subtotal) * 100).toFixed(2)) : (settings?.serviceTaxRate || 5));
+                : (actOrder.alcoholSubtotal > 0 && actOrder.serviceTax > 0
+                    ? Number(((actOrder.serviceTax / actOrder.alcoholSubtotal) * 100).toFixed(2))
+                    : (actOrder.subtotal > 0 && actOrder.serviceTax > 0 ? Number(((actOrder.serviceTax / actOrder.subtotal) * 100).toFixed(2)) : (settings?.serviceTaxRate || 5)));
+            } else {
+              // Order had NO service tax — explicitly disable it so current settings don't override
+              serviceTaxEnabledVal = false;
+              serviceTaxRateVal = 0;
             }
           }
 
@@ -1293,7 +1301,7 @@ export default function BillingPage() {
         paidVal,
         dueVal,
         (!hasAlcohol || alcoholSubtotal <= 0) ? 0 : ((discountVal >= 100 || (discountAmount > 0 && grandTotal <= 1 && foodSubtotal === 0)) ? 100 : Math.min(100, Math.max(0, discountVal || (alcoholSubtotal > 0 && discountAmount > 0 ? Math.round((discountAmount / alcoholSubtotal) * 100) : 0)))),
-        effectiveServiceTaxRate,
+        isServiceTaxOn ? effectiveServiceTaxRate : 0,
         fine,
         foodSubtotal,
         alcoholSubtotal
@@ -1313,7 +1321,7 @@ export default function BillingPage() {
           sgst,
           cgst,
           serviceTax,
-          serviceTaxRate: effectiveServiceTaxRate,
+          serviceTaxRate: isServiceTaxOn ? effectiveServiceTaxRate : 0,
           serviceTaxEnabled: isServiceTaxOn,
           discountAmount,
           discountPercent: (!hasAlcohol || alcoholSubtotal <= 0) ? 0 : ((discountVal >= 100 || (discountAmount > 0 && grandTotal <= 1 && foodSubtotal === 0)) ? 100 : Math.min(100, Math.max(0, discountVal || (alcoholSubtotal > 0 && discountAmount > 0 ? Math.round((discountAmount / alcoholSubtotal) * 100) : 0)))),

@@ -560,11 +560,13 @@ router.patch('/:id/finalize-bill', async (req, res) => {
     order.sgst = sgst;
     order.cgst = cgst;
     order.serviceTax = typeof serviceTax === 'number' ? serviceTax : 0;
-    if (serviceTaxRate !== undefined && serviceTaxRate !== null) {
+    if (order.serviceTax <= 0) {
+      order.serviceTaxRate = 0;
+    } else if (serviceTaxRate !== undefined && serviceTaxRate !== null && parseFloat(serviceTaxRate) > 0) {
       order.serviceTaxRate = parseFloat(serviceTaxRate) || 0;
-    } else if (order.serviceTax > 0 && order.alcoholSubtotal > 0 && (!order.serviceTaxRate || order.serviceTaxRate === 0)) {
+    } else if (order.alcoholSubtotal > 0 && (!order.serviceTaxRate || order.serviceTaxRate === 0)) {
       order.serviceTaxRate = Number(((order.serviceTax / order.alcoholSubtotal) * 100).toFixed(2));
-    } else if (order.serviceTax > 0 && order.subtotal > 0 && (!order.serviceTaxRate || order.serviceTaxRate === 0)) {
+    } else if (order.subtotal > 0 && (!order.serviceTaxRate || order.serviceTaxRate === 0)) {
       order.serviceTaxRate = Number(((order.serviceTax / order.subtotal) * 100).toFixed(2));
     }
     order.discount = typeof discount === 'number' ? discount : (parseFloat(discount) || 0);
@@ -740,7 +742,7 @@ router.post('/offline-sync', async (req, res) => {
     order.sgst = Number(sgst) || 0;
     order.cgst = Number(cgst) || 0;
     order.serviceTax = Number(serviceTax) || 0;
-    order.serviceTaxRate = Number(serviceTaxRate) || 0;
+    order.serviceTaxRate = order.serviceTax > 0 ? (Number(serviceTaxRate) || 0) : 0;
     order.discount = Number(discount) || 0;
     order.discountPercent = Number(discountPercent) || 0;
     order.fine = Number(fine) || 0;
